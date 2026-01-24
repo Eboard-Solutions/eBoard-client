@@ -11,36 +11,28 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const [, setLocation] = useLocation();
-  const isAuthenticated = authService.isUserAuthenticated();
-  const hasRequiredPermission = requiredRole 
-    ? authService.hasPermission(requiredRole)
+
+  const isAuthenticated = authService.isAuthenticated?.() ?? false;
+  const hasRequiredPermission = requiredRole
+    ? authService.hasPermission?.(requiredRole) ?? false
     : true;
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setLocation('/auth/signin');
+      setLocation('/auth/signin', { replace: true });
     } else if (!hasRequiredPermission) {
-      setLocation('/unauthorized');
+      setLocation('/unauthorized', { replace: true });
     }
   }, [isAuthenticated, hasRequiredPermission, setLocation]);
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !hasRequiredPermission) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!hasRequiredPermission) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Redirecting...</p>
+        <div className="text-center space-y-4">
+          <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">
+            {!isAuthenticated ? 'Authenticating...' : 'Checking access...'}
+          </p>
         </div>
       </div>
     );
@@ -48,3 +40,6 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
   return <>{children}</>;
 }
+
+// If you prefer default export instead, use this instead of the line above:
+export default ProtectedRoute;

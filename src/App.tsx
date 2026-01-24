@@ -4,6 +4,7 @@ import { AppLayout } from "@/pages/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
+import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
 import { Members } from "@/pages/Members";
@@ -18,6 +19,7 @@ import { CreateAdmin } from "@/pages/admin/CreateAdmin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Home } from "lucide-react";
+import React from "react";
 
 function UnauthorizedPage() {
   return (
@@ -65,6 +67,7 @@ function App() {
         {/* Auth Routes - No Layout */}
         <Route path="/auth/signin" component={SignIn} />
         <Route path="/auth/signup" component={SignUp} />
+        <Route path="/auth/forgot-password" component={ForgotPassword} />
         <Route path="/unauthorized" component={UnauthorizedPage} />
 
         {/* Protected Routes - With Layout */}

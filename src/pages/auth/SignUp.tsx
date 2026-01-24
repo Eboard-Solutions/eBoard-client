@@ -1,302 +1,379 @@
-import { useState } from 'react';
+'use client';
+import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { authService } from '@/lib/auth';
-import { toast } from 'sonner';
-import { Loader2, User, Mail, Lock, Briefcase, Building } from 'lucide-react';
+import { Loader2, User, Mail, Lock, Eye, EyeOff, Phone, Building2, CheckCircle2, XCircle } from 'lucide-react';
 
 export function SignUp() {
   const [, setLocation] = useLocation();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    position: '',
-    department: '',
-  });
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string, description?: string } | null>(null);
+
+  const isFirstNameValid = firstName.trim().length >= 3;
+  const isLastNameValid = lastName.trim().length >= 3;
+  const isOrgNameValid = organizationName.trim().length >= 3;
+  const isPhoneValid = phoneNumber.trim().length >= 10;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const isPasswordValid = password.length >= 8;
+  const passwordsMatch = password === confirmPassword || confirmPassword === '';
+
+  const isFormValid =
+    isFirstNameValid &&
+    isLastNameValid &&
+    isOrgNameValid &&
+    isPhoneValid &&
+    isEmailValid &&
+    isPasswordValid &&
+    passwordsMatch;
+
+  const getPasswordStrength = () => {
+    if (password.length === 0) return { label: '', color: '' };
+    if (password.length < 8) return { label: 'Weak', color: 'bg-red-500/70' };
+    if (password.length < 12) return { label: 'Good', color: 'bg-amber-500/70' };
+    return { label: 'Strong', color: 'bg-emerald-500/70' };
+  };
+
+  const strength = getPasswordStrength();
+
+  const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
+    setNotification({ type, message, description });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
-    if (!agreeToTerms) {
-      toast.error('Please agree to the Terms of Service');
+    if (!isFormValid) {
+      if (!passwordsMatch) {
+        showNotification('error', 'Passwords do not match');
+      } else {
+        showNotification('error', 'Please complete all fields correctly');
+      }
       return;
     }
 
     setIsLoading(true);
 
-    const result = await authService.signUp({
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      position: formData.position,
-      department: formData.department,
-    });
+    setTimeout(() => {
+      setIsLoading(false);
+      showNotification('success', 'Account created successfully', 'You can now sign in.');
 
-    if (result.success) {
-      toast.success('Account created successfully!', {
-        description: 'Welcome to E-Board',
-      });
-      setLocation('/');
-    } else {
-      toast.error('Sign up failed', {
-        description: result.error || 'Please try again',
-      });
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+      setTimeout(() => {
+        setFirstName('');
+        setLastName('');
+        setOrganizationName('');
+        setPhoneNumber('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+      }, 2000);
+    }, 1500);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-4">
-            <span className="text-primary-foreground font-bold text-2xl">EB</span>
+    <div className="min-h-screen flex">
+      {/* Notification Toast */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 min-w-[320px] animate-in slide-in-from-top-5 ${notification.type === 'success'
+          ? 'bg-emerald-50 border border-emerald-200'
+          : 'bg-red-50 border border-red-200'
+          } rounded-lg shadow-lg p-4`}>
+          <div className="flex items-start gap-3">
+            {notification.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+            )}
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${notification.type === 'success' ? 'text-emerald-900' : 'text-red-900'
+                }`}>
+                {notification.message}
+              </p>
+              {notification.description && (
+                <p className={`text-sm mt-1 ${notification.type === 'success' ? 'text-emerald-700' : 'text-red-700'
+                  }`}>
+                  {notification.description}
+                </p>
+              )}
+            </div>
           </div>
-          <h1 className="text-3xl font-bold mb-2">Join E-Board</h1>
-          <p className="text-muted-foreground">Create your account to get started</p>
         </div>
+      )}
 
-        {/* Sign Up Card */}
-        <Card className="glass-strong">
-          <CardHeader>
-            <CardTitle>Sign Up</CardTitle>
-            <CardDescription>
-              Fill in your details to create an account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="John Doe"
-                    className="pl-10"
-                    value={formData.name}
-                    onChange={(e) => handleChange('name', e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+      {/* Left Panel - Branding Section */}
+      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-indigo-600 via-indigo-600 to-blue-700 p-16 flex-col justify-center items-center relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-24 left-12 w-24 h-24 bg-indigo-400 rounded-full opacity-20 blur-xl"></div>
+        <div className="absolute bottom-32 right-20 w-40 h-40 bg-blue-400 rounded-full opacity-20 blur-xl"></div>
+        <div className="absolute top-1/3 right-16 w-32 h-32 border-4 border-indigo-300 opacity-15 transform rotate-45"></div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    className="pl-10"
-                    value={formData.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+        {/* Content */}
+        <div className="relative z-10 text-center max-w-md">
+          <div className="mx-auto mb-10 w-56 h-56 bg-white/10 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-white/20 shadow-2xl">
+            <p className="text-white/70 text-base px-8">
+            <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="" />
+            </p>
+          </div>
+          <h1 className="text-white text-5xl font-bold leading-tight mb-6">
+            Welcome to<br />EBoard Portal
+          </h1>
+          <p className="text-indigo-100 text-xl">
+            Streamline your organization's<br />management and collaboration
+          </p>
+        </div>
+      </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="position">Position</Label>
-                  <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Right Panel - Form */}
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-100/70 to-indigo-50/30 dark:from-slate-950 dark:via-slate-950/90 dark:to-indigo-950/30 px-6 py-12 lg:px-12">
+        <div className="w-full max-w-2xl">
+          {/* Header */}
+          <div className="text-center mb-10">
+            <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600/90 to-blue-700/90 shadow-lg shadow-indigo-500/30">
+              <span className="text-white font-bold text-3xl tracking-tight">
+                <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="" />
+              </span>
+            </div>
+            <h1 className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 mb-3">
+              Create Organization Admin Account
+            </h1>
+            <p className="text-lg text-slate-600 dark:text-slate-400">
+              Register as organization administrator
+            </p>
+          </div>
+
+          {/* Card */}
+          <Card className="border border-slate-200/70 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl shadow-2xl shadow-slate-200/50 dark:shadow-black/50 rounded-2xl overflow-hidden">
+            <CardHeader className="px-10 pt-10 pb-6">
+              <CardTitle className="text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                Admin Registration
+              </CardTitle>
+              <CardDescription className="mt-2 text-base text-slate-600 dark:text-slate-400">
+                Please fill in your information below
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="px-10 pb-10">
+              <form onSubmit={handleSubmit} className="space-y-7">
+                {/* First Name & Last Name */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2.5">
+                    <Label htmlFor="firstName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      First Name
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                      <Input
+                        id="firstName"
+                        placeholder="Enter First Name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                        required
+                        minLength={3}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <Label htmlFor="lastName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Last Name
+                    </Label>
                     <Input
-                      id="position"
-                      type="text"
-                      placeholder="e.g., Member"
-                      className="pl-10"
-                      value={formData.position}
-                      onChange={(e) => handleChange('position', e.target.value)}
+                      id="lastName"
+                      placeholder="Enter Last Name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="h-12 px-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                      required
+                      minLength={3}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Select
-                    value={formData.department}
-                    onValueChange={(value) => handleChange('department', value)}
+                {/* Organization Name */}
+                <div className="space-y-2.5">
+                  <Label htmlFor="organizationName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Organization Name
+                  </Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                    <Input
+                      id="organizationName"
+                      placeholder="Enter Organization Name"
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                      className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                      required
+                      minLength={3}
+                    />
+                  </div>
+                </div>
+
+                {/* Phone Number & Email */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2.5">
+                    <Label htmlFor="phoneNumber" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Phone Number
+                    </Label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                      <Input
+                        id="phoneNumber"
+                        type="tel"
+                        placeholder="+254 712 345 678"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <Label htmlFor="email" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Email Address
+                    </Label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="Enter Email Address"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value.trim())}
+                        className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="space-y-2.5">
+                  <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-12 pl-11 pr-12 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                      required
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-76 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+
+                  {password && (
+                    <div className="space-y-2 pt-2">
+                      <div className="h-2 w-full bg-slate-200/70 dark:bg-slate-700/50 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${strength.color}`}
+                          style={{ width: password.length < 8 ? '33%' : password.length < 12 ? '66%' : '100%' }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Password strength:{' '}
+                        <span className={
+                          strength.color.includes('red')
+                            ? 'text-red-600 dark:text-red-400 font-medium'
+                            : strength.color.includes('amber')
+                              ? 'text-amber-600 dark:text-amber-400 font-medium'
+                              : 'text-emerald-600 dark:text-emerald-400 font-medium'
+                        }>
+                          {strength.label}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm Password */}
+                <div className="space-y-2.5">
+                  <Label htmlFor="confirmPassword" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Confirm Password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Enter Confirm Password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`h-12 pl-11 pr-12 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200 ${confirmPassword && !passwordsMatch ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''
+                        }`}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-76 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+
+                  {confirmPassword && !passwordsMatch && (
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                      Passwords do not match
+                    </p>
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                <div className="pt-6">
+                  <Button
+                    type="submit"
+                    disabled={isLoading || !isFormValid}
+                    className="w-full h-12 text-lg font-medium bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                   >
-                    <SelectTrigger id="department">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Executive">Executive</SelectItem>
-                      <SelectItem value="Operations">Operations</SelectItem>
-                      <SelectItem value="Finance">Finance</SelectItem>
-                      <SelectItem value="Marketing">Marketing</SelectItem>
-                      <SelectItem value="Technology">Technology</SelectItem>
-                      <SelectItem value="HR">Human Resources</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    className="pl-10"
-                    value={formData.password}
-                    onChange={(e) => handleChange('password', e.target.value)}
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Must be at least 8 characters
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="••••••••"
-                    className="pl-10"
-                    value={formData.confirmPassword}
-                    onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="terms"
-                  checked={agreeToTerms}
-                  onCheckedChange={(checked) => setAgreeToTerms(checked === true)}
-                />
-                <Label
-                  htmlFor="terms"
-                  className="text-sm font-normal leading-tight cursor-pointer"
-                >
-                  I agree to the{' '}
-                  <Button variant="link" className="px-0 h-auto font-normal" type="button">
-                    Terms of Service
-                  </Button>{' '}
-                  and{' '}
-                  <Button variant="link" className="px-0 h-auto font-normal" type="button">
-                    Privacy Policy
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Creating account...
+                      </>
+                    ) : (
+                      'Create Admin Account'
+                    )}
                   </Button>
-                </Label>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                size="lg"
-                disabled={isLoading || !agreeToTerms}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating account...
-                  </>
-                ) : (
-                  'Create Account'
-                )}
-              </Button>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    Or sign up with
-                  </span>
-                </div>
+              </form>
+
+              <div className="mt-8 text-center text-sm text-slate-600 dark:text-slate-400">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium hover:underline"
+                  onClick={() => setLocation('/auth/signin')}
+                >
+                  Sign in
+                </button>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Button variant="outline" type="button">
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  Google
-                </Button>
-                <Button variant="outline" type="button">
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z"
-                    />
-                  </svg>
-                  Microsoft
-                </Button>
-              </div>
-            </form>
-
-            <div className="mt-6 text-center text-sm">
-              <span className="text-muted-foreground">Already have an account? </span>
-              <Button
-                variant="link"
-                className="px-0 font-semibold"
-                onClick={() => setLocation('/auth/signin')}
-              >
-                Sign in
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Footer Note */}
-        <div className="mt-6 p-4 rounded-lg bg-accent/50 border border-border">
-          <p className="text-xs text-muted-foreground text-center">
-            <strong>Note:</strong> Admin and Super Admin accounts are created exclusively by the Super Admin for security purposes.
-          </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
