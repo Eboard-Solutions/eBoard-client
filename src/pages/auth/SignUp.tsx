@@ -23,7 +23,7 @@ export function SignUp() {
 
   const isFirstNameValid = firstName.trim().length >= 3;
   const isLastNameValid = lastName.trim().length >= 3;
-  const isOrgNameValid = organizationName.trim().length >= 3;
+  const isorganisationNameValid = organizationName.trim().length >= 3;
   const isPhoneValid = phoneNumber.trim().length >= 10;
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const isPasswordValid = password.length >= 8;
@@ -32,7 +32,7 @@ export function SignUp() {
   const isFormValid =
     isFirstNameValid &&
     isLastNameValid &&
-    isOrgNameValid &&
+    isorganisationNameValid &&
     isPhoneValid &&
     isEmailValid &&
     isPasswordValid &&
