@@ -30,6 +30,7 @@ const ROUTES = {
   orgAdmin: '/dashboard/org-admin',
   boardMember: '/dashboard/board-member',
   default: '/dashboard',
+  userLogin: '/auth/user-login',
 };
 
 interface Notification {
@@ -40,7 +41,6 @@ interface Notification {
 
 interface DecodedToken {
   role?: string;
-  // Add other fields if needed: sub, email, exp, iat, ...
 }
 
 export function SignIn() {
@@ -52,21 +52,19 @@ export function SignIn() {
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
 
-  const showNotification = (
-    type: 'success' | 'error',
-    message: string,
-    description?: string
-  ) => {
+  const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
     setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 4200);
+    setTimeout(() => setNotification(null), 5000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password) {
-      showNotification('error', 'Please enter email and password');
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail || !trimmedPassword) {
+      showNotification('error', 'Email and password are required');
       return;
     }
 
@@ -75,44 +73,36 @@ export function SignIn() {
     try {
       const data = await authService.login({
         email: trimmedEmail,
-        password,
+        password: trimmedPassword,
       });
 
       const token = data.access_token;
-
-      // Decode token to get role
       const decoded = jwtDecode<DecodedToken>(token);
-      const userRole = (decoded.role || '').toLowerCase();
+      const role = (decoded.role || '').toLowerCase().trim();
 
-      showNotification(
-        'success',
-        `Welcome back${data.user?.firstName ? `, ${data.user.firstName}` : ''}!`
-      );
+      showNotification('success', 'Login successful', `Role: ${role}`);
 
-      // Role-based redirect
       setTimeout(() => {
-        switch (userRole) {
-          case 'superadmin':
-            setLocation(ROUTES.superAdmin);
-            break;
-          case 'orgadmin':
-            setLocation(ROUTES.orgAdmin);
-            break;
-          case 'boardmember':
-          case 'secretary':
-            setLocation(ROUTES.boardMember);
-            break;
-          default:
-            setLocation(ROUTES.default);
+        if (role.includes('superadmin') || role === 'super_admin') {
+          setLocation(ROUTES.superAdmin);
+        } else if (role.includes('orgadmin') || role === 'org_admin') {
+          setLocation(ROUTES.orgAdmin);
+        } else {
+          showNotification('error', 'Please use the member login page');
+          setLocation(ROUTES.userLogin);
         }
       }, 1200);
     } catch (err: any) {
-      console.error('Login error:', err);
+      let msg = err.message || 'Login failed. Please try again.';
 
-      const msg =
-        err.message ||
-        err?.response?.data?.message ||
-        'Something went wrong. Please try again.';
+      if (err.message?.includes('orgCode')) {
+        msg = 'Organization code required. Use the member login page.';
+        setLocation(ROUTES.userLogin);
+      } else if (err.response?.data?.message) {
+        msg = Array.isArray(err.response.data.message)
+          ? err.response.data.message.join(' • ')
+          : err.response.data.message;
+      }
 
       showNotification('error', 'Login failed', msg);
     } finally {
@@ -120,42 +110,27 @@ export function SignIn() {
     }
   };
 
-  // ────────────────────────────────────────────────
-  // JSX – unchanged except minor cleanups & safety
-  // ────────────────────────────────────────────────
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/20 px-5 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+      {/* Notification */}
       {notification && (
         <div
-          className={`fixed top-5 right-5 z-50 w-full max-w-sm sm:max-w-md animate-in slide-in-from-top-6 fade-in-5 duration-300 ${
+          className={`fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-5 fade-in duration-300 ${
             notification.type === 'success'
-              ? 'bg-emerald-50/95 border-emerald-200'
-              : 'bg-red-50/95 border-red-200'
-          } border rounded-xl shadow-2xl backdrop-blur-sm p-4`}
+              ? 'bg-green-50/95 border-green-200 text-green-900'
+              : 'bg-red-50/95 border-red-200 text-red-900'
+          } border rounded-xl shadow-xl backdrop-blur-sm p-4`}
         >
           <div className="flex items-start gap-3">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
             ) : (
               <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
             )}
-            <div className="flex-1">
-              <p
-                className={`font-semibold text-sm ${
-                  notification.type === 'success' ? 'text-emerald-900' : 'text-red-900'
-                }`}
-              >
-                {notification.message}
-              </p>
+            <div>
+              <p className="font-medium text-sm">{notification.message}</p>
               {notification.description && (
-                <p
-                  className={`mt-1 text-sm ${
-                    notification.type === 'success' ? 'text-emerald-700' : 'text-red-700'
-                  }`}
-                >
-                  {notification.description}
-                </p>
+                <p className="mt-1 text-sm opacity-90">{notification.description}</p>
               )}
             </div>
           </div>
@@ -163,47 +138,48 @@ export function SignIn() {
       )}
 
       <div className="w-full max-w-md">
+        {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-xl mb-5 mx-auto">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
-              alt="Logo"
-              className="h-10 w-10"
+              alt="E-Board Logo"
+              className="h-10 w-10 rounded-full"
             />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
             Sign In
           </h1>
-          <p className="mt-3 text-slate-600 dark:text-slate-400">
-            Welcome back, please enter your credentials to access your account.
+          <p className="mt-3 text-gray-600 dark:text-gray-400">
+            Welcome back • Super Admin / Organization Admin
           </p>
         </div>
 
-        <Card className="border-slate-200/70 dark:border-slate-800/50 bg-white/90 dark:bg-slate-900/80 backdrop-blur-md shadow-2xl shadow-slate-200/40 dark:shadow-black/50 rounded-2xl overflow-hidden">
-          <CardHeader className="px-8 pt-8 pb-4">
-            <CardTitle className="text-2xl font-semibold text-center">
-              Account Login
-            </CardTitle>
-            <CardDescription className="text-center mt-1.5">
-              Access your E-Board dashboard
+        {/* Card */}
+        <Card className="border-gray-200/60 dark:border-gray-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
+          <CardHeader className="px-10 pt-10 pb-6 text-center">
+            <CardTitle className="text-2xl font-semibold">Admin Login</CardTitle>
+            <CardDescription className="mt-2 text-base">
+              Access your administration dashboard
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="px-8 pb-10">
+          <CardContent className="px-10 pb-10">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="font-medium">
-                  Email
+                <Label htmlFor="email" className="font-medium text-gray-700 dark:text-gray-300">
+                  Email address
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 pointer-events-none" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" />
                   <Input
                     id="email"
                     type="email"
-                    placeholder="Enter your email address..."
+                    placeholder="admin@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 pl-11 pr-11 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700 rounded-xl focus:border-indigo-500 focus:ring-indigo-500/20"
+                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     required
                     autoFocus
                     autoComplete="email"
@@ -211,15 +187,16 @@ export function SignIn() {
                 </div>
               </div>
 
+              {/* Password */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="font-medium">
+                  <Label htmlFor="password" className="font-medium text-gray-700 dark:text-gray-300">
                     Password
                   </Label>
                   <Button
                     variant="link"
                     size="sm"
-                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 px-0"
+                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 p-0 h-auto font-medium"
                     type="button"
                     onClick={() => setLocation('/auth/forgot-password')}
                   >
@@ -228,31 +205,33 @@ export function SignIn() {
                 </div>
 
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" />
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password..."
+                    placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 pl-11 pr-11 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700 rounded-xl focus:border-indigo-500 focus:ring-indigo-500/20"
+                    className="h-12 pl-11 pr-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     required
+                    minLength={8}
                     autoComplete="current-password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
 
+              {/* Submit */}
               <Button
                 type="submit"
-                disabled={isLoading || !email.trim() || !password}
-                className="w-full h-12 mt-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60"
+                disabled={isLoading || !email.trim() || !password.trim()}
+                className="w-full h-12 mt-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
@@ -265,20 +244,21 @@ export function SignIn() {
               </Button>
             </form>
 
-            <div className="mt-8 text-center text-sm text-slate-600 dark:text-slate-400">
-              Don't have an account?{' '}
+            {/* Footer link */}
+            <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+              Regular user or board member?{' '}
               <button
                 type="button"
-                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium hover:underline"
-                onClick={() => setLocation('/auth/signup')}
+                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium underline-offset-4 hover:underline"
+                onClick={() => setLocation(ROUTES.userLogin)}
               >
-                Sign up
+                Login with Organization Code
               </button>
             </div>
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-slate-500 dark:text-slate-600 mt-10">
+        <p className="text-center text-xs text-gray-500 dark:text-gray-600 mt-10">
           © {new Date().getFullYear()} E-Board • All rights reserved
         </p>
       </div>
