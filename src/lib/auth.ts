@@ -4,19 +4,7 @@ import axios, { AxiosError, AxiosResponse } from 'axios';
 // ────────────────────────────────────────────────
 // CONFIGURATION
 // ────────────────────────────────────────────────
-const rawApiUrl = import.meta.env.VITE_API_URL;
-
-if (!rawApiUrl) {
-  console.error(
-    '%c[CRITICAL] VITE_API_URL is missing!\n' +
-      'Add VITE_API_URL=http://localhost:3000 (or your backend URL) ' +
-      'to .env.local or .env file. Then restart dev server.',
-    'color: #ff4444; font-weight: bold; font-size: 14px; background: #1e1e1e; padding: 8px 12px; border-radius: 4px;'
-  );
-}
-
-const API_URL = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : '';
-const API_BASE = API_URL ? `${API_URL}/api/v1` : '';
+const API_BASE = `http://localhost:3000/api/v1`;
 
 // ────────────────────────────────────────────────
 // TYPES
@@ -28,8 +16,27 @@ interface LoginCredentials {
 }
 
 interface LoginResponse {
-  access_token: string;
-  // Extend later when backend returns more (user, refresh_token, expires_in, etc.)
+  at: string; // access token
+  rt: string; // refresh token
+  user: {
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    hasOrganisation: boolean;
+    organisationStatus: string | null;
+    orgCode: string | null;
+  };
+}
+
+interface SignUpData {
+  firstName: string;
+  lastName: string;
+  organisationName: string; // Note: British spelling to match backend
+  phoneNumber: string;
+  email: string;
+  password: string;
 }
 
 // ────────────────────────────────────────────────
@@ -44,66 +51,91 @@ export const authService = {
       throw new Error('API base URL not configured (VITE_API_URL missing)');
     }
 
-    const url = `${API_BASE}/auth/login/`;
+    // Determine endpoint based on whether orgCode is provided
+    const isOrgAdminLogin = !credentials.orgCode; // Org admins login without orgCode
+    const url = isOrgAdminLogin 
+      ? `${API_BASE}/auth/org-admin/login`  // Org admin endpoint
+      : `${API_BASE}/auth/login`;             // Regular user endpoint (with orgCode)
 
-    // Build payload – orgCode is optional
     const payload: Record<string, string> = {
       email: credentials.email.trim(),
       password: credentials.password.trim(),
     };
 
+    // Only include orgCode for regular users
     if (credentials.orgCode?.trim()) {
       payload.orgCode = credentials.orgCode.trim();
     }
 
     try {
-      const response: AxiosResponse<LoginResponse> = await axios.post(url, payload, {
+      console.log('🔐 Login request to:', url);
+      console.log('📤 Payload:', { email: payload.email, hasOrgCode: !!payload.orgCode });
+
+      const response = await axios.post<LoginResponse>(url, payload, {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const { access_token } = response.data;
+      const { at, rt, user } = response.data;
 
-      if (!access_token) {
+      if (!at) {
         throw new Error('No access token received from server');
       }
 
-      localStorage.setItem('token', access_token);
+      // Store tokens and user data
+      localStorage.setItem('token', at);
+      localStorage.setItem('refreshToken', rt);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      console.log('✅ Login successful:', { 
+        role: user.role, 
+        hasOrganisation: user.hasOrganisation 
+      });
+
       return response.data;
     } catch (err) {
       if (err instanceof AxiosError) {
         const status = err.response?.status;
-        let message = err.response?.data?.message || err.message || 'Unknown error';
+        let message = err.response?.data?.message || err.message || 'Login failed';
 
-        // Handle common status codes with better messages
+        console.error('❌ Login failed:', {
+          status,
+          message,
+          endpoint: url
+        });
+
+        // Improve message readability
         if (status === 400) {
           if (Array.isArray(message)) {
             message = message.join(' • ');
           }
-          if (message.includes('orgCode')) {
-            throw new Error('Organization code is required for this account type');
+          if (message.toLowerCase().includes('orgcode') || message.toLowerCase().includes('organization code')) {
+            throw new Error('Organization code is required for this account');
           }
-          throw new Error(`Invalid input: ${message}`);
+          if (message.toLowerCase().includes('email') || message.toLowerCase().includes('password')) {
+            throw new Error('Invalid email or password');
+          }
+          throw new Error(`Invalid request: ${message}`);
         }
 
         if (status === 401) {
-          throw new Error('Invalid email or password');
+          throw new Error('Invalid credentials');
         }
 
         if (status === 404) {
-          throw new Error(`Login endpoint not found: ${url}`);
+          throw new Error('Login service not available');
         }
 
         if (status === 429) {
-          throw new Error('Too many login attempts. Please try again later.');
+          throw new Error('Too many attempts. Try again later.');
         }
 
-        // Network / timeout / CORS issues
-        if (status === undefined || status === 0) {
-          throw new Error('Network error – is the backend server running?');
+        if (!status) {
+          throw new Error('Cannot reach the server. Check your connection.');
         }
+
+        throw new Error(message);
       }
 
-      // Fallback for non-Axios errors
       throw err instanceof Error ? err : new Error('Login failed unexpectedly');
     }
   },
@@ -111,15 +143,90 @@ export const authService = {
   /**
    * Register new organization admin
    */
-  signUp: async (data: { name: string; email: string; password: string }): Promise<unknown> => {
-    if (!API_BASE) throw new Error('API base URL not configured');
+  signUp: async (data: SignUpData): Promise<unknown> => {
+    if (!API_BASE) {
+      throw new Error('API base URL not configured (VITE_API_URL missing)');
+    }
+
+    const url = `${API_BASE}/auth/register/org-admin`;
+
+    // Build payload - must match backend API field names exactly
+    const payload = {
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      organisationName: data.organisationName.trim(), // British spelling!
+      phoneNumber: data.phoneNumber.trim(),
+      email: data.email.trim(),
+      password: data.password.trim(),
+    };
 
     try {
-      const response = await axios.post(`${API_BASE}/auth/register/org-admin`, data);
+      console.log('📤 Signup request to:', url);
+      console.log('📤 Payload:', { ...payload, password: '***' }); // Log without password
+      
+      const response = await axios.post(url, payload, {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+      });
+      
+      console.log('✅ Signup successful:', response.data);
       return response.data;
     } catch (err) {
-      console.error('Signup failed:', err);
-      throw err instanceof Error ? err : new Error('Signup request failed');
+      if (err instanceof AxiosError) {
+        const status = err.response?.status;
+        let message = err.response?.data?.message || err.message || 'Unknown error';
+        
+        // Enhanced error logging for debugging
+        console.error('❌ Signup failed:', {
+          status,
+          statusText: err.response?.statusText,
+          message,
+          errorData: err.response?.data,
+          url
+        });
+
+        if (Array.isArray(message)) {
+          message = message.join(' • ');
+        }
+
+        if (status === 400) {
+          // Extract detailed validation errors if available
+          const validationErrors = err.response?.data?.errors || 
+                                   err.response?.data?.details ||
+                                   err.response?.data?.error;
+          
+          if (validationErrors) {
+            if (Array.isArray(validationErrors)) {
+              throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+            }
+            throw new Error(`Validation failed: ${validationErrors}`);
+          }
+          throw new Error(`Invalid input: ${message}`);
+        }
+
+        if (status === 409) {
+          throw new Error('An account with this email already exists');
+        }
+
+        if (status === 404) {
+          throw new Error(`Signup endpoint not found. Please check backend server.`);
+        }
+
+        if (status === 429) {
+          throw new Error('Too many signup attempts. Please try again later.');
+        }
+
+        if (status === undefined || status === 0) {
+          throw new Error('Network error – is the backend server running at http://localhost:3000?');
+        }
+
+        throw new Error(`Signup failed (${status}): ${message}`);
+      }
+
+      console.error('❌ Unexpected error:', err);
+      throw err instanceof Error ? err : new Error('Signup failed unexpectedly');
     }
   },
 
@@ -146,12 +253,32 @@ export const authService = {
   },
 
   /**
-   * Remove token (logout)
+   * Get stored refresh token
+   */
+  getRefreshToken(): string | null {
+    return localStorage.getItem('refreshToken');
+  },
+
+  /**
+   * Get stored user data
+   */
+  getUser(): LoginResponse['user'] | null {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Remove tokens and user data (logout)
    */
   logout(): void {
     localStorage.removeItem('token');
-    // Optional: clear additional data if stored
-    // localStorage.removeItem('user');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
   },
 
   /**
