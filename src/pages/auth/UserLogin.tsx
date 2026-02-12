@@ -1,3 +1,4 @@
+// src/pages/auth/UserLogin.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -20,16 +21,14 @@ import {
   EyeOff,
   CheckCircle2,
   XCircle,
+  Hash,
 } from 'lucide-react';
 
-import { authService } from '@/lib/auth';
+import authService from '@/lib/auth';
 
 const ROUTES = {
-  superAdmin: '/super-admin',
-  orgAdmin: '/dashboard/',
   boardMember: '/dashboard/board-member',
-  default: '/dashboard',
-  userLogin: '/auth/user-login',
+  adminLogin: '/auth/signin',
 };
 
 interface Notification {
@@ -38,11 +37,12 @@ interface Notification {
   description?: string;
 }
 
-export function SignIn() {
+export function UserLogin() {
   const [, setLocation] = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [orgCode, setOrgCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -57,75 +57,50 @@ export function SignIn() {
 
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
+    const trimmedOrgCode = orgCode.trim();
 
-    if (!trimmedEmail || !trimmedPassword) {
-      showNotification('error', 'Email and password are required');
+    if (!trimmedEmail || !trimmedPassword || !trimmedOrgCode) {
+      showNotification('error', 'All fields are required');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      console.log('🔐 Attempting login...');
+      console.log('🔐 Attempting board member login...');
       
       const response = await authService.login({
         email: trimmedEmail,
         password: trimmedPassword,
+        orgCode: trimmedOrgCode,
       });
 
       const { user } = response;
 
-      console.log('✅ Login successful:', { 
-        role: user.role, 
-        hasOrganisation: user.hasOrganisation 
-      });
-
-      // Determine redirect based on role
-      let targetRoute = ROUTES.default;
-      const role = user.role.toLowerCase();
-
-      if (role.includes('superadmin') || role === 'superadmin') {
-        targetRoute = ROUTES.superAdmin;
-      } else if (role.includes('orgadmin') || role === 'orgadmin') {
-        targetRoute = ROUTES.orgAdmin;
-      } else if (role.includes('boardmember') || role === 'boardmember') {
-        targetRoute = ROUTES.boardMember;
-      } else {
-        // Unknown role - default to dashboard
-        targetRoute = ROUTES.default;
-      }
+      console.log('✅ Login successful:', { role: user.role });
 
       showNotification('success', 'Login successful!', `Welcome back, ${user.firstName}!`);
 
-      // Redirect after short delay
+      // Redirect to board member dashboard
       setTimeout(() => {
-        setLocation(targetRoute);
+        setLocation(ROUTES.boardMember);
       }, 1200);
     } catch (err: any) {
       console.error('[LOGIN ERROR]', err);
 
       let msg = 'Login failed. Please try again.';
-      let redirectToUserLogin = false;
 
-      if (err.message?.toLowerCase().includes('orgcode') || err.message?.includes('organization code')) {
-        msg = 'Organization code required. Please use the member login page.';
-        redirectToUserLogin = true;
-      } else if (err.message) {
+      if (err.message) {
         msg = err.message;
       }
 
       showNotification('error', 'Login Failed', msg);
-
-      if (redirectToUserLogin) {
-        setTimeout(() => setLocation(ROUTES.userLogin), 2200);
-      }
-
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-fuchsia-50 dark:from-purple-950 dark:to-fuchsia-950 px-4 py-12 sm:px-6 lg:px-8">
       {/* Notification Toast */}
       {notification && (
         <div
@@ -154,7 +129,7 @@ export function SignIn() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 to-fuchsia-600 shadow-2xl mb-6 mx-auto overflow-hidden">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board Logo"
@@ -162,24 +137,47 @@ export function SignIn() {
             />
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
-            Sign In
+            Board Member Login
           </h1>
           <p className="mt-3 text-gray-600 dark:text-gray-400">
-            Welcome back • Super Admin / Organization Admin
+            Sign in to access your organization's board
           </p>
         </div>
 
         {/* Card */}
-        <Card className="border-gray-200/60 dark:border-gray-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
+        <Card className="border-purple-200/60 dark:border-purple-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
           <CardHeader className="px-10 pt-10 pb-6 text-center">
-            <CardTitle className="text-2xl font-semibold">Admin Login</CardTitle>
+            <CardTitle className="text-2xl font-semibold">Member Sign In</CardTitle>
             <CardDescription className="mt-2 text-base">
-              Access your administration dashboard
+              Enter your credentials and organization code
             </CardDescription>
           </CardHeader>
 
           <CardContent className="px-10 pb-10">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Organization Code */}
+              <div className="space-y-2">
+                <Label htmlFor="orgCode" className="font-medium text-gray-700 dark:text-gray-300">
+                  Organization Code
+                </Label>
+                <div className="relative">
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" />
+                  <Input
+                    id="orgCode"
+                    type="text"
+                    placeholder="Enter your organization code"
+                    value={orgCode}
+                    onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
+                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all uppercase"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Ask your organization admin for the code
+                </p>
+              </div>
+
               {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-medium text-gray-700 dark:text-gray-300">
@@ -190,12 +188,11 @@ export function SignIn() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="admin@company.com"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                     required
-                    autoFocus
                     autoComplete="email"
                   />
                 </div>
@@ -210,7 +207,7 @@ export function SignIn() {
                   <Button
                     variant="link"
                     size="sm"
-                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 p-0 h-auto font-medium"
+                    className="text-purple-600 dark:text-purple-400 hover:text-purple-500 p-0 h-auto font-medium"
                     type="button"
                     onClick={() => setLocation('/auth/forgot-password')}
                   >
@@ -226,7 +223,7 @@ export function SignIn() {
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 pl-11 pr-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    className="h-12 pl-11 pr-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                     required
                     minLength={8}
                     autoComplete="current-password"
@@ -244,8 +241,8 @@ export function SignIn() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                disabled={isLoading || !email.trim() || !password.trim()}
-                className="w-full h-12 mt-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isLoading || !email.trim() || !password.trim() || !orgCode.trim()}
+                className="w-full h-12 mt-2 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
@@ -260,13 +257,13 @@ export function SignIn() {
 
             {/* Footer link */}
             <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-              Regular user or board member?{' '}
+              Are you an admin?{' '}
               <button
                 type="button"
-                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium underline-offset-4 hover:underline"
-                onClick={() => setLocation(ROUTES.userLogin)}
+                className="text-purple-600 dark:text-purple-400 hover:text-purple-500 font-medium underline-offset-4 hover:underline"
+                onClick={() => setLocation(ROUTES.adminLogin)}
               >
-                Login with Organization Code
+                Sign in as Admin
               </button>
             </div>
           </CardContent>

@@ -50,7 +50,8 @@ export function ProtectedRoute({
         } else if (userRole.includes('boardmember')) {
           setLocation('/dashboard/board-member');
         } else {
-          setLocation('/auth/signin');
+          // Unknown role - redirect to unauthorized page
+          setLocation('/unauthorized');
         }
         return;
       }

@@ -273,6 +273,20 @@ export const authService = {
   },
 
   /**
+   * Get current user with formatted name (for Dashboard compatibility)
+   */
+  getCurrentUser(): { name: string; email: string; role: string } | null {
+    const user = this.getUser();
+    if (!user) return null;
+    
+    return {
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: user.role,
+    };
+  },
+
+  /**
    * Remove tokens and user data (logout)
    */
   logout(): void {

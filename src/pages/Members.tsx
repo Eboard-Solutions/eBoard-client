@@ -1,17 +1,12 @@
+'use client';
+
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -19,123 +14,221 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { users } from '@/lib/store';
-import { Search, Plus, Mail, Phone, Calendar, Building, Grid, List } from 'lucide-react';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Search, Plus, Grid, List } from 'lucide-react';
 
-export function Members() {
+import { usePermissions } from '@/lib/permissions';
+
+import AddMemberDialog from '@/components/members/AddMemberDialog';
+import EditMemberDialog from '@/components/members/EditMemberDialog';
+import MembersGrid from '@/components/members/MembersGrid';
+import MembersList from '@/components/members/MembersList';
+
+import {
+  fetchMembers,
+  createMember,
+  updateMember,
+  deleteMember,
+  fetchCommittees,
+} from '@/lib/api/members';
+
+// ────────────────────────────────────────────────
+// Types (unchanged)
+// ────────────────────────────────────────────────
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  email: string;
+  role: string;
+  title?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+  committees?: string[];
+  organizationId?: string;     // ← make sure this exists
+  hasOrganisation?: boolean;   // ← or hasOrganization — pick one name
+}
+
+// ────────────────────────────────────────────────
+// Main Component
+// ────────────────────────────────────────────────
+export default function Members() {
+  const permissions = usePermissions();
+  const { can, isSuperAdmin, isOrgAdmin, currentOrgId, isLoading, authError } = permissions;
+
+  const queryClient = useQueryClient();
+
+  // ── Early access decisions ───────────────────────────────────────
+  if (isLoading) {
+    return <div className="p-8 text-center">Loading permissions...</div>;
+  }
+
+  if (authError || !currentOrgId) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
+        <h2 className="text-2xl font-semibold tracking-tight">Access Issue</h2>
+        <p className="mt-4 max-w-md text-muted-foreground">
+          {authError ? 'Authentication error. Please sign in again.' : 
+           'No organization assigned. Please contact support.'}
+        </p>
+        <Button variant="outline" className="mt-6" asChild>
+          <a href="/dashboard">Back to Dashboard</a>
+        </Button>
+      </div>
+    );
+  }
+
+  if (!isSuperAdmin && !isOrgAdmin) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
+        <h2 className="text-2xl font-semibold">Access Restricted</h2>
+        <p className="mt-4 max-w-md text-muted-foreground">
+          This page is only available to Super Administrators and Organization Administrators.
+        </p>
+        <Button variant="outline" className="mt-6" asChild>
+          <a href="/dashboard">Back to Dashboard</a>
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Allowed users reach this point ──────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.position?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+  const [selectedMember, setSelectedMember] = useState<User | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
+
+  const { data: committees = [] } = useQuery<string[]>({
+    queryKey: ['committees'],
+    queryFn: fetchCommittees,
   });
 
-  const roleColors = {
-    super_admin: 'destructive',
-    admin: 'default',
-    board_member: 'secondary',
-    guest: 'outline'
-  } as const;
+  const { data: members = [], isLoading: membersLoading } = useQuery<User[]>({
+    queryKey: ['members', searchQuery, roleFilter, currentOrgId],
+    queryFn: () =>
+      fetchMembers({
+        search: searchQuery || undefined,
+        role: roleFilter !== 'all' ? roleFilter : undefined,
+        // You may want to pass organizationId if backend supports it
+      }),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createMember,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      toast.success('Member added');
+    },
+    onError: () => toast.error('Failed to add member'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: updateMember,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      toast.success('Member updated');
+      setEditOpen(false);
+    },
+    onError: () => toast.error('Failed to update member'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteMember,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      toast.success('Member removed');
+      setDeleteConfirmOpen(false);
+    },
+    onError: () => toast.error('Failed to remove member'),
+  });
+
+  const handleDeleteRequest = (id: string) => {
+    setMemberToDelete(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (memberToDelete) deleteMutation.mutate(memberToDelete);
+  };
+
+  const handleEdit = (member: User) => {
+    setSelectedMember(member);
+    setEditOpen(true);
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Members</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage board members and directory
+          <h1 className="text-3xl font-bold tracking-tight">Members</h1>
+          <p className="text-muted-foreground">
+            {isSuperAdmin ? 'Manage users across organizations' : 'Manage users in your organization'}
           </p>
         </div>
-        
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button size="lg" className="gap-2">
-              <Plus className="h-5 w-5" />
-              Invite Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Invite New Member</DialogTitle>
-              <DialogDescription>
-                Send an invitation to join the board
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" placeholder="John Doe" />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input id="email" type="email" placeholder="john@example.com" />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select>
-                  <SelectTrigger id="role">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="board_member">Board Member</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="guest">Guest</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="position">Position</Label>
-                <Input id="position" placeholder="e.g., Treasurer" />
-              </div>
-
-              <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline">Cancel</Button>
-                <Button>Send Invitation</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {can('members:invite') && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <AddMemberDialog
+                onSubmit={(data) => createMutation.mutate(data)}
+                committees={committees}
+                showSuperAdminRole={isSuperAdmin}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Filters */}
-      <Card className="glass">
+      <Card>
         <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
+            <div className="relative flex-1 min-w-[260px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search members..."
+                placeholder="Search name, email, title..."
                 className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            
+
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter by role" />
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
+                <SelectItem value="all">All roles</SelectItem>
+                {isSuperAdmin && <SelectItem value="super-admin">Super Admin</SelectItem>}
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="board_member">Board Member</SelectItem>
                 <SelectItem value="guest">Guest</SelectItem>
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-1 border rounded-lg p-1">
+            <div className="flex items-center gap-1 rounded-md border p-1 sm:ml-auto">
               <Button
                 size="icon"
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
@@ -157,142 +250,69 @@ export function Members() {
         </CardContent>
       </Card>
 
-      {/* Members Grid/List */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredUsers.map((user) => (
-            <Card key={user.id} className="glass hover:shadow-lg transition-all cursor-pointer">
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <Avatar className="h-24 w-24 ring-4 ring-background">
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="text-2xl">
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-lg">{user.name}</h3>
-                    <p className="text-sm text-muted-foreground">{user.position}</p>
-                    <Badge variant={roleColors[user.role]} className="text-xs">
-                      {user.role.replace('_', ' ').toUpperCase()}
-                    </Badge>
-                  </div>
-
-                  <div className="w-full space-y-2 pt-2 border-t border-border">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{user.email}</span>
-                    </div>
-                    {user.phone && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Phone className="h-4 w-4 shrink-0" />
-                        <span>{user.phone}</span>
-                      </div>
-                    )}
-                    {user.department && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Building className="h-4 w-4 shrink-0" />
-                        <span>{user.department}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {user.committees && user.committees.length > 0 && (
-                    <div className="w-full pt-2">
-                      <div className="flex flex-wrap gap-1 justify-center">
-                        {user.committees.map((committee) => (
-                          <Badge key={committee} variant="outline" className="text-xs">
-                            {committee}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <Button variant="outline" className="w-full">
-                    View Profile
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Content */}
+      {membersLoading ? (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-80 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
+      ) : members.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <p className="text-lg font-medium">No members found</p>
+            <p className="mt-2">Try adjusting your search or role filter</p>
+          </CardContent>
+        </Card>
+      ) : viewMode === 'grid' ? (
+        <MembersGrid
+          members={members}
+          onEdit={can('members:update') ? handleEdit : undefined}
+          onDelete={can('members:delete') ? handleDeleteRequest : undefined}
+        />
       ) : (
-        <Card className="glass">
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {filteredUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="p-6 hover:bg-accent/50 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-16 w-16">
-                      <AvatarImage src={user.avatar} alt={user.name} />
-                      <AvatarFallback className="text-lg">
-                        {user.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-lg">{user.name}</h3>
-                        <Badge variant={roleColors[user.role]} className="text-xs">
-                          {user.role.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">{user.position}</p>
-                      
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1.5">
-                          <Mail className="h-3.5 w-3.5" />
-                          <span>{user.email}</span>
-                        </div>
-                        {user.phone && (
-                          <div className="flex items-center gap-1.5">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span>{user.phone}</span>
-                          </div>
-                        )}
-                        {user.department && (
-                          <div className="flex items-center gap-1.5">
-                            <Building className="h-3.5 w-3.5" />
-                            <span>{user.department}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {user.committees && user.committees.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {user.committees.map((committee) => (
-                            <Badge key={committee} variant="outline" className="text-xs">
-                              {committee}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Button variant="outline">View Profile</Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <MembersList
+          members={members}
+          onEdit={can('members:update') ? handleEdit : undefined}
+          onDelete={can('members:delete') ? handleDeleteRequest : undefined}
+        />
       )}
 
-      {filteredUsers.length === 0 && (
-        <Card className="glass">
-          <CardContent className="p-12">
-            <div className="text-center text-muted-foreground">
-              <p className="text-lg font-medium">No members found</p>
-              <p className="text-sm mt-1">Try adjusting your search or filters</p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Edit dialog */}
+      {selectedMember && (
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="sm:max-w-md">
+            <EditMemberDialog
+              member={selectedMember}
+              onSubmit={(data) => updateMutation.mutate({ id: selectedMember.id, ...data })}
+              committees={committees}
+              showSuperAdminRole={isSuperAdmin}
+            />
+          </DialogContent>
+        </Dialog>
       )}
+
+      {/* Delete confirm */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this member? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
