@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 
 import { authService } from '@/lib/auth';
-import { jwtDecode } from 'jwt-decode';
 
 const ROUTES = {
   superAdmin: '/super-admin',
@@ -37,10 +36,6 @@ interface Notification {
   type: 'success' | 'error';
   message: string;
   description?: string;
-}
-
-interface DecodedToken {
-  role?: string;
 }
 
 export function SignIn() {
@@ -71,48 +66,67 @@ export function SignIn() {
     setIsLoading(true);
 
     try {
-      const data = await authService.login({
+      console.log('🔐 Attempting login...');
+      
+      const response = await authService.login({
         email: trimmedEmail,
         password: trimmedPassword,
       });
 
-      const token = data.access_token;
-      const decoded = jwtDecode<DecodedToken>(token);
-      const role = (decoded.role || '').toLowerCase().trim();
+      const { user } = response;
 
-      showNotification('success', 'Login successful', `Role: ${role}`);
+      console.log('✅ Login successful:', { 
+        role: user.role, 
+        hasOrganisation: user.hasOrganisation 
+      });
 
-      setTimeout(() => {
-        if (role.includes('superadmin') || role === 'super_admin') {
-          setLocation(ROUTES.superAdmin);
-        } else if (role.includes('orgadmin') || role === 'org_admin') {
-          setLocation(ROUTES.orgAdmin);
-        } else {
-          showNotification('error', 'Please use the member login page');
-          setLocation(ROUTES.userLogin);
-        }
-      }, 1200);
-    } catch (err: any) {
-      let msg = err.message || 'Login failed. Please try again.';
+      // Determine redirect based on role
+      let targetRoute = ROUTES.default;
+      const role = user.role.toLowerCase();
 
-      if (err.message?.includes('orgCode')) {
-        msg = 'Organization code required. Use the member login page.';
-        setLocation(ROUTES.userLogin);
-      } else if (err.response?.data?.message) {
-        msg = Array.isArray(err.response.data.message)
-          ? err.response.data.message.join(' • ')
-          : err.response.data.message;
+      if (role.includes('superadmin') || role === 'superadmin') {
+        targetRoute = ROUTES.superAdmin;
+      } else if (role.includes('orgadmin') || role === 'orgadmin') {
+        targetRoute = ROUTES.orgAdmin;
+      } else if (role.includes('boardmember') || role === 'boardmember') {
+        targetRoute = ROUTES.boardMember;
+      } else {
+        // Unknown role - default to dashboard
+        targetRoute = ROUTES.default;
       }
 
-      showNotification('error', 'Login failed', msg);
-    } finally {
+      showNotification('success', 'Login successful!', `Welcome back, ${user.firstName}!`);
+
+      // Redirect after short delay
+      setTimeout(() => {
+        setLocation(targetRoute);
+      }, 1200);
+    } catch (err: any) {
+      console.error('[LOGIN ERROR]', err);
+
+      let msg = 'Login failed. Please try again.';
+      let redirectToUserLogin = false;
+
+      if (err.message?.toLowerCase().includes('orgcode') || err.message?.includes('organization code')) {
+        msg = 'Organization code required. Please use the member login page.';
+        redirectToUserLogin = true;
+      } else if (err.message) {
+        msg = err.message;
+      }
+
+      showNotification('error', 'Login Failed', msg);
+
+      if (redirectToUserLogin) {
+        setTimeout(() => setLocation(ROUTES.userLogin), 2200);
+      }
+
       setIsLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
-      {/* Notification */}
+      {/* Notification Toast */}
       {notification && (
         <div
           className={`fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-5 fade-in duration-300 ${
@@ -140,11 +154,11 @@ export function SignIn() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board Logo"
-              className="h-10 w-10 rounded-full"
+              className="h-full w-full object-cover"
             />
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
@@ -227,7 +241,7 @@ export function SignIn() {
                 </div>
               </div>
 
-              {/* Submit */}
+              {/* Submit Button */}
               <Button
                 type="submit"
                 disabled={isLoading || !email.trim() || !password.trim()}
