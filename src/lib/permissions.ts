@@ -1,62 +1,164 @@
-import { authService } from '@/lib/auth';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import authService from './auth';
+
+export interface AuthenticatedUser {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  hasOrganisation: boolean;
+  organisationStatus: string | null;
+  orgCode: string | null;
+}
 
 export type Permission =
-  | 'members:view:any'            // super admin only — cross org
-  | 'members:view:own'            // view members in own org
-  | 'members:invite'              // invite/create in own org
+  | 'members:view:any'
+  | 'members:view:own'
+  | 'members:invite'
   | 'members:update'
   | 'members:delete'
-  | 'members:change_org'          // reassign to another org
-  | 'members:assign:super-admin'  // promote to global super admin
-  | 'orgs:view:list';             // list all organizations
+  | 'members:change_org'
+  | 'members:assign:super-admin'
+  | 'orgs:view:list';
 
-export function usePermissions() {
-  const { user, isLoading, error } = authService.useUser?.() || authService; // adjust depending on your authService shape
+const SUPER_ADMIN_ROLES = ['super-admin', 'superadmin', 'superadmin'] as const;
+const ORG_ADMIN_ROLES = [
+  'org-admin',
+  'organization-admin',
+  'admin',
+  'orgadmin',  // Matches "OrgAdmin" after normalization
+  'org-admin', // Additional variants for backend flexibility
+] as const;
 
-  const isSuperAdmin = user?.role?.toLowerCase() === 'super-admin';
+interface UsePermissionsResult {
+  can: (perm: Permission) => boolean;
+  isSuperAdmin: boolean;
+  isOrgAdmin: boolean;
+  currentOrgId: string | null;
+  user: AuthenticatedUser | null;
+  isLoading: boolean;
+  authError: string | null;
+  refresh: () => Promise<void>;
+}
 
-  // Be generous with org admin role names — normalize
-  const normalizedRole = (user?.role || '').trim().toLowerCase();
-  const possibleOrgAdminRoles = [
-    'orgadmin',
-    'org-admin',
-    'organizationadmin',
-    'organization-admin',
-    'admin',
-    'owner',
-    'administrator',
-  ];
+export function usePermissions(): UsePermissionsResult {
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const isOrgAdmin = !!user?.organizationId && possibleOrgAdminRoles.includes(normalizedRole);
+  const loadUser = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-  const can = (permission: Permission): boolean => {
-    if (isSuperAdmin) return true;
-    if (!user || isLoading || error) return false;
-
-    switch (permission) {
-      case 'members:view:any':
-      case 'members:change_org':
-      case 'members:assign:super-admin':
-      case 'orgs:view:list':
-        return false; // super admin only
-
-      case 'members:view:own':
-      case 'members:invite':
-      case 'members:update':
-      case 'members:delete':
-        return isOrgAdmin;
-
-      default:
-        return false;
+    if (!authService.isAuthenticated()) {
+      setUser(null);
+      setIsLoading(false);
+      return;
     }
-  };
+
+    const token = authService.getToken();
+    if (!token) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/v1/auth/me', {
+        method: 'GET',
+        credentials: 'omit',  // Avoid CORS issues; use Bearer token only
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          authService.logout();
+          setError('Session expired. Please sign in again.');
+          setUser(null);
+          return;
+        }
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json() as AuthenticatedUser;
+      setUser(data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load user:', err);
+      const msg = err.message || 'Failed to verify authentication';
+      setError(msg.includes('fetch') ? 'Cannot reach backend — is it running?' : msg);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUser();
+  }, [loadUser]);
+
+  const normalizedRole = useMemo(
+    () => (user?.role ?? '').trim().toLowerCase(),
+    [user?.role]
+  );
+
+  const isSuperAdmin = useMemo(
+    () => SUPER_ADMIN_ROLES.some(r => normalizedRole === r),
+    [normalizedRole]
+  );
+
+  // Ignore hasOrganisation for dev; focus on role
+  const isOrgAdmin = useMemo(
+    () => ORG_ADMIN_ROLES.some(r => normalizedRole === r),
+    [normalizedRole]
+  );
+
+  // Fallback to null (not a dummy string) to avoid sending invalid orgId to backend
+  const currentOrgId = user?.orgCode ?? null;
+
+  const can = useCallback((permission: Permission): boolean => {
+    if (isLoading || !user) return false;
+    if (isSuperAdmin) return true;
+
+    const orgAdminPerms: Permission[] = [
+      'members:view:own',
+      'members:invite',
+      'members:update',
+      'members:delete',
+    ];
+
+    if (orgAdminPerms.includes(permission)) {
+      return isOrgAdmin;
+    }
+
+    // Super-admin only
+    if ([
+      'members:view:any',
+      'members:change_org',
+      'members:assign:super-admin',
+      'orgs:view:list',
+    ].includes(permission)) {
+      return false;
+    }
+
+    console.warn(`Permission not defined: ${permission}`);
+    return false;
+  }, [isLoading, user, isSuperAdmin, isOrgAdmin]);
 
   return {
     can,
     isSuperAdmin,
     isOrgAdmin,
-    currentOrgId: user?.organizationId ?? null,
+    currentOrgId,
+    user,
     isLoading,
     authError: error,
+    refresh: loadUser,
   };
 }
