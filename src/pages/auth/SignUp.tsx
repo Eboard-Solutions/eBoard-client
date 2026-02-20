@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, User, Mail, Lock, Eye, EyeOff, Phone, Building2, CheckCircle2, XCircle } from 'lucide-react';
+import { authService } from '@/lib/auth';
 
 export function SignUp() {
   const [, setLocation] = useLocation();
@@ -23,7 +24,7 @@ export function SignUp() {
 
   const isFirstNameValid = firstName.trim().length >= 3;
   const isLastNameValid = lastName.trim().length >= 3;
-  const isOrgNameValid = organizationName.trim().length >= 3;
+  const isorganisationNameValid = organizationName.trim().length >= 3;
   const isPhoneValid = phoneNumber.trim().length >= 10;
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const isPasswordValid = password.length >= 8;
@@ -32,11 +33,12 @@ export function SignUp() {
   const isFormValid =
     isFirstNameValid &&
     isLastNameValid &&
-    isOrgNameValid &&
+    isorganisationNameValid &&
     isPhoneValid &&
     isEmailValid &&
     isPasswordValid &&
-    passwordsMatch;
+    passwordsMatch &&
+    confirmPassword.length > 0; // Ensure confirm password is filled
 
   const getPasswordStrength = () => {
     if (password.length === 0) return { label: '', color: '' };
@@ -49,7 +51,7 @@ export function SignUp() {
 
   const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
     setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 4000);
+    setTimeout(() => setNotification(null), 5000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +60,8 @@ export function SignUp() {
     if (!isFormValid) {
       if (!passwordsMatch) {
         showNotification('error', 'Passwords do not match');
+      } else if (!confirmPassword) {
+        showNotification('error', 'Please confirm your password');
       } else {
         showNotification('error', 'Please complete all fields correctly');
       }
@@ -66,10 +70,22 @@ export function SignUp() {
 
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      console.log('🚀 Starting signup process...');
+      
+      await authService.signUp({
+        firstName,
+        lastName,
+        organisationName: organizationName, // Map to backend field name
+        phoneNumber,
+        email,
+        password,
+      });
+      
       setIsLoading(false);
-      showNotification('success', 'Account created successfully', 'You can now sign in.');
+      showNotification('success', 'Account created successfully!', 'Redirecting to sign in...');
 
+      // Clear form
       setTimeout(() => {
         setFirstName('');
         setLastName('');
@@ -78,15 +94,21 @@ export function SignUp() {
         setEmail('');
         setPassword('');
         setConfirmPassword('');
+        setLocation('/auth/signin');
       }, 2000);
-    }, 1500);
+    } catch (error) {
+      setIsLoading(false);
+      console.error('Signup error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Signup failed unexpectedly';
+      showNotification('error', 'Signup Failed', errorMessage);
+    }
   };
 
   return (
     <div className="min-h-screen flex">
       {/* Notification Toast */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 min-w-[320px] animate-in slide-in-from-top-5 ${notification.type === 'success'
+        <div className={`fixed top-4 right-4 z-50 min-w-[320px] max-w-md animate-in slide-in-from-top-5 ${notification.type === 'success'
           ? 'bg-emerald-50 border border-emerald-200'
           : 'bg-red-50 border border-red-200'
           } rounded-lg shadow-lg p-4`}>
@@ -122,9 +144,7 @@ export function SignUp() {
         {/* Content */}
         <div className="relative z-10 text-center max-w-md">
           <div className="mx-auto mb-10 w-56 h-56 bg-white/10 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-white/20 shadow-2xl">
-            <p className="text-white/70 text-base px-8">
-            <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="" />
-            </p>
+            <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="EBoard Logo" className="w-full h-full object-cover rounded-3xl" />
           </div>
           <h1 className="text-white text-5xl font-bold leading-tight mb-6">
             Welcome to<br />EBoard Portal
@@ -140,10 +160,8 @@ export function SignUp() {
         <div className="w-full max-w-2xl">
           {/* Header */}
           <div className="text-center mb-10">
-            <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600/90 to-blue-700/90 shadow-lg shadow-indigo-500/30">
-              <span className="text-white font-bold text-3xl tracking-tight">
-                <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="" />
-              </span>
+            <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600/90 to-blue-700/90 shadow-lg shadow-indigo-500/30 overflow-hidden">
+              <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="EBoard Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 mb-3">
               Create Organization Admin Account
@@ -280,7 +298,7 @@ export function SignUp() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-76 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                     >
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -320,7 +338,7 @@ export function SignUp() {
                     <Input
                       id="confirmPassword"
                       type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="Enter Confirm Password"
+                      placeholder="Re-enter Password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className={`h-12 pl-11 pr-12 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200 ${confirmPassword && !passwordsMatch ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''
@@ -330,7 +348,7 @@ export function SignUp() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-76 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                     >
                       {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
