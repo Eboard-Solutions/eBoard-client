@@ -7,6 +7,7 @@ import { SignUp } from "@/pages/auth/SignUp";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
+import { LiveMeeting } from "@/pages/LiveMeeting";
 import { Members } from "@/pages/Members";
 import { Documents } from "@/pages/Documents";
 import { Voting } from "@/pages/Voting";
@@ -83,6 +84,14 @@ function App() {
           <ProtectedRoute>
             <AppLayout>
               <Meetings />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/meetings/live/:id">
+          <ProtectedRoute>
+            <AppLayout>
+              <LiveMeeting />
             </AppLayout>
           </ProtectedRoute>
         </Route>
