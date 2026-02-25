@@ -3,6 +3,99 @@
 
 export type UserRole = 'super_admin' | 'admin' | 'board_member' | 'guest';
 
+<<<<<<< Updated upstream
+=======
+// ============================================================================
+// Meeting State Machine Types
+// ============================================================================
+
+export type MeetingState = 
+  | 'DRAFT' 
+  | 'SCHEDULED' 
+  | 'IN_PROGRESS' 
+  | 'PAUSED' 
+  | 'COMPLETED' 
+  | 'MINUTES_GENERATED' 
+  | 'MINUTES_APPROVED' 
+  | 'ARCHIVED';
+
+export type AgendaItemStatus = 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'SKIPPED';
+
+// Decision & Voting Types
+export type DecisionType = 'RESOLUTION' | 'MOTION' | 'INFORMAL';
+export type ApprovalMethod = 'VOTE' | 'CONSENSUS' | 'UNANIMOUS';
+export type VoteStatus = 'PENDING' | 'ACTIVE' | 'APPROVED' | 'REJECTED' | 'ABSTAINED';
+export type ActionItemStatus = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
+
+// Meeting Participation
+export type AttendanceStatus = 'PENDING' | 'PRESENT' | 'ABSENT' | 'LATE' | 'LEFT_EARLY';
+
+// Minutes Status
+export type MinutesStatus = 'DRAFT' | 'GENERATED' | 'PENDING_APPROVAL' | 'APPROVED' | 'ARCHIVED';
+
+// ============================================================================
+// New Meeting Types
+// ============================================================================
+
+// Meeting Format Types
+export type MeetingFormat = 'physical' | 'online' | 'hybrid';
+
+// Meeting Type
+export type MeetingType = 'regular' | 'special' | 'emergency' | 'annual';
+
+// Priority Levels
+export type Priority = 'low' | 'medium' | 'high';
+
+// Recurring Frequency
+export type RecurringFrequency = 'none' | 'weekly' | 'monthly' | 'yearly';
+
+// RSVP Status
+export type RSVPStatus = 'invited' | 'accepted' | 'declined' | 'tentative';
+
+// Reminder Types
+export type ReminderType = 'email' | 'in_app' | 'whatsapp' | 'sms';
+
+// Meeting Reminder
+export interface MeetingReminder {
+  id: string;
+  meetingId: string;
+  type: ReminderType;
+  minutesBefore: number;
+  customMessage?: string;
+  userIds: string[];
+  isSent: boolean;
+  scheduledFor: string;
+  sentAt?: string;
+}
+
+// Check-in PIN
+export interface CheckInPIN {
+  meetingId: string;
+  pin: string;
+  expiresAt: string;
+  isActive: boolean;
+}
+
+// Meeting with enhanced fields
+export interface MeetingEnhanced extends Meeting {
+  format: MeetingFormat;
+  meetingType: MeetingType;
+  priority: Priority;
+  recurring: RecurringFrequency;
+  recurringEndDate?: string;
+  quorumRequired: number;
+  description?: string;
+  rsvpStatus: RSVPStatus[];
+  reminders: MeetingReminder[];
+  checkInPIN?: CheckInPIN;
+  virtualLink?: string;
+}
+
+// ============================================================================
+// Legacy Types (for backward compatibility)
+// ============================================================================
+
+>>>>>>> Stashed changes
 export type MeetingStatus = 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
