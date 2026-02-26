@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,11 +17,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { meetings, users } from '@/lib/store';
-import { Calendar, Clock, MapPin, Users as UsersIcon, Plus, Filter, Search, Video } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users as UsersIcon, Plus, Filter, Search, Video, ClipboardList, FileText, Play, Radio } from 'lucide-react';
+import { AgendaManager } from '@/components/meetings/AgendaManager';
+import { MinutesManager } from '@/components/meetings/MinutesManager';
 
 export function Meetings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [, setLocation] = useLocation();
+
+  // Get meetings that are currently in progress (live)
+  const liveMeetings = meetings.filter(m => m.status === 'in_progress');
 
   const filteredMeetings = meetings.filter(meeting => {
     const matchesSearch = meeting.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -61,6 +68,10 @@ export function Meetings() {
     return `In ${days} days`;
   };
 
+  const handleStartLive = (meetingId: string) => {
+    setLocation(`/meetings/live/${meetingId}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -88,30 +99,29 @@ export function Meetings() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="title">Meeting Title</Label>
-                <Input id="title" placeholder="e.g., Q1 Strategic Planning" />
+                <Label>Meeting Title</Label>
+                <Input placeholder="e.g., Q1 Strategic Planning" />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" />
+                  <Label>Date</Label>
+                  <Input type="date" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="time">Time</Label>
-                  <Input id="time" type="time" />
+                  <Label>Time</Label>
+                  <Input type="time" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input id="location" placeholder="Conference Room A or Virtual" />
+                <Label>Location</Label>
+                <Input placeholder="Conference Room A or Virtual" />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="agenda">Agenda Items</Label>
+                <Label>Agenda Items</Label>
                 <Textarea 
-                  id="agenda" 
                   placeholder="Enter agenda items (one per line)"
                   rows={4}
                 />
@@ -125,6 +135,38 @@ export function Meetings() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Live Meetings Banner */}
+      {liveMeetings.length > 0 && (
+        <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-5 w-5 text-green-600 animate-pulse" />
+                  <span className="font-semibold text-green-700 dark:text-green-400">
+                    Live Meeting{liveMeetings.length > 1 ? 's' : ''} In Progress
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {liveMeetings.map(meeting => (
+                    <Button 
+                      key={meeting.id}
+                      variant="outline" 
+                      size="sm"
+                      className="gap-2 border-green-300 text-green-700 hover:bg-green-100"
+                      onClick={() => handleStartLive(meeting.id)}
+                    >
+                      <Play className="h-4 w-4" />
+                      {meeting.title}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters and Search */}
       <Card className="glass">
@@ -177,6 +219,14 @@ export function Meetings() {
             Past ({pastMeetings.length})
           </TabsTrigger>
           <TabsTrigger value="calendar">Calendar View</TabsTrigger>
+          <TabsTrigger value="agenda" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Agenda
+          </TabsTrigger>
+           <TabsTrigger value="minutes" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Minutes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
@@ -206,7 +256,18 @@ export function Meetings() {
                             {getDaysUntil(meeting.startAt)}
                           </Badge>
                         </div>
-                        <Button variant="outline">View Details</Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => handleStartLive(meeting.id)}
+                          >
+                            <Video className="h-4 w-4" />
+                            Start Live
+                          </Button>
+                          <Button variant="outline">View Details</Button>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -332,6 +393,14 @@ export function Meetings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="agenda">
+          <AgendaManager />
+        </TabsContent>
+
+        <TabsContent value="minutes">
+          <MinutesManager />
         </TabsContent>
       </Tabs>
     </div>
