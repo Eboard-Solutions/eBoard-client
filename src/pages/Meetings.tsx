@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
+<!-- <<<<<<< meeting-features-update -->
 import { Card, CardContent } from '@/components/ui/card';
+<!-- ======= -->
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+<!-- >>>>>>> main -->
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { meetings, users } from '@/lib/store';
+<!-- <<<<<<< meeting-features-update -->
 import { Calendar, Clock, MapPin, Users as UsersIcon, Plus, Search, Video, ClipboardList, FileText, Play, Radio, Building, Building2, Monitor, Flag, Repeat, Bell, Mail, MessageSquare, Smartphone, QrCode, UsersRound, CheckCircle } from 'lucide-react';
 import { AgendaManager } from '@/components/meetings/AgendaManager';
 import { MinutesManager } from '@/components/meetings/MinutesManager';
@@ -123,10 +128,16 @@ const RSVP_STATUS_LABELS: { value: RSVPStatus; label: string; color: string }[] 
   { value: 'declined', label: 'Declined', color: 'bg-red-100 text-red-700' },
   { value: 'tentative', label: 'Tentative', color: 'bg-yellow-100 text-yellow-700' },
 ];
+<!-- ======= -->
+import { Calendar, Clock, MapPin, Users as UsersIcon, Plus, Filter, Search, Video, ClipboardList, FileText, Play, Radio } from 'lucide-react';
+import { AgendaManager } from '@/components/meetings/AgendaManager';
+import { MinutesManager } from '@/components/meetings/MinutesManager';
+<!-- >>>>>>> main -->
 
 export function Meetings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+<!-- <<<<<<< meeting-features-update -->
   const [selectedFormat, setSelectedFormat] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
@@ -140,6 +151,12 @@ export function Meetings() {
   const [, setLocation] = useLocation();
 
   const liveMeetings = (meetings as EnhancedMeeting[]).filter(m => m.status === 'in_progress');
+<!-- ======= -->
+  const [, setLocation] = useLocation();
+
+  // Get meetings that are currently in progress (live)
+  const liveMeetings = meetings.filter(m => m.status === 'in_progress');
+<!-- >>>>>>> main -->
 
   const filteredMeetings = (meetings as EnhancedMeeting[]).filter(meeting => {
     const matchesSearch = meeting.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -162,6 +179,7 @@ export function Meetings() {
     return `In ${days} days`;
   };
 
+<!-- <<<<<<< meeting-features-update -->
   const handleStartLive = (meetingId: string) => setLocation(`/meetings/live/${meetingId}`);
   const handleViewDetails = (meeting: EnhancedMeeting) => { setSelectedMeeting(meeting); setIsDetailsDialogOpen(true); };
   const handleToggleAttendee = (userId: string) => {
@@ -174,6 +192,12 @@ export function Meetings() {
   const getMeetingTypeBadge = (type: MeetingType) => { const t = MEETING_TYPES.find(mt => mt.value === type); return t ? <Badge className={`${t.color} text-white text-xs`}>{t.label}</Badge> : null; };
   const getRSVPBadge = (status: RSVPStatus) => { const r = RSVP_STATUS_LABELS.find(rs => rs.value === status); return r ? <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.color}`}>{r.label}</span> : null; };
 
+<!-- ======= -->
+  const handleStartLive = (meetingId: string) => {
+    setLocation(`/meetings/live/${meetingId}`);
+  };
+
+<!-- >>>>>>> main -->
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -191,6 +215,7 @@ export function Meetings() {
               <DialogTitle>Schedule New Meeting</DialogTitle>
               <DialogDescription>Create a new board meeting with full configuration options</DialogDescription>
             </DialogHeader>
+<!-- <<<<<<< meeting-features-update -->
             <div className="space-y-6 py-4">
               <div className="space-y-4">
                 <h3 className="font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" />Basic Information</h3>
@@ -283,6 +308,36 @@ export function Meetings() {
               <div className="space-y-4">
                 <h3 className="font-semibold flex items-center gap-2"><QrCode className="h-4 w-4" />Digital Check-In</h3>
                 <div className="flex items-center gap-2"><Switch checked={formData.enableCheckIn} onCheckedChange={(v) => setFormData(prev => ({ ...prev, enableCheckIn: v }))} /><Label>Enable Check-In PIN for Physical Meetings</Label></div>
+=======
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Meeting Title</Label>
+                <Input placeholder="e.g., Q1 Strategic Planning" />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input type="date" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Time</Label>
+                  <Input type="time" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Location</Label>
+                <Input placeholder="Conference Room A or Virtual" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Agenda Items</Label>
+                <Textarea 
+                  placeholder="Enter agenda items (one per line)"
+                  rows={4}
+                />
+<!-- >>>>>>> main -->
               </div>
               <div className="flex gap-2 justify-end pt-4">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
@@ -294,6 +349,7 @@ export function Meetings() {
         </Dialog>
       </div>
 
+<!-- <<<<<<< meeting-features-update -->
       {liveMeetings.length > 0 && (
         <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
           <CardContent className="p-4">
@@ -306,12 +362,44 @@ export function Meetings() {
                     <Play className="h-4 w-4" />{meeting.title}
                   </Button>
                 ))}
+<!-- ======= -->
+      {Live Meetings Banner}
+      {liveMeetings.length > 0 && (
+        <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-5 w-5 text-green-600 animate-pulse" />
+                  <span className="font-semibold text-green-700 dark:text-green-400">
+                    Live Meeting{liveMeetings.length > 1 ? 's' : ''} In Progress
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {liveMeetings.map(meeting => (
+                    <Button 
+                      key={meeting.id}
+                      variant="outline" 
+                      size="sm"
+                      className="gap-2 border-green-300 text-green-700 hover:bg-green-100"
+                      onClick={() => handleStartLive(meeting.id)}
+                    >
+                      <Play className="h-4 w-4" />
+                      {meeting.title}
+                    </Button>
+                  ))}
+                </div>
+<!-- >>>>>>> main -->
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
+<!-- <<<<<<< meeting-features-update -->
+<!-- ======= -->
+      {Filters and Search}
+<!-- >>>>>>> main -->
       <Card className="glass">
         <CardContent className="p-4">
           <div className="flex items-center gap-4 flex-wrap">
@@ -378,8 +466,19 @@ export function Meetings() {
           <TabsTrigger value="upcoming">Upcoming ({upcomingMeetings.length})</TabsTrigger>
           <TabsTrigger value="past">Past ({pastMeetings.length})</TabsTrigger>
           <TabsTrigger value="calendar">Calendar View</TabsTrigger>
+<!-- <<<<<<< meeting-features-update -->
           <TabsTrigger value="agenda" className="gap-2"><ClipboardList className="h-4 w-4" />Agenda</TabsTrigger>
           <TabsTrigger value="minutes" className="gap-2"><FileText className="h-4 w-4" />Minutes</TabsTrigger>
+<!-- ======= -->
+          <TabsTrigger value="agenda" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Agenda
+          </TabsTrigger>
+           <TabsTrigger value="minutes" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Minutes
+          </TabsTrigger>
+<!-- >>>>>>> main -->
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
@@ -412,6 +511,21 @@ export function Meetings() {
                           <Button variant="outline" size="sm" className="gap-1" onClick={() => handleViewDetails(meeting)}><UsersIcon className="h-4 w-4" />Details</Button>
                           <Button variant="outline" size="sm" className="gap-1" onClick={() => handleStartLive(meeting.id)}><Video className="h-4 w-4" />Start Live</Button>
                         </div>
+<!-- <<<<<<< meeting-features-update -->
+<!-- ======= -->
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => handleStartLive(meeting.id)}
+                          >
+                            <Video className="h-4 w-4" />
+                            Start Live
+                          </Button>
+                          <Button variant="outline">View Details</Button>
+                        </div>
+<!-- >>>>>>> main -->
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /><span>{formatDate(meeting.startAt)}</span></div>
@@ -469,8 +583,18 @@ export function Meetings() {
           <Card className="glass"><CardContent className="p-12"><div className="text-center text-muted-foreground"><Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" /><p className="text-lg font-medium mb-2">Calendar View</p><p className="text-sm">Interactive calendar view coming soon</p></div></CardContent></Card>
         </TabsContent>
 
+<!-- <<<<<<< meeting-features-update -->
         <TabsContent value="agenda"><AgendaManager /></TabsContent>
         <TabsContent value="minutes"><MinutesManager /></TabsContent>
+<!-- ======= -->
+        <TabsContent value="agenda">
+          <AgendaManager />
+        </TabsContent>
+
+        <TabsContent value="minutes">
+          <MinutesManager />
+        </TabsContent>
+<!-- >>>>>>> main -->
       </Tabs>
     </div>
   );

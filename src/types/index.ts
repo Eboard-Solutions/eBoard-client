@@ -1,10 +1,73 @@
 // src/types/index.ts
 // Central type definitions – works perfectly with Vite + React + TypeScript
 
+// ============================================================================
+// Member Status Types
+// ============================================================================
+
+export type MemberStatus = 'active' | 'inactive' | 'suspended' | 'pending_invite';
+
+export type Permission = 
+  | 'view_members'
+  | 'edit_members'
+  | 'delete_members'
+  | 'manage_roles'
+  | 'view_meetings'
+  | 'create_meetings'
+  | 'edit_meetings'
+  | 'delete_meetings'
+  | 'view_documents'
+  | 'upload_documents'
+  | 'delete_documents'
+  | 'view_finance'
+  | 'manage_finance'
+  | 'view_announcements'
+  | 'publish_announcements'
+  | 'view_reports'
+  | 'manage_settings'
+  | 'view_audit_log';
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string;
+  permissions: Permission[];
+  isDefault: boolean;
+  isCritical: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserActivity {
+  id: string;
+  userId: string;
+  action: string;
+  ipAddress?: string;
+  userAgent?: string;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  action: 'role_changed' | 'member_removed' | 'status_updated' | 'member_created' | 'department_changed' | 'bulk_action';
+  targetUserId?: string;
+  targetUserName?: string;
+  previousValue?: string;
+  newValue?: string;
+  timestamp: string;
+  ipAddress?: string;
+}
+
 export type UserRole = 'super_admin' | 'admin' | 'board_member' | 'guest';
 
-<<<<<<< Updated upstream
-=======
+// <<<<<<< meeting-features-update
+// <<<<<<< Updated upstream
+// =======
+// =======
+// >>>>>>> main
 // ============================================================================
 // Meeting State Machine Types
 // ============================================================================
@@ -34,6 +97,7 @@ export type AttendanceStatus = 'PENDING' | 'PRESENT' | 'ABSENT' | 'LATE' | 'LEFT
 export type MinutesStatus = 'DRAFT' | 'GENERATED' | 'PENDING_APPROVAL' | 'APPROVED' | 'ARCHIVED';
 
 // ============================================================================
+// <<<<<<< meeting-features-update
 // New Meeting Types
 // ============================================================================
 
@@ -94,8 +158,13 @@ export interface MeetingEnhanced extends Meeting {
 // ============================================================================
 // Legacy Types (for backward compatibility)
 // ============================================================================
+// 
+// >>>>>>> Stashed changes
+// =======
+// Legacy Types (for backward compatibility)
+// ============================================================================
 
->>>>>>> Stashed changes
+// >>>>>>> main
 export type MeetingStatus = 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -122,6 +191,12 @@ export interface User {
   termStartDate?: string;
   termEndDate?: string;
   committees?: string[];
+  // New fields for enhanced member management
+  status?: MemberStatus;
+  lastLogin?: string;
+  createdAt?: string;
+  twoFactorEnabled?: boolean;
+  loginHistory?: UserActivity[];
 }
 
 export interface Meeting {
@@ -148,6 +223,65 @@ export interface AgendaItem {
   description?: string;
   attachments: string[];
   order: number;
+}
+
+// Minutes related types
+export interface Minutes {
+  id: string;
+  meetingId: string;
+  title: string;
+  date: string;
+  time: string;
+  endTime?: string;
+  location: string;
+  attendance: AttendanceRecord[];
+  approvalOfPreviousMinutes?: string;
+  agendaSummaries: AgendaSummary[];
+  decisions: Decision[];
+  actionItems: ActionItem[];
+  nextMeetingDetails?: NextMeetingDetails;
+  attachments: string[];
+  preparedBy: string;
+  approvedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AttendanceRecord {
+  userId: string;
+  present: boolean;
+  role?: string;
+}
+
+export interface AgendaSummary {
+  id: string;
+  topic: string;
+  discussion: string;
+  decision?: string;
+  presenter?: string;
+}
+
+export interface Decision {
+  id: string;
+  title: string;
+  description: string;
+  approvedBy?: string;
+  date?: string;
+}
+
+export interface ActionItem {
+  id: string;
+  action: string;
+  owner: string;
+  dueDate: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface NextMeetingDetails {
+  date?: string;
+  time?: string;
+  location?: string;
+  agenda?: string;
 }
 
 export interface Task {
@@ -263,28 +397,269 @@ export interface DashboardStats {
   attendanceTrend: { month: string; attendance: number }[];
 }
 
-// THIS LINE IS THE KEY – forces Vite to treat the module as having runtime exports
-export default {} as const;
+// ============================================================================
+// Live Meeting Module Types
+// ============================================================================
 
-// Optional: re-export everything explicitly (helps IDEs and some edge cases)
-export type {
-  User,
-  UserRole,
-  Meeting,
-  MeetingStatus,
-  AgendaItem,
-  Task,
-  TaskStatus,
-  TaskPriority,
-  Document,
-  DocumentAccessLevel,
-  Poll,
-  PollOption,
-  Budget,
-  Expense,
-  ExpenseStatus,
-  Announcement,
-  Notification,
-  NotificationType,
-  DashboardStats,
-};
+export interface MeetingVote {
+  id: string;
+  decisionId: string;
+  odlId: string;
+  voterName: string;
+  vote: 'YES' | 'NO' | 'ABSTAIN';
+  votedAt: string;
+  isLocked: boolean;
+}
+
+export interface MeetingDecision {
+  id: string;
+  meetingId: string;
+  agendaItemId?: string;
+  decisionText: string;
+  decisionType: DecisionType;
+  description?: string;
+  approvalMethod: ApprovalMethod;
+  majorityRule: number;
+  quorumRequired: number;
+  quorumPresent: number;
+  votes: MeetingVote[];
+  yesVotes: number;
+  noVotes: number;
+  abstentions: number;
+  result?: 'APPROVED' | 'REJECTED' | 'PENDING';
+  isLocked: boolean;
+  lockedAt?: string;
+  lockedBy?: string;
+  createdBy: string;
+  createdAt: string;
+  finalizedAt?: string;
+  actionItemIds: string[];
+}
+
+export interface MeetingSession {
+  id: string;
+  meetingId: string;
+  title: string;
+  description?: string;
+  state: MeetingState;
+  scheduledStart: string;
+  scheduledEnd: string;
+  actualStart?: string;
+  actualEnd?: string;
+  location?: string;
+  virtualLink?: string;
+  quorumRequired: number;
+  quorumPresent: number;
+  chairpersonId: string;
+  secretaryId: string;
+  participants: Participant[];
+  agendaItems: AgendaItemSession[];
+  activeAgendaItemId?: string;
+  decisions: Decision[];
+  votes: MeetingVote[];
+  actionItems: MeetingActionItem[];
+  liveNotes: LiveNote[];
+  minutesId?: string;
+  minutes?: MeetingMinutes;
+  aiSummary?: string;
+  aiDraftResolution?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  endedAt?: string;
+}
+
+export interface Participant {
+  id: string;
+  odlId: string;
+  name: string;
+  email: string;
+  role: 'CHAIR' | 'SECRETARY' | 'MEMBER' | 'OBSERVER' | 'GUEST';
+  attendanceStatus: AttendanceStatus;
+  joinedAt?: string;
+  leftAt?: string;
+  isPresent: boolean;
+  canVote: boolean;
+  hasVoted: boolean;
+}
+
+export interface AgendaItemSession {
+  id: string;
+  meetingId: string;
+  title: string;
+  description?: string;
+  ownerId: string;
+  ownerName: string;
+  duration: number;
+  order: number;
+  status: AgendaItemStatus;
+  startedAt?: string;
+  endedAt?: string;
+  actualDuration?: number;
+  notes: string[];
+  decisionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetingActionItem {
+  id: string;
+  meetingId: string;
+  decisionId?: string;
+  agendaItemId?: string;
+  title: string;
+  description?: string;
+  ownerId: string;
+  ownerName: string;
+  dueDate: string;
+  status: ActionItemStatus;
+  priority: TaskPriority;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  completedAt?: string;
+  closedAt?: string;
+}
+
+export interface LiveNote {
+  id: string;
+  meetingId: string;
+  agendaItemId?: string;
+  content: string;
+  summary?: string;
+  version: number;
+  previousVersionId?: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  isAutoSaved: boolean;
+  timestamp?: string;
+}
+
+export interface MeetingMinutes {
+  id: string;
+  meetingId: string;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  attendance: AttendanceRecordEnhanced[];
+  agendaSummaries: AgendaSummaryEnhanced[];
+  decisions: Decision[];
+  actionItems: MeetingActionItem[];
+  nextMeetingDetails?: NextMeetingDetails;
+  attachments: string[];
+  status: MinutesStatus;
+  version: number;
+  preparedBy: string;
+  preparedByName: string;
+  preparedAt: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  isLocked: boolean;
+  lockedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AttendanceRecordEnhanced {
+  odlId: string;
+  name: string;
+  email: string;
+  role: string;
+  status: AttendanceStatus;
+  joinedAt?: string;
+  leftAt?: string;
+}
+
+export interface AgendaSummaryEnhanced {
+  id: string;
+  agendaItemId: string;
+  topic: string;
+  discussion: string;
+  decision?: string;
+  presenterId: string;
+  presenterName: string;
+  duration: number;
+  actualDuration?: number;
+}
+
+export interface AuditLog {
+  id: string;
+  meetingId: string;
+  action: string;
+  entityType: 'MEETING' | 'AGENDA_ITEM' | 'DECISION' | 'VOTE' | 'ACTION_ITEM' | 'NOTE' | 'MINUTES' | 'PARTICIPANT';
+  entityId: string;
+  actorId: string;
+  actorName: string;
+  actorRole: string;
+  previousValue?: string;
+  newValue?: string;
+  timestamp: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export type MeetingEventType = 
+  | 'MEETING_STATE_CHANGED'
+  | 'AGENDA_ITEM_ACTIVATED'
+  | 'AGENDA_ITEM_COMPLETED'
+  | 'AGENDA_ITEM_SKIPPED'
+  | 'DECISION_CREATED'
+  | 'DECISION_UPDATED'
+  | 'DECISION_LOCKED'
+  | 'VOTE_CAST'
+  | 'ACTION_ITEM_CREATED'
+  | 'ACTION_ITEM_UPDATED'
+  | 'NOTE_CREATED'
+  | 'NOTE_UPDATED'
+  | 'PARTICIPANT_JOINED'
+  | 'PARTICIPANT_LEFT'
+  | 'MINUTES_GENERATED'
+  | 'MINUTES_APPROVED';
+
+export interface MeetingEvent {
+  type: MeetingEventType;
+  meetingId: string;
+  data: Record<string, unknown>;
+  timestamp: string;
+  actorId: string;
+  actorName: string;
+}
+
+export interface AISummarizeRequest {
+  meetingId: string;
+  agendaItemId?: string;
+  content: string[];
+}
+
+export interface AISummarizeResponse {
+  summary: string;
+  keyPoints: string[];
+  actionItems: string[];
+}
+
+export interface AIDraftResolutionRequest {
+  decisionText: string;
+  discussion: string;
+}
+
+export interface AIDraftResolutionResponse {
+  draftResolution: string;
+  suggestedWording: string[];
+}
+
+export interface AIGenerateMinutesRequest {
+  meetingId: string;
+}
+
+export interface AIGenerateMinutesResponse {
+  draft: MeetingMinutes;
+  confidence: number;
+}
+
+// THIS LINE IS THE KEY – forces Vite to treat the module as having runtime exports
+export default {};

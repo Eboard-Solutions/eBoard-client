@@ -7,8 +7,16 @@ import { SignUp } from "@/pages/auth/SignUp";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
+<!-- <<<<<<< meeting-features-update -->
 import { LiveMeeting } from "@/pages/LiveMeeting";
 import { Members } from "@/pages/Members";
+<!-- ======= -->
+<!-- <<<<<<< live-meeting-feature -->
+import { LiveMeeting } from "@/pages/LiveMeeting";
+import { Members } from "@/pages/Members";
+<!-- import Members from "@/pages/Members"; -->
+<!-- >>>>>>> main -->
+<!-- >>>>>>> main -->
 import { Documents } from "@/pages/Documents";
 import { Voting } from "@/pages/Voting";
 import { Tasks } from "@/pages/Tasks";

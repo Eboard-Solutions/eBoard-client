@@ -1,4 +1,4 @@
-import { User, Meeting, Task, Poll, Notification } from '@/types';
+import { User, Meeting, Task, Poll, Notification, Role, AuditLogEntry, UserActivity, Permission } from '@/types';
 
 export interface DashboardStats {
   upcomingMeetings: Meeting[];
@@ -28,6 +28,140 @@ export interface Document {
   accessLevel: string;
 }
 
+// Mock login history for users
+const generateLoginHistory = (userId: string): UserActivity[] => {
+  const actions = ['Login', 'Viewed Dashboard', 'Updated Profile', 'Joined Meeting', 'Uploaded Document'];
+  return Array.from({ length: 5 }, (_, i) => ({
+    id: `activity-${i}`,
+    userId,
+    action: actions[i % actions.length],
+    ipAddress: `192.168.1.${100 + i}`,
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    timestamp: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+  }));
+};
+
+// Default roles with permissions
+export const roles: Role[] = [
+  {
+    id: 'role-1',
+    name: 'Super Admin',
+    description: 'Full system access with all permissions',
+    permissions: [
+      'view_members', 'edit_members', 'delete_members', 'manage_roles',
+      'view_meetings', 'create_meetings', 'edit_meetings', 'delete_meetings',
+      'view_documents', 'upload_documents', 'delete_documents',
+      'view_finance', 'manage_finance', 'view_announcements', 'publish_announcements',
+      'view_reports', 'manage_settings', 'view_audit_log'
+    ] as Permission[],
+    isDefault: false,
+    isCritical: true,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: 'role-2',
+    name: 'Admin',
+    description: 'Administrative access with member and content management',
+    permissions: [
+      'view_members', 'edit_members', 'manage_roles',
+      'view_meetings', 'create_meetings', 'edit_meetings',
+      'view_documents', 'upload_documents',
+      'view_finance', 'view_announcements', 'publish_announcements',
+      'view_reports', 'view_audit_log'
+    ] as Permission[],
+    isDefault: false,
+    isCritical: true,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: 'role-3',
+    name: 'Board Member',
+    description: 'Standard board member with meeting and document access',
+    permissions: [
+      'view_members', 'view_meetings', 'create_meetings',
+      'view_documents', 'upload_documents',
+      'view_announcements', 'view_reports'
+    ] as Permission[],
+    isDefault: true,
+    isCritical: false,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: 'role-4',
+    name: 'Guest',
+    description: 'Limited read-only access',
+    permissions: [
+      'view_members', 'view_meetings', 'view_documents', 'view_announcements'
+    ] as Permission[],
+    isDefault: false,
+    isCritical: false,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z'
+  }
+];
+
+// Mock audit log entries
+export const auditLogs: AuditLogEntry[] = [
+  {
+    id: 'audit-1',
+    userId: '1',
+    userName: 'Sarah Johnson',
+    action: 'role_changed',
+    targetUserId: '2',
+    targetUserName: 'Michael Chen',
+    previousValue: 'board_member',
+    newValue: 'admin',
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    ipAddress: '192.168.1.100'
+  },
+  {
+    id: 'audit-2',
+    userId: '1',
+    userName: 'Sarah Johnson',
+    action: 'member_removed',
+    targetUserId: '6',
+    targetUserName: 'John Smith',
+    timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    ipAddress: '192.168.1.100'
+  },
+  {
+    id: 'audit-3',
+    userId: '2',
+    userName: 'Michael Chen',
+    action: 'status_updated',
+    targetUserId: '3',
+    targetUserName: 'Emily Rodriguez',
+    previousValue: 'active',
+    newValue: 'suspended',
+    timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    ipAddress: '192.168.1.101'
+  },
+  {
+    id: 'audit-4',
+    userId: '1',
+    userName: 'Sarah Johnson',
+    action: 'member_created',
+    targetUserId: '7',
+    targetUserName: 'New Member',
+    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    ipAddress: '192.168.1.100'
+  },
+  {
+    id: 'audit-5',
+    userId: '1',
+    userName: 'Sarah Johnson',
+    action: 'bulk_action',
+    targetUserName: '3 members',
+    previousValue: 'No department',
+    newValue: 'Finance',
+    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    ipAddress: '192.168.1.100'
+  }
+];
+
 // Current user - can be changed to simulate different roles
 export const currentUser: User = {
   id: '1',
@@ -40,10 +174,15 @@ export const currentUser: User = {
   phone: '+1 (555) 123-4567',
   termStartDate: '2024-01-01',
   termEndDate: '2025-12-31',
-  committees: ['Finance', 'Strategy']
+  committees: ['Finance', 'Strategy'],
+  status: 'active',
+  lastLogin: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+  createdAt: '2023-06-15T00:00:00Z',
+  twoFactorEnabled: true,
+  loginHistory: generateLoginHistory('1')
 };
 
-// Mock users
+// Mock users with enhanced data
 export const users: User[] = [
   currentUser,
   {
@@ -51,11 +190,16 @@ export const users: User[] = [
     name: 'Michael Chen',
     email: 'michael.chen@eboard.com',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
-    role: 'board_member',
+    role: 'admin',
     position: 'Vice President',
     department: 'Operations',
     phone: '+1 (555) 234-5678',
-    committees: ['Operations', 'Technology']
+    committees: ['Operations', 'Technology'],
+    status: 'active',
+    lastLogin: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2023-07-20T00:00:00Z',
+    twoFactorEnabled: false,
+    loginHistory: generateLoginHistory('2')
   },
   {
     id: '3',
@@ -65,7 +209,12 @@ export const users: User[] = [
     role: 'board_member',
     position: 'Treasurer',
     department: 'Finance',
-    committees: ['Finance', 'Audit']
+    committees: ['Finance', 'Audit'],
+    status: 'active',
+    lastLogin: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2023-08-10T00:00:00Z',
+    twoFactorEnabled: true,
+    loginHistory: generateLoginHistory('3')
   },
   {
     id: '4',
@@ -75,7 +224,12 @@ export const users: User[] = [
     role: 'board_member',
     position: 'Secretary',
     department: 'Administration',
-    committees: ['Governance', 'Communications']
+    committees: ['Governance', 'Communications'],
+    status: 'active',
+    lastLogin: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2023-09-01T00:00:00Z',
+    twoFactorEnabled: false,
+    loginHistory: generateLoginHistory('4')
   },
   {
     id: '5',
@@ -85,8 +239,54 @@ export const users: User[] = [
     role: 'board_member',
     position: 'Board Member',
     department: 'Marketing',
-    committees: ['Marketing', 'Public Relations']
+    committees: ['Marketing', 'Public Relations'],
+    status: 'inactive',
+    lastLogin: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2023-10-15T00:00:00Z',
+    twoFactorEnabled: false,
+    loginHistory: generateLoginHistory('5')
+  },
+  {
+    id: '6',
+    name: 'James Wilson',
+    email: 'james.wilson@eboard.com',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
+    role: 'board_member',
+    position: 'Board Member',
+    department: 'Technology',
+    committees: ['Technology', 'Strategy'],
+    status: 'suspended',
+    lastLogin: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2023-11-01T00:00:00Z',
+    twoFactorEnabled: false,
+    loginHistory: generateLoginHistory('6')
+  },
+  {
+    id: '7',
+    name: 'Amanda Taylor',
+    email: 'amanda.taylor@eboard.com',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop',
+    role: 'guest',
+    position: 'Consultant',
+    department: 'Strategy',
+    committees: [],
+    status: 'pending_invite',
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    twoFactorEnabled: false,
+    loginHistory: []
   }
+];
+
+// Available departments
+export const departments = [
+  'Executive',
+  'Operations',
+  'Finance',
+  'Administration',
+  'Marketing',
+  'Technology',
+  'Strategy',
+  'Human Resources'
 ];
 
 // Mock meetings
@@ -94,12 +294,12 @@ export const meetings: Meeting[] = [
   {
     id: '1',
     title: 'Q1 Strategic Planning Session',
-    startAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    endAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(),
+    startAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    endAt: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
     timezone: 'America/New_York',
     location: 'Conference Room A',
     isRecurring: false,
-    status: 'upcoming',
+    status: 'in_progress',
     agenda: [
       {
         id: 'a1',
@@ -337,7 +537,18 @@ export const polls: Poll[] = [
 ];
 
 // Mock budgets
-export const budgets: any[] = [
+export interface BudgetItem {
+  id: string;
+  fiscalYear: string;
+  category: string;
+  allocated: number;
+  spent: number;
+  status: 'draft' | 'approved' | 'active';
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+export const budgets: BudgetItem[] = [
   {
     id: '1',
     fiscalYear: '2024',
