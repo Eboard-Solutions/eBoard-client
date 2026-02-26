@@ -7,8 +7,11 @@ import { SignUp } from "@/pages/auth/SignUp";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
+<!-- <<<<<<< live-meeting-feature -->
 import { LiveMeeting } from "@/pages/LiveMeeting";
 import { Members } from "@/pages/Members";
+import Members from "@/pages/Members";
+<!-- >>>>>>> main -->
 import { Documents } from "@/pages/Documents";
 import { Voting } from "@/pages/Voting";
 import { Tasks } from "@/pages/Tasks";
@@ -16,6 +19,7 @@ import { Finance } from "@/pages/Finance";
 import { Announcements } from "@/pages/Announcements";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
+import Profile from "@/pages/Profile";
 import { CreateAdmin } from "@/pages/admin/CreateAdmin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -156,6 +160,14 @@ function App() {
           <ProtectedRoute>
             <AppLayout>
               <Settings />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/profile">
+          <ProtectedRoute>
+            <AppLayout>
+              <Profile />
             </AppLayout>
           </ProtectedRoute>
         </Route>
