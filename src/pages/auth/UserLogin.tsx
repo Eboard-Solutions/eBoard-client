@@ -1,7 +1,7 @@
 // src/pages/auth/UserLogin.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Card,
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import {
   Loader2,
   Mail,
@@ -22,6 +23,10 @@ import {
   CheckCircle2,
   XCircle,
   Hash,
+  ArrowRight,
+  ShieldCheck,
+  Users,
+  Building2,
 } from 'lucide-react';
 
 import authService from '@/lib/auth';
@@ -29,6 +34,7 @@ import authService from '@/lib/auth';
 const ROUTES = {
   boardMember: '/dashboard/board-member',
   adminLogin: '/auth/signin',
+  forgotPassword: '/auth/forgot-password',
 };
 
 interface Notification {
@@ -46,6 +52,11 @@ export function UserLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
     setNotification({ type, message, description });
@@ -67,8 +78,6 @@ export function UserLogin() {
     setIsLoading(true);
 
     try {
-      console.log('🔐 Attempting board member login...');
-      
       const response = await authService.login({
         email: trimmedEmail,
         password: trimmedPassword,
@@ -76,31 +85,22 @@ export function UserLogin() {
       });
 
       const { user } = response;
-
-      console.log('✅ Login successful:', { role: user.role });
-
       showNotification('success', 'Login successful!', `Welcome back, ${user.firstName}!`);
 
-      // Redirect to board member dashboard
       setTimeout(() => {
         setLocation(ROUTES.boardMember);
       }, 1200);
     } catch (err: any) {
-      console.error('[LOGIN ERROR]', err);
-
-      let msg = 'Login failed. Please try again.';
-
-      if (err.message) {
-        msg = err.message;
-      }
-
-      showNotification('error', 'Login Failed', msg);
+      showNotification('error', 'Login Failed', err.message || 'Login failed. Please try again.');
       setIsLoading(false);
     }
   };
 
+  const isFormValid = email.trim() && password.trim() && orgCode.trim();
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-fuchsia-50 dark:from-purple-950 dark:to-fuchsia-950 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+
       {/* Notification Toast */}
       {notification && (
         <div
@@ -126,10 +126,17 @@ export function UserLogin() {
         </div>
       )}
 
-      <div className="w-full max-w-md">
+      <div
+        className="w-full max-w-md"
+        style={{
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(16px)',
+          transition: 'opacity 0.5s ease-out, transform 0.5s ease-out',
+        }}
+      >
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 to-fuchsia-600 shadow-2xl mb-6 mx-auto overflow-hidden">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board Logo"
@@ -140,13 +147,33 @@ export function UserLogin() {
             Board Member Login
           </h1>
           <p className="mt-3 text-gray-600 dark:text-gray-400">
-            Sign in to access your organization's board
+            Welcome back • Sign in with your organization code
           </p>
         </div>
 
+        {/* Trust indicators */}
+        <div className="flex items-center justify-center gap-6 mb-8">
+          {[
+            { icon: <ShieldCheck className="h-3.5 w-3.5" />, label: 'Secure Login' },
+            { icon: <Building2 className="h-3.5 w-3.5" />, label: 'Org Verified' },
+            { icon: <Users className="h-3.5 w-3.5" />, label: 'Board Access' },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="flex items-center gap-1.5 text-indigo-500/70 dark:text-indigo-400/60 text-xs"
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+
         {/* Card */}
-        <Card className="border-purple-200/60 dark:border-purple-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
-          <CardHeader className="px-10 pt-10 pb-6 text-center">
+        <Card className="border-gray-200/60 dark:border-gray-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
+          {/* Top accent line — matches indigo theme */}
+          <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-500" />
+
+          <CardHeader className="px-10 pt-8 pb-6 text-center">
             <CardTitle className="text-2xl font-semibold">Member Sign In</CardTitle>
             <CardDescription className="mt-2 text-base">
               Enter your credentials and organization code
@@ -155,6 +182,7 @@ export function UserLogin() {
 
           <CardContent className="px-10 pb-10">
             <form onSubmit={handleSubmit} className="space-y-6">
+
               {/* Organization Code */}
               <div className="space-y-2">
                 <Label htmlFor="orgCode" className="font-medium text-gray-700 dark:text-gray-300">
@@ -165,16 +193,16 @@ export function UserLogin() {
                   <Input
                     id="orgCode"
                     type="text"
-                    placeholder="Enter your organization code"
+                    placeholder="e.g. ACME-2024"
                     value={orgCode}
                     onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
-                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all uppercase"
+                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all font-mono tracking-wider uppercase"
                     required
                     autoFocus
                   />
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Ask your organization admin for the code
+                <p className="text-xs text-slate-500 dark:text-slate-400 pl-1">
+                  Ask your organization administrator for this code
                 </p>
               </div>
 
@@ -191,7 +219,7 @@ export function UserLogin() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     required
                     autoComplete="email"
                   />
@@ -207,14 +235,13 @@ export function UserLogin() {
                   <Button
                     variant="link"
                     size="sm"
-                    className="text-purple-600 dark:text-purple-400 hover:text-purple-500 p-0 h-auto font-medium"
+                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 p-0 h-auto font-medium"
                     type="button"
-                    onClick={() => setLocation('/auth/forgot-password')}
+                    onClick={() => setLocation(ROUTES.forgotPassword)}
                   >
                     Forgot password?
                   </Button>
                 </div>
-
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" />
                   <Input
@@ -223,7 +250,7 @@ export function UserLogin() {
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 pl-11 pr-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                    className="h-12 pl-11 pr-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     required
                     minLength={8}
                     autoComplete="current-password"
@@ -241,8 +268,8 @@ export function UserLogin() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                disabled={isLoading || !email.trim() || !password.trim() || !orgCode.trim()}
-                className="w-full h-12 mt-2 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isLoading || !isFormValid}
+                className="w-full h-12 mt-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed group"
               >
                 {isLoading ? (
                   <>
@@ -250,22 +277,41 @@ export function UserLogin() {
                     Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  <>
+                    Sign In to Board
+                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+                  </>
                 )}
               </Button>
             </form>
 
-            {/* Footer link */}
-            <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-              Are you an admin?{' '}
-              <button
-                type="button"
-                className="text-purple-600 dark:text-purple-400 hover:text-purple-500 font-medium underline-offset-4 hover:underline"
-                onClick={() => setLocation(ROUTES.adminLogin)}
-              >
-                Sign in as Admin
-              </button>
+            {/* Divider */}
+            <div className="my-8 flex items-center gap-4">
+              <Separator className="flex-1" />
+              <span className="text-xs text-gray-400 dark:text-gray-600 font-medium uppercase tracking-wider">
+                Are you an admin?
+              </span>
+              <Separator className="flex-1" />
             </div>
+
+            {/* Admin Login Button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-12 rounded-xl border-2 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:border-indigo-400 dark:hover:border-indigo-600 font-medium transition-all group"
+              onClick={() => setLocation(ROUTES.adminLogin)}
+            >
+              <ShieldCheck className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
+              Sign in as Administrator
+            </Button>
+
+            {/* Footer note */}
+            <p className="mt-6 text-center text-xs text-gray-500 dark:text-gray-600">
+              Don't have access?{' '}
+              <span className="text-indigo-600 dark:text-indigo-400">
+                Contact your organization admin
+              </span>
+            </p>
           </CardContent>
         </Card>
 

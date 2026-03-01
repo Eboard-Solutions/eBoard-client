@@ -1,5 +1,5 @@
 // src/lib/auth.ts
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosError } from 'axios';
 
 // ────────────────────────────────────────────────
 // CONFIGURATION
@@ -9,133 +9,131 @@ const API_BASE = `http://localhost:3000/api/v1`;
 // ────────────────────────────────────────────────
 // TYPES
 // ────────────────────────────────────────────────
-interface LoginCredentials {
+export interface LoginCredentials {
   email: string;
   password: string;
   orgCode?: string;
 }
 
-interface LoginResponse {
-  at: string; // access token
-  rt: string; // refresh token
-  user: {
-    userId: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    hasOrganisation: boolean;
-    organisationStatus: string | null;
-    orgCode: string | null;
-  };
-}
-
-interface SignUpData {
+export interface AuthUser {
+  userId: string;
+  email: string;
   firstName: string;
   lastName: string;
-  organisationName: string; // Note: British spelling to match backend
+  role: string;
+  hasOrganisation: boolean;
+  organisationStatus: string | null;
+  orgCode: string | null;
+}
+
+export interface LoginResponse {
+  at: string;   // access token
+  rt: string;   // refresh token
+  user: AuthUser;
+}
+
+export interface SignUpData {
+  firstName: string;
+  lastName: string;
+  organisationName: string;
   phoneNumber: string;
   email: string;
   password: string;
 }
 
 // ────────────────────────────────────────────────
+// HELPERS
+// ────────────────────────────────────────────────
+function extractMessage(data: unknown): string {
+  if (!data || typeof data !== 'object') return 'Unknown error';
+  const d = data as Record<string, unknown>;
+  const raw = d.message ?? d.error ?? d.detail ?? 'Unknown error';
+  if (Array.isArray(raw)) return raw.join(' • ');
+  return String(raw);
+}
+
+// ────────────────────────────────────────────────
 // AUTH SERVICE
 // ────────────────────────────────────────────────
 export const authService = {
+
   /**
-   * Log in user (super-admin, org-admin, or regular user)
+   * Login — routes to the correct endpoint based on whether orgCode is supplied.
+   *
+   * No orgCode  →  admin login  →  /auth/org-admin/login
+   * With orgCode → member login →  /auth/login
    */
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
-    if (!API_BASE) {
-      throw new Error('API base URL not configured (VITE_API_URL missing)');
-    }
+    const hasOrgCode = !!credentials.orgCode?.trim();
 
-    // Determine endpoint based on whether orgCode is provided
-    const isOrgAdminLogin = !credentials.orgCode; // Org admins login without orgCode
-    const url = isOrgAdminLogin 
-      ? `${API_BASE}/auth/org-admin/login`  // Org admin endpoint
-      : `${API_BASE}/auth/login`;             // Regular user endpoint (with orgCode)
+    // FIX: correct endpoint routing
+    const url = hasOrgCode
+      ? `${API_BASE}/auth/login`            // board member / regular user
+      : `${API_BASE}/auth/org-admin/login`; // super admin / org admin
 
     const payload: Record<string, string> = {
-      email: credentials.email.trim(),
+      email:    credentials.email.trim(),
       password: credentials.password.trim(),
     };
-
-    // Only include orgCode for regular users
-    if (credentials.orgCode?.trim()) {
-      payload.orgCode = credentials.orgCode.trim();
+    if (hasOrgCode) {
+      payload.orgCode = credentials.orgCode!.trim();
     }
 
     try {
-      console.log('🔐 Login request to:', url);
-      console.log('📤 Payload:', { email: payload.email, hasOrgCode: !!payload.orgCode });
+      console.log('🔐 Login →', url, { hasOrgCode });
 
       const response = await axios.post<LoginResponse>(url, payload, {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const { at, rt, user } = response.data;
+      // Defensive: handle both flat and nested response shapes
+      // e.g. { at, rt, user } OR { data: { at, rt, user } }
+      const body = (response.data as any)?.data ?? response.data;
+      const { at, rt, user } = body as LoginResponse;
 
       if (!at) {
+        console.error('🔴 Full server response:', JSON.stringify(response.data, null, 2));
         throw new Error('No access token received from server');
       }
+      if (!user) {
+        throw new Error('No user data received from server');
+      }
 
-      // Store tokens and user data
-      localStorage.setItem('token', at);
+      // Persist session
+      localStorage.setItem('token',        at);
       localStorage.setItem('refreshToken', rt);
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('user',         JSON.stringify(user));
 
-      console.log('✅ Login successful:', { 
-        role: user.role, 
-        hasOrganisation: user.hasOrganisation 
-      });
+      console.log('✅ Login successful:', { role: user.role, hasOrganisation: user.hasOrganisation });
 
-      return response.data;
+      return { at, rt, user };
+
     } catch (err) {
       if (err instanceof AxiosError) {
-        const status = err.response?.status;
-        let message = err.response?.data?.message || err.message || 'Login failed';
+        const status  = err.response?.status;
+        const data    = err.response?.data;
+        let   message = extractMessage(data);
 
-        console.error('❌ Login failed:', {
-          status,
-          message,
-          endpoint: url
-        });
+        console.error('❌ Login failed:', { status, message, url, data });
 
-        // Improve message readability
+        if (!status) throw new Error('Cannot reach the server. Check your connection.');
+
         if (status === 400) {
-          if (Array.isArray(message)) {
-            message = message.join(' • ');
-          }
-          if (message.toLowerCase().includes('orgcode') || message.toLowerCase().includes('organization code')) {
+          if (message.toLowerCase().includes('orgcode') || message.toLowerCase().includes('organization code'))
             throw new Error('Organization code is required for this account');
-          }
-          if (message.toLowerCase().includes('email') || message.toLowerCase().includes('password')) {
+          if (message.toLowerCase().includes('email') || message.toLowerCase().includes('password'))
             throw new Error('Invalid email or password');
-          }
           throw new Error(`Invalid request: ${message}`);
         }
-
-        if (status === 401) {
-          throw new Error('Invalid credentials');
-        }
-
-        if (status === 404) {
-          throw new Error('Login service not available');
-        }
-
-        if (status === 429) {
-          throw new Error('Too many attempts. Try again later.');
-        }
-
-        if (!status) {
-          throw new Error('Cannot reach the server. Check your connection.');
-        }
+        if (status === 401) throw new Error('Invalid credentials. Please check your email and password.');
+        if (status === 403) throw new Error('Access denied. You may not have permission to log in here.');
+        if (status === 404) throw new Error('Login service not found. Is the backend running?');
+        if (status === 429) throw new Error('Too many attempts. Please try again later.');
 
         throw new Error(message);
       }
 
+      // Re-throw non-Axios errors (e.g. the manual throws above)
       throw err instanceof Error ? err : new Error('Login failed unexpectedly');
     }
   },
@@ -144,98 +142,51 @@ export const authService = {
    * Register new organization admin
    */
   signUp: async (data: SignUpData): Promise<unknown> => {
-    if (!API_BASE) {
-      throw new Error('API base URL not configured (VITE_API_URL missing)');
-    }
-
     const url = `${API_BASE}/auth/register/org-admin`;
 
-    // Build payload - must match backend API field names exactly
     const payload = {
-      firstName: data.firstName.trim(),
-      lastName: data.lastName.trim(),
-      organisationName: data.organisationName.trim(), // British spelling!
-      phoneNumber: data.phoneNumber.trim(),
-      email: data.email.trim(),
-      password: data.password.trim(),
+      firstName:        data.firstName.trim(),
+      lastName:         data.lastName.trim(),
+      organisationName: data.organisationName.trim(),
+      phoneNumber:      data.phoneNumber.trim(),
+      email:            data.email.trim(),
+      password:         data.password.trim(),
     };
 
     try {
-      console.log('📤 Signup request to:', url);
-      console.log('📤 Payload:', { ...payload, password: '***' }); // Log without password
-      
+      console.log('📤 Signup →', url, { ...payload, password: '***' });
       const response = await axios.post(url, payload, {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       });
-      
-      console.log('✅ Signup successful:', response.data);
+      console.log('✅ Signup successful');
       return response.data;
     } catch (err) {
       if (err instanceof AxiosError) {
-        const status = err.response?.status;
-        let message = err.response?.data?.message || err.message || 'Unknown error';
-        
-        // Enhanced error logging for debugging
-        console.error('❌ Signup failed:', {
-          status,
-          statusText: err.response?.statusText,
-          message,
-          errorData: err.response?.data,
-          url
-        });
+        const status  = err.response?.status;
+        const data    = err.response?.data;
+        let   message = extractMessage(data);
 
-        if (Array.isArray(message)) {
-          message = message.join(' • ');
-        }
+        console.error('❌ Signup failed:', { status, message, data, url });
 
-        if (status === 400) {
-          // Extract detailed validation errors if available
-          const validationErrors = err.response?.data?.errors || 
-                                   err.response?.data?.details ||
-                                   err.response?.data?.error;
-          
-          if (validationErrors) {
-            if (Array.isArray(validationErrors)) {
-              throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
-            }
-            throw new Error(`Validation failed: ${validationErrors}`);
-          }
-          throw new Error(`Invalid input: ${message}`);
-        }
+        if (Array.isArray(data?.errors))
+          throw new Error(`Validation failed: ${(data.errors as string[]).join(', ')}`);
 
-        if (status === 409) {
-          throw new Error('An account with this email already exists');
-        }
-
-        if (status === 404) {
-          throw new Error(`Signup endpoint not found. Please check backend server.`);
-        }
-
-        if (status === 429) {
-          throw new Error('Too many signup attempts. Please try again later.');
-        }
-
-        if (status === undefined || status === 0) {
-          throw new Error('Network error – is the backend server running at http://localhost:3000?');
-        }
+        if (!status) throw new Error('Network error – is the backend running at http://localhost:3000?');
+        if (status === 400) throw new Error(`Invalid input: ${message}`);
+        if (status === 409) throw new Error('An account with this email already exists.');
+        if (status === 404) throw new Error('Signup endpoint not found. Check backend server.');
+        if (status === 429) throw new Error('Too many signup attempts. Try again later.');
 
         throw new Error(`Signup failed (${status}): ${message}`);
       }
-
-      console.error('❌ Unexpected error:', err);
       throw err instanceof Error ? err : new Error('Signup failed unexpectedly');
     }
   },
 
   /**
-   * Request password reset
+   * Request password reset email
    */
   forgotPassword: async (data: { email: string }): Promise<unknown> => {
-    if (!API_BASE) throw new Error('API base URL not configured');
-
     try {
       const response = await axios.post(`${API_BASE}/auth/forgot-password`, data);
       return response.data;
@@ -245,59 +196,41 @@ export const authService = {
     }
   },
 
-  /**
-   * Get stored JWT token
-   */
+  // ── Token / session helpers ──────────────────
+
   getToken(): string | null {
     return localStorage.getItem('token');
   },
 
-  /**
-   * Get stored refresh token
-   */
   getRefreshToken(): string | null {
     return localStorage.getItem('refreshToken');
   },
 
-  /**
-   * Get stored user data
-   */
-  getUser(): LoginResponse['user'] | null {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return null;
+  getUser(): AuthUser | null {
     try {
-      return JSON.parse(userStr);
+      const raw = localStorage.getItem('user');
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
     } catch {
       return null;
     }
   },
 
-  /**
-   * Get current user with formatted name (for Dashboard compatibility)
-   */
   getCurrentUser(): { name: string; email: string; role: string } | null {
-    const user = this.getUser();
+    const user = authService.getUser();
     if (!user) return null;
-    
     return {
-      name: `${user.firstName} ${user.lastName}`,
+      name:  `${user.firstName} ${user.lastName}`,
       email: user.email,
-      role: user.role,
+      role:  user.role,
     };
   },
 
-  /**
-   * Remove tokens and user data (logout)
-   */
   logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   },
 
-  /**
-   * Check if user appears logged in (client-side only)
-   */
   isAuthenticated(): boolean {
     return !!authService.getToken();
   },
@@ -308,23 +241,20 @@ export const authService = {
 // ────────────────────────────────────────────────
 axios.interceptors.request.use((config) => {
   const token = authService.getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 axios.interceptors.response.use(
   (response) => response,
-  (error) => {
+  (error: AxiosError) => {
     if (error.response?.status === 401) {
       authService.logout();
-      // Optional: redirect to login
+      // Uncomment to force redirect on token expiry:
       // window.location.href = '/auth/signin';
     }
     return Promise.reject(error);
   }
 );
 
-// Export default for easier imports
 export default authService;

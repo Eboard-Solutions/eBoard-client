@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import {
   Loader2,
   Mail,
@@ -20,6 +21,8 @@ import {
   EyeOff,
   CheckCircle2,
   XCircle,
+  UserPlus,
+  ArrowRight,
 } from 'lucide-react';
 
 import { authService } from '@/lib/auth';
@@ -29,7 +32,8 @@ const ROUTES = {
   orgAdmin: '/dashboard/',
   boardMember: '/dashboard/board-member',
   default: '/dashboard',
-  userLogin: '/auth/user-login',
+  userLogin: '/auth/userLogin',
+  signUp: '/auth/signUp',
 };
 
 interface Notification {
@@ -67,7 +71,7 @@ export function SignIn() {
 
     try {
       console.log('🔐 Attempting login...');
-      
+
       const response = await authService.login({
         email: trimmedEmail,
         password: trimmedPassword,
@@ -75,12 +79,11 @@ export function SignIn() {
 
       const { user } = response;
 
-      console.log('✅ Login successful:', { 
-        role: user.role, 
-        hasOrganisation: user.hasOrganisation 
+      console.log('✅ Login successful:', {
+        role: user.role,
+        hasOrganisation: user.hasOrganisation,
       });
 
-      // Determine redirect based on role
       let targetRoute = ROUTES.default;
       const role = user.role.toLowerCase();
 
@@ -91,13 +94,11 @@ export function SignIn() {
       } else if (role.includes('boardmember') || role === 'boardmember') {
         targetRoute = ROUTES.boardMember;
       } else {
-        // Unknown role - default to dashboard
         targetRoute = ROUTES.default;
       }
 
       showNotification('success', 'Login successful!', `Welcome back, ${user.firstName}!`);
 
-      // Redirect after short delay
       setTimeout(() => {
         setLocation(targetRoute);
       }, 1200);
@@ -126,6 +127,7 @@ export function SignIn() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+
       {/* Notification Toast */}
       {notification && (
         <div
@@ -152,6 +154,7 @@ export function SignIn() {
       )}
 
       <div className="w-full max-w-md">
+
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
@@ -169,7 +172,7 @@ export function SignIn() {
           </p>
         </div>
 
-        {/* Card */}
+        {/* Sign In Card */}
         <Card className="border-gray-200/60 dark:border-gray-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
           <CardHeader className="px-10 pt-10 pb-6 text-center">
             <CardTitle className="text-2xl font-semibold">Admin Login</CardTitle>
@@ -180,6 +183,7 @@ export function SignIn() {
 
           <CardContent className="px-10 pb-10">
             <form onSubmit={handleSubmit} className="space-y-6">
+
               {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-medium text-gray-700 dark:text-gray-300">
@@ -217,7 +221,6 @@ export function SignIn() {
                     Forgot password?
                   </Button>
                 </div>
-
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" />
                   <Input
@@ -241,7 +244,7 @@ export function SignIn() {
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Sign In Button */}
               <Button
                 type="submit"
                 disabled={isLoading || !email.trim() || !password.trim()}
@@ -253,10 +256,33 @@ export function SignIn() {
                     Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  <>
+                    Sign In
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
                 )}
               </Button>
             </form>
+
+            {/* Divider */}
+            <div className="my-8 flex items-center gap-4">
+              <Separator className="flex-1" />
+              <span className="text-xs text-gray-400 dark:text-gray-600 font-medium uppercase tracking-wider">
+                New here?
+              </span>
+              <Separator className="flex-1" />
+            </div>
+
+            {/* Sign Up Button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-12 rounded-xl border-2 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:border-indigo-400 dark:hover:border-indigo-600 font-medium transition-all group"
+              onClick={() => setLocation(ROUTES.signUp)}
+            >
+              <UserPlus className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
+              Create an Account
+            </Button>
 
             {/* Footer link */}
             <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">

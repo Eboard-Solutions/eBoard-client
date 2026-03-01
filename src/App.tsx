@@ -4,19 +4,12 @@ import { AppLayout } from "@/pages/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
+import { UserLogin } from "@/pages/auth/UserLogin";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
-<!-- <<<<<<< meeting-features-update -->
 import { LiveMeeting } from "@/pages/LiveMeeting";
 import { Members } from "@/pages/Members";
-<!-- ======= -->
-<!-- <<<<<<< live-meeting-feature -->
-import { LiveMeeting } from "@/pages/LiveMeeting";
-import { Members } from "@/pages/Members";
-<!-- import Members from "@/pages/Members"; -->
-<!-- >>>>>>> main -->
-<!-- >>>>>>> main -->
 import { Documents } from "@/pages/Documents";
 import { Voting } from "@/pages/Voting";
 import { Tasks } from "@/pages/Tasks";
@@ -29,8 +22,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Home } from "lucide-react";
 import React from "react";
+import { useLocation } from "wouter";
 
 function UnauthorizedPage() {
+  const [, setLocation] = useLocation();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="glass max-w-md w-full border-destructive/50">
@@ -41,7 +36,7 @@ function UnauthorizedPage() {
             <p className="text-muted-foreground mb-6">
               You don't have permission to access this page.
             </p>
-            <Button onClick={() => window.location.href = '/'}>
+            <Button onClick={() => setLocation("/")}>
               <Home className="mr-2 h-4 w-4" />
               Go to Dashboard
             </Button>
@@ -53,6 +48,7 @@ function UnauthorizedPage() {
 }
 
 function NotFoundPage() {
+  const [, setLocation] = useLocation();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="text-center">
@@ -60,7 +56,7 @@ function NotFoundPage() {
         <p className="text-xl text-muted-foreground mb-6">
           Sorry, this page doesn't exist.
         </p>
-        <Button onClick={() => window.location.href = '/'}>
+        <Button onClick={() => setLocation("/")}>
           <Home className="mr-2 h-4 w-4" />
           Go to Dashboard
         </Button>
@@ -75,11 +71,13 @@ function App() {
       <Switch>
         {/* Auth Routes - No Layout */}
         <Route path="/auth/signin" component={SignIn} />
+        <Route path="/auth/sign-up" component={SignUp} />
         <Route path="/auth/signup" component={SignUp} />
+        <Route path="/auth/userLogin" component={UserLogin} />
         <Route path="/auth/forgot-password" component={ForgotPassword} />
         <Route path="/unauthorized" component={UnauthorizedPage} />
 
-        {/* Protected Routes - With Layout */}
+        {/* Root → redirect to sign-in if unauthenticated, else dashboard */}
         <Route path="/">
           <ProtectedRoute>
             <AppLayout>
@@ -88,6 +86,24 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Dashboard */}
+        <Route path="/dashboard">
+          <ProtectedRoute>
+            <AppLayout>
+              <Dashboard />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/dashboard/board-member">
+          <ProtectedRoute requiredRole={["board_member", "admin", "super_admin"]}>
+            <AppLayout>
+              <Dashboard />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
+
+        {/* Meetings */}
         <Route path="/meetings">
           <ProtectedRoute>
             <AppLayout>
@@ -104,6 +120,7 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Members */}
         <Route path="/members">
           <ProtectedRoute>
             <AppLayout>
@@ -112,6 +129,7 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Documents */}
         <Route path="/documents">
           <ProtectedRoute>
             <AppLayout>
@@ -120,6 +138,7 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Voting */}
         <Route path="/voting">
           <ProtectedRoute>
             <AppLayout>
@@ -128,6 +147,7 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Tasks */}
         <Route path="/tasks">
           <ProtectedRoute>
             <AppLayout>
@@ -136,14 +156,16 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Finance - admin only */}
         <Route path="/finance">
-          <ProtectedRoute requiredRole={['admin', 'super_admin']}>
+          <ProtectedRoute requiredRole={["admin", "super_admin"]}>
             <AppLayout>
               <Finance />
             </AppLayout>
           </ProtectedRoute>
         </Route>
 
+        {/* Announcements */}
         <Route path="/announcements">
           <ProtectedRoute>
             <AppLayout>
@@ -152,18 +174,29 @@ function App() {
           </ProtectedRoute>
         </Route>
 
+        {/* Reports - admin only */}
         <Route path="/reports">
-          <ProtectedRoute requiredRole={['admin', 'super_admin']}>
+          <ProtectedRoute requiredRole={["admin", "super_admin"]}>
             <AppLayout>
               <Reports />
             </AppLayout>
           </ProtectedRoute>
         </Route>
 
+        {/* Settings */}
         <Route path="/settings">
           <ProtectedRoute>
             <AppLayout>
               <Settings />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
+
+        {/* Super Admin */}
+        <Route path="/super-admin">
+          <ProtectedRoute requiredRole="super_admin">
+            <AppLayout>
+              <Dashboard />
             </AppLayout>
           </ProtectedRoute>
         </Route>
@@ -176,7 +209,7 @@ function App() {
           </ProtectedRoute>
         </Route>
 
-        {/* 404 */}
+        {/* 404 Fallback */}
         <Route component={NotFoundPage} />
       </Switch>
       <Toaster />
