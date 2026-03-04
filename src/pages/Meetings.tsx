@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,12 +16,44 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { meetings, users } from '@/lib/store';
-import { Calendar, Clock, MapPin, Users as UsersIcon, Plus, Filter, Search, Video } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Calendar, Clock, MapPin, Plus, Search, Loader2 } from 'lucide-react';
+
+// Import React Query hooks
+import { useMeetings, useCreateMeeting } from '@/hooks/api/useMeetings';
+import type { CreateMeetingData, MeetingFormat, MeetingType, MeetingPriority, MeetingFrequency } from '@/types/api.types';
 
 export function Meetings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  // Form state for creating meetings
+  const [newMeeting, setNewMeeting] = useState<Partial<CreateMeetingData>>({
+    title: '',
+    description: '',
+    meetingFormat: 'online',
+    meetingFrequency: 'once',
+    meetingType: 'regular',
+    meetingPriority: 'medium',
+    location: '',
+    onlineMeetingLink: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+  });
+
+  // Fetch data from API
+  const { data: meetingsData, isLoading, error } = useMeetings({ page: 1, limit: 50 });
+  const createMeetingMutation = useCreateMeeting();
+
+  const meetings = meetingsData?.items || [];
 
   const filteredMeetings = meetings.filter(meeting => {
     const matchesSearch = meeting.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -28,8 +61,12 @@ export function Meetings() {
     return matchesSearch && matchesStatus;
   });
 
-  const upcomingMeetings = filteredMeetings.filter(m => m.status === 'upcoming');
-  const pastMeetings = filteredMeetings.filter(m => m.status === 'completed');
+  const upcomingMeetings = filteredMeetings.filter(m => 
+    m.status === 'scheduled' || (m.date && new Date(m.date) > new Date())
+  );
+  const pastMeetings = filteredMeetings.filter(m => 
+    m.status === 'completed' || (m.date && new Date(m.date) < new Date())
+  );
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -61,6 +98,55 @@ export function Meetings() {
     return `In ${days} days`;
   };
 
+  const handleCreateMeeting = async () => {
+    if (!newMeeting.title || !newMeeting.date || !newMeeting.startTime || !newMeeting.endTime) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      await createMeetingMutation.mutateAsync({
+        title: newMeeting.title,
+        description: newMeeting.description || '',
+        meetingFormat: (newMeeting.meetingFormat || 'online') as MeetingFormat,
+        meetingFrequency: (newMeeting.meetingFrequency || 'once') as MeetingFrequency,
+        meetingType: (newMeeting.meetingType || 'regular') as MeetingType,
+        meetingPriority: (newMeeting.meetingPriority || 'medium') as MeetingPriority,
+        location: newMeeting.location || '',
+        onlineMeetingLink: newMeeting.onlineMeetingLink || '',
+        date: newMeeting.date,
+        startTime: new Date(`${newMeeting.date}T${newMeeting.startTime}`).toISOString(),
+        endTime: new Date(`${newMeeting.date}T${newMeeting.endTime}`).toISOString(),
+      });
+      toast.success('Meeting scheduled successfully!');
+      setIsCreateDialogOpen(false);
+      setNewMeeting({
+        title: '',
+        description: '',
+        meetingFormat: 'online',
+        meetingFrequency: 'once',
+        meetingType: 'regular',
+        meetingPriority: 'medium',
+        location: '',
+        onlineMeetingLink: '',
+        date: '',
+        startTime: '',
+        endTime: '',
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create meeting');
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-2xl font-semibold text-destructive">Error loading meetings</h2>
+        <p className="mt-2 text-muted-foreground">{(error as Error).message}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -72,7 +158,7 @@ export function Meetings() {
           </p>
         </div>
         
-        <Dialog>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2">
               <Plus className="h-5 w-5" />
@@ -88,43 +174,162 @@ export function Meetings() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="title">Meeting Title</Label>
-                <Input id="title" placeholder="e.g., Q1 Strategic Planning" />
+                <Label htmlFor="title">Meeting Title *</Label>
+                <Input 
+                  id="title" 
+                  placeholder="e.g., Q1 Strategic Planning" 
+                  value={newMeeting.title}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, title: e.target.value })}
+                />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" />
+                  <Label htmlFor="date">Date *</Label>
+                  <Input 
+                    id="date" 
+                    type="date" 
+                    value={newMeeting.date}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, date: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="time">Time</Label>
-                  <Input id="time" type="time" />
+                  <Label htmlFor="meetingType">Meeting Type</Label>
+                  <Select 
+                    value={newMeeting.meetingType}
+                    onValueChange={(value) => setNewMeeting({ ...newMeeting, meetingType: value as MeetingType })}
+                  >
+                    <SelectTrigger id="meetingType">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Regular</SelectItem>
+                      <SelectItem value="special">Special</SelectItem>
+                      <SelectItem value="emergency">Emergency</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">Start Time *</Label>
+                  <Input 
+                    id="startTime" 
+                    type="time" 
+                    value={newMeeting.startTime}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, startTime: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">End Time *</Label>
+                  <Input 
+                    id="endTime" 
+                    type="time" 
+                    value={newMeeting.endTime}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="meetingFormat">Format</Label>
+                  <Select 
+                    value={newMeeting.meetingFormat}
+                    onValueChange={(value) => setNewMeeting({ ...newMeeting, meetingFormat: value as MeetingFormat })}
+                  >
+                    <SelectTrigger id="meetingFormat">
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="in-person">In-Person</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meetingPriority">Priority</Label>
+                  <Select 
+                    value={newMeeting.meetingPriority}
+                    onValueChange={(value) => setNewMeeting({ ...newMeeting, meetingPriority: value as MeetingPriority })}
+                  >
+                    <SelectTrigger id="meetingPriority">
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="location">Location</Label>
-                <Input id="location" placeholder="Conference Room A or Virtual" />
+                <Input 
+                  id="location" 
+                  placeholder="Conference Room A" 
+                  value={newMeeting.location}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })}
+                />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="agenda">Agenda Items</Label>
+                <Label htmlFor="onlineMeetingLink">Online Meeting Link</Label>
+                <Input 
+                  id="onlineMeetingLink" 
+                  placeholder="https://zoom.us/j/..." 
+                  value={newMeeting.onlineMeetingLink}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, onlineMeetingLink: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
                 <Textarea 
-                  id="agenda" 
-                  placeholder="Enter agenda items (one per line)"
+                  id="description" 
+                  placeholder="Meeting description and agenda items..."
                   rows={4}
+                  value={newMeeting.description}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, description: e.target.value })}
                 />
               </div>
 
               <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline">Save as Draft</Button>
-                <Button>Schedule & Send Invites</Button>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateMeeting}
+                  disabled={createMeetingMutation.isPending}
+                >
+                  {createMeetingMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Schedule Meeting'
+                  )}
+                </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Loading meetings...</span>
+        </div>
+      )}
 
       {/* Filters and Search */}
       <Card className="glass">
@@ -181,8 +386,6 @@ export function Meetings() {
 
         <TabsContent value="upcoming" className="space-y-4">
           {upcomingMeetings.map((meeting) => {
-            const attendeeAvatars = users.filter(u => meeting.attendees.includes(u.id));
-
             return (
               <Card key={meeting.id} className="glass hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
@@ -190,10 +393,10 @@ export function Meetings() {
                     {/* Date Badge */}
                     <div className="flex flex-col items-center justify-center w-20 h-20 rounded-lg bg-primary text-primary-foreground shrink-0">
                       <span className="text-2xl font-bold">
-                        {new Date(meeting.startAt).getDate()}
+                        {new Date(meeting.date || meeting.startTime).getDate()}
                       </span>
                       <span className="text-xs uppercase">
-                        {new Date(meeting.startAt).toLocaleDateString('en-US', { month: 'short' })}
+                        {new Date(meeting.date || meeting.startTime).toLocaleDateString('en-US', { month: 'short' })}
                       </span>
                     </div>
 
@@ -203,7 +406,7 @@ export function Meetings() {
                         <div>
                           <h3 className="text-xl font-semibold mb-1">{meeting.title}</h3>
                           <Badge variant="secondary" className="text-xs">
-                            {getDaysUntil(meeting.startAt)}
+                            {getDaysUntil(meeting.date || meeting.startTime)}
                           </Badge>
                         </div>
                         <Button variant="outline">View Details</Button>
@@ -212,11 +415,11 @@ export function Meetings() {
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
-                          <span>{formatDate(meeting.startAt)}</span>
+                          <span>{formatDate(meeting.date || meeting.startTime)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4" />
-                          <span>{formatTime(meeting.startAt)} - {formatTime(meeting.endAt)}</span>
+                          <span>{formatTime(meeting.startTime)} - {formatTime(meeting.endTime)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" />
@@ -224,42 +427,39 @@ export function Meetings() {
                         </div>
                       </div>
 
-                      {/* Agenda Preview */}
-                      {meeting.agenda.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-semibold">Agenda:</h4>
-                          <ul className="space-y-1">
-                            {meeting.agenda.slice(0, 2).map((item) => (
-                              <li key={item.id} className="text-sm text-muted-foreground flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                                {item.title}
-                              </li>
-                            ))}
-                            {meeting.agenda.length > 2 && (
-                              <li className="text-sm text-muted-foreground pl-3.5">
-                                +{meeting.agenda.length - 2} more items
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      )}
+                      {/* Meeting Info */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {meeting.meetingType}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {meeting.meetingFormat}
+                        </Badge>
+                        {meeting.meetingPriority === 'high' || meeting.meetingPriority === 'urgent' ? (
+                          <Badge variant="destructive" className="text-xs capitalize">
+                            {meeting.meetingPriority}
+                          </Badge>
+                        ) : null}
+                      </div>
 
                       {/* Attendees */}
-                      <div className="flex items-center gap-3 pt-2">
-                        <div className="flex -space-x-2">
-                          {attendeeAvatars.slice(0, 5).map((user) => (
-                            <Avatar key={user.id} className="h-8 w-8 border-2 border-background">
-                              <AvatarImage src={user.avatar} alt={user.name} />
-                              <AvatarFallback>
-                                {user.name.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
+                      {meeting.attendees && meeting.attendees.length > 0 && (
+                        <div className="flex items-center gap-3 pt-2">
+                          <div className="flex -space-x-2">
+                            {meeting.attendees.slice(0, 5).map((attendee) => (
+                              <Avatar key={attendee.userId} className="h-8 w-8 border-2 border-background">
+                                <AvatarImage src={attendee.user?.profilePictureUrl} alt={attendee.user?.firstName} />
+                                <AvatarFallback>
+                                  {attendee.user?.firstName?.[0]}{attendee.user?.lastName?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {meeting.attendees.length} attendees
+                          </span>
                         </div>
-                        <span className="text-sm text-muted-foreground">
-                          {meeting.attendees.length} attendees
-                        </span>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -287,10 +487,10 @@ export function Meetings() {
                 <div className="flex items-start gap-6">
                   <div className="flex flex-col items-center justify-center w-20 h-20 rounded-lg bg-muted shrink-0">
                     <span className="text-2xl font-bold">
-                      {new Date(meeting.startAt).getDate()}
+                      {new Date(meeting.date || meeting.startTime).getDate()}
                     </span>
                     <span className="text-xs uppercase">
-                      {new Date(meeting.startAt).toLocaleDateString('en-US', { month: 'short' })}
+                      {new Date(meeting.date || meeting.startTime).toLocaleDateString('en-US', { month: 'short' })}
                     </span>
                   </div>
 
@@ -299,7 +499,7 @@ export function Meetings() {
                       <div>
                         <h3 className="text-xl font-semibold mb-1">{meeting.title}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {formatDate(meeting.startAt)} • {formatTime(meeting.startAt)}
+                          {formatDate(meeting.date || meeting.startTime)} • {formatTime(meeting.startTime)}
                         </p>
                       </div>
                       <Button variant="outline" size="sm">View Minutes</Button>
