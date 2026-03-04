@@ -1,7 +1,7 @@
-import { Route, Router, Switch } from "wouter";
+import { Route, Router, Switch, Redirect } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
-import { AppLayout } from "@/pages/components/layout/AppLayout";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
@@ -20,7 +20,6 @@ import { CreateAdmin } from "@/pages/admin/CreateAdmin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Home } from "lucide-react";
-import React from "react";
 
 function UnauthorizedPage() {
   return (
@@ -68,6 +67,12 @@ function App() {
         {/* Auth Routes - No Layout */}
         <Route path="/auth/signin" component={SignIn} />
         <Route path="/auth/signup" component={SignUp} />
+        <Route path="/auth/user-login">
+          <Redirect to="/auth/signin" />
+        </Route>
+        <Route path="/auth/superadmin">
+          <Redirect to="/auth/signin" />
+        </Route>
         <Route path="/auth/forgot-password" component={ForgotPassword} />
         <Route path="/unauthorized" component={UnauthorizedPage} />
 
@@ -121,7 +126,7 @@ function App() {
         </Route>
 
         <Route path="/finance">
-          <ProtectedRoute requiredRole={['admin', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
             <AppLayout>
               <Finance />
             </AppLayout>
@@ -137,7 +142,7 @@ function App() {
         </Route>
 
         <Route path="/reports">
-          <ProtectedRoute requiredRole={['admin', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
             <AppLayout>
               <Reports />
             </AppLayout>
@@ -161,7 +166,7 @@ function App() {
         </Route>
 
         <Route path="/admin/create">
-          <ProtectedRoute requiredRole="super_admin">
+          <ProtectedRoute allowedRoles={['SuperAdmin']}>
             <AppLayout>
               <CreateAdmin />
             </AppLayout>
