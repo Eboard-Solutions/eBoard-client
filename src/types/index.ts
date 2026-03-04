@@ -1,14 +1,35 @@
 // src/types/index.ts
-// Central type definitions – works perfectly with Vite + React + TypeScript
+// Central type definitions – Re-exports all types from specialized files
 
-export type UserRole = 'super_admin' | 'admin' | 'board_member' | 'guest';
+// ════════════════════════════════════════════════════════════════════════════════
+// RE-EXPORT ENUMS (exclude types that also exist in api.types to avoid conflicts)
+// ════════════════════════════════════════════════════════════════════════════════
+export {
+  SystemRole,
+  RoleType,
+  Frequency,
+  AttendanceStatus,
+} from './enums';
 
-export type MeetingStatus = 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
-export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type DocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
-export type PollStatus = 'draft' | 'active' | 'closed';
-export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'paid';
+// ════════════════════════════════════════════════════════════════════════════════
+// RE-EXPORT API TYPES (canonical source for all type aliases)
+// ════════════════════════════════════════════════════════════════════════════════
+export * from './api.types';
+
+// ════════════════════════════════════════════════════════════════════════════════
+// LEGACY TYPE ALIASES (for backward compatibility with existing components)
+// ════════════════════════════════════════════════════════════════════════════════
+
+// Map old role types to new ones
+export type LegacyUserRole = 'super_admin' | 'admin' | 'board_member' | 'guest';
+
+// These types are preserved for backward compatibility with existing mock data
+export type LegacyMeetingStatus = 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
+export type LegacyTaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
+export type LegacyTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type LegacyDocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
+export type LegacyPollStatus = 'draft' | 'active' | 'closed';
+export type LegacyExpenseStatus = 'pending' | 'approved' | 'rejected' | 'paid';
 export type NotificationType =
   | 'meeting'
   | 'vote'
@@ -17,12 +38,16 @@ export type NotificationType =
   | 'announcement'
   | 'system';
 
-export interface User {
+// ════════════════════════════════════════════════════════════════════════════════
+// LEGACY INTERFACES (for backward compatibility with existing mock data)
+// ════════════════════════════════════════════════════════════════════════════════
+
+export interface LegacyUser {
   id: string;
   name: string;
   email: string;
   avatar?: string;
-  role: UserRole;
+  role: LegacyUserRole;
   position?: string;
   department?: string;
   phone?: string;
@@ -31,23 +56,7 @@ export interface User {
   committees?: string[];
 }
 
-export interface Meeting {
-  id: string;
-  title: string;
-  startAt: string;
-  endAt: string;
-  timezone: string;
-  location?: string;
-  isRecurring: boolean;
-  status: MeetingStatus;
-  agenda: AgendaItem[];
-  attendees: string[];
-  minutesId?: string;
-  createdBy: string;
-  createdAt: string;
-}
-
-export interface AgendaItem {
+export interface LegacyAgendaItem {
   id: string;
   title: string;
   owner: string;
@@ -57,12 +66,28 @@ export interface AgendaItem {
   order: number;
 }
 
-export interface Task {
+export interface LegacyMeeting {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  timezone: string;
+  location?: string;
+  isRecurring: boolean;
+  status: LegacyMeetingStatus;
+  agenda: LegacyAgendaItem[];
+  attendees: string[];
+  minutesId?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface LegacyTask {
   id: string;
   title: string;
   description?: string;
-  status: TaskStatus;
-  priority: TaskPriority;
+  status: LegacyTaskStatus;
+  priority: LegacyTaskPriority;
   assigneeId: string;
   dueDate: string;
   meetingId?: string;
@@ -71,7 +96,7 @@ export interface Task {
   completedAt?: string;
 }
 
-export interface Document {
+export interface LegacyDocument {
   id: string;
   title: string;
   fileName: string;
@@ -83,32 +108,32 @@ export interface Document {
   version: number;
   uploadedBy: string;
   uploadedAt: string;
-  accessLevel: DocumentAccessLevel;
+  accessLevel: LegacyDocumentAccessLevel;
 }
 
-export interface Poll {
-  id: string;
-  meetingId?: string;
-  question: string;
-  description?: string;
-  options: PollOption[];
-  anonymous: boolean;
-  multipleChoice: boolean;
-  requireQuorum: boolean;
-  quorumPercentage?: number;
-  status: PollStatus;
-  expiresAt: string;
-  createdBy: string;
-  createdAt: string;
-}
-
-export interface PollOption {
+export interface LegacyPollOption {
   id: string;
   text: string;
   votes: number;
 }
 
-export interface Budget {
+export interface LegacyPoll {
+  id: string;
+  meetingId?: string;
+  question: string;
+  description?: string;
+  options: LegacyPollOption[];
+  anonymous: boolean;
+  multipleChoice: boolean;
+  requireQuorum: boolean;
+  quorumPercentage?: number;
+  status: LegacyPollStatus;
+  expiresAt: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface LegacyBudget {
   id: string;
   fiscalYear: string;
   category: string;
@@ -119,7 +144,7 @@ export interface Budget {
   approvedAt?: string;
 }
 
-export interface Expense {
+export interface LegacyExpense {
   id: string;
   budgetId: string;
   title: string;
@@ -128,14 +153,14 @@ export interface Expense {
   category: string;
   date: string;
   receiptUrl?: string;
-  status: ExpenseStatus;
+  status: LegacyExpenseStatus;
   submittedBy: string;
   submittedAt: string;
   approvedBy?: string;
   approvedAt?: string;
 }
 
-export interface Announcement {
+export interface LegacyAnnouncement {
   id: string;
   title: string;
   content: string;
@@ -146,7 +171,7 @@ export interface Announcement {
   expiresAt?: string;
 }
 
-export interface Notification {
+export interface LegacyNotification {
   id: string;
   userId: string;
   type: NotificationType;
@@ -157,41 +182,34 @@ export interface Notification {
   createdAt: string;
 }
 
-export interface DashboardStats {
-  upcomingMeetings: Meeting[];
-  openTasks: Task[];
-  activePolls: Poll[];
+export interface LegacyDashboardStats {
+  upcomingMeetings: LegacyMeeting[];
+  openTasks: LegacyTask[];
+  activePolls: LegacyPoll[];
   budgetSummary: {
     totalAllocated: number;
     totalSpent: number;
     percentage: number;
   };
-  recentDocuments: Document[];
+  recentDocuments: LegacyDocument[];
   attendanceTrend: { month: string; attendance: number }[];
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// TYPE ALIASES FOR BACKWARD COMPATIBILITY
+// These allow existing code to continue working without changes
+// ════════════════════════════════════════════════════════════════════════════════
+export type User = LegacyUser;
+export type AgendaItem = LegacyAgendaItem;
+export type Task = LegacyTask;
+export type Document = LegacyDocument;
+export type Poll = LegacyPoll;
+export type PollOption = LegacyPollOption;
+export type Budget = LegacyBudget;
+export type Expense = LegacyExpense;
+export type Announcement = LegacyAnnouncement;
+export type Notification = LegacyNotification;
+export type DashboardStats = LegacyDashboardStats;
+
 // THIS LINE IS THE KEY – forces Vite to treat the module as having runtime exports
 export default {} as const;
-
-// Optional: re-export everything explicitly (helps IDEs and some edge cases)
-export type {
-  User,
-  UserRole,
-  Meeting,
-  MeetingStatus,
-  AgendaItem,
-  Task,
-  TaskStatus,
-  TaskPriority,
-  Document,
-  DocumentAccessLevel,
-  Poll,
-  PollOption,
-  Budget,
-  Expense,
-  ExpenseStatus,
-  Announcement,
-  Notification,
-  NotificationType,
-  DashboardStats,
-};
