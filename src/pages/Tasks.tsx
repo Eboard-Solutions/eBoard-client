@@ -22,12 +22,54 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { tasks, users } from '@/lib/store';
-import { Plus, Search, Calendar, CheckCircle2, Clock } from 'lucide-react';
+import { useTasks, useCreateTask } from '@/hooks/api/useTasks';
+import { useOrganisationUsers } from '@/hooks/api/useUsers';
+import { toast } from 'sonner';
+import { Plus, Search, Calendar, CheckCircle2, Loader2 } from 'lucide-react';
+import type { Task, CreateTaskData, User as ApiUser } from '@/types/api.types';
+
+// Task type matching API response
+interface TaskDisplay {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'review' | 'completed';
+  priority: 'urgent' | 'high' | 'medium' | 'low';
+  dueDate: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeAvatar?: string;
+}
 
 export function Tasks() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newTask, setNewTask] = useState<Partial<CreateTaskData>>({});
+
+  // Fetch tasks from API
+  const { data: tasksData, isLoading, error } = useTasks();
+  const { data: usersData } = useOrganisationUsers();
+  const createTaskMutation = useCreateTask();
+
+  // Extract tasks from response
+  const tasks: TaskDisplay[] = (() => {
+    const rawTasks = Array.isArray(tasksData) ? tasksData : (tasksData as { items?: Task[] })?.items || [];
+    return rawTasks.map((task: Task) => ({
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status: (task.status?.toLowerCase() || 'todo') as TaskDisplay['status'],
+      priority: (task.priority?.toLowerCase() || 'medium') as TaskDisplay['priority'],
+      dueDate: task.dueDate ? new Date(task.dueDate).toISOString() : new Date().toISOString(),
+      assigneeId: task.assigneeId,
+      assigneeName: task.assignee ? `${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim() : undefined,
+      assigneeAvatar: task.assignee?.profilePictureUrl,
+    }));
+  })();
+
+  // Extract users for assignment
+  const users: ApiUser[] = Array.isArray(usersData) ? usersData : (usersData as { items?: ApiUser[] })?.items || [];
 
   const filteredTasks = tasks.filter(task =>
     task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -46,13 +88,6 @@ export function Tasks() {
     low: 'outline'
   } as const;
 
-  const statusColors = {
-    todo: 'secondary',
-    in_progress: 'default',
-    review: 'warning',
-    completed: 'success'
-  } as const;
-
   const formatDueDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -64,8 +99,31 @@ export function Tasks() {
     return { text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), variant: 'secondary' as const };
   };
 
-  const TaskCard = ({ task }: { task: typeof tasks[0] }) => {
-    const assignee = users.find(u => u.id === task.assigneeId);
+  const handleCreateTask = async () => {
+    if (!newTask.title) {
+      toast.error('Please enter a task title');
+      return;
+    }
+    
+    try {
+      // Convert string date to number timestamp if provided
+      const taskData: CreateTaskData = {
+        ...newTask,
+        dueDate: (newTask as { dueDate?: string | number }).dueDate 
+          ? new Date((newTask as { dueDate: string | number }).dueDate).getTime() 
+          : undefined,
+      } as CreateTaskData;
+      await createTaskMutation.mutateAsync(taskData);
+      toast.success('Task created successfully');
+      setIsCreateDialogOpen(false);
+      setNewTask({});
+    } catch (err) {
+      toast.error('Failed to create task');
+    }
+  };
+
+  const TaskCard = ({ task }: { task: TaskDisplay }) => {
+    const assignee = users.find((u: ApiUser) => u.id === task.assigneeId);
     const dueDate = formatDueDate(task.dueDate);
 
     return (
@@ -91,13 +149,13 @@ export function Tasks() {
                 {assignee && (
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={assignee.avatar} alt={assignee.name} />
+                      <AvatarImage src={assignee.profilePictureUrl} alt={`${assignee.firstName} ${assignee.lastName}`} />
                       <AvatarFallback className="text-xs">
-                        {assignee.name.split(' ').map(n => n[0]).join('')}
+                        {(assignee.firstName?.[0] || '') + (assignee.lastName?.[0] || '')}
                       </AvatarFallback>
                     </Avatar>
                     <span className="text-xs text-muted-foreground">
-                      {assignee.name.split(' ')[0]}
+                      {assignee.firstName}
                     </span>
                   </div>
                 )}
@@ -116,6 +174,27 @@ export function Tasks() {
     );
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-muted-foreground">Loading tasks...</span>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Card className="glass">
+        <CardContent className="p-12 text-center">
+          <p className="text-destructive">Failed to load tasks. Please try again.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -127,7 +206,7 @@ export function Tasks() {
           </p>
         </div>
         
-        <Dialog>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2">
               <Plus className="h-5 w-5" />
@@ -144,7 +223,12 @@ export function Tasks() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Task Title</Label>
-                <Input id="title" placeholder="What needs to be done?" />
+                <Input 
+                  id="title" 
+                  placeholder="What needs to be done?" 
+                  value={newTask.title || ''}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+                />
               </div>
 
               <div className="space-y-2">
@@ -153,20 +237,22 @@ export function Tasks() {
                   id="description" 
                   placeholder="Add details..."
                   rows={3}
+                  value={newTask.description || ''}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="assignee">Assign To</Label>
-                  <Select>
+                  <Select onValueChange={(value) => setNewTask(prev => ({ ...prev, assigneeId: value }))}>
                     <SelectTrigger id="assignee">
                       <SelectValue placeholder="Select member" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
+                      {users.map((user: ApiUser) => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.name}
+                          {`${user.firstName} ${user.lastName}`}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -175,7 +261,7 @@ export function Tasks() {
 
                 <div className="space-y-2">
                   <Label htmlFor="priority">Priority</Label>
-                  <Select>
+                  <Select onValueChange={(value) => setNewTask(prev => ({ ...prev, priority: value as CreateTaskData['priority'] }))}>
                     <SelectTrigger id="priority">
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
@@ -191,12 +277,26 @@ export function Tasks() {
 
               <div className="space-y-2">
                 <Label htmlFor="due-date">Due Date</Label>
-                <Input id="due-date" type="date" />
+                <Input 
+                  id="due-date" 
+                  type="date" 
+                  value={(newTask as { dueDate?: string }).dueDate || ''}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: e.target.value } as Partial<CreateTaskData>))}
+                />
               </div>
 
               <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline">Cancel</Button>
-                <Button>Create Task</Button>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateTask} disabled={createTaskMutation.isPending}>
+                  {createTaskMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Task'
+                  )}
+                </Button>
               </div>
             </div>
           </DialogContent>
