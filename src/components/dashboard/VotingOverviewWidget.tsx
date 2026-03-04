@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Poll } from '@/types';
+import type { Poll } from '@/types/api.types';
 import { Vote, Clock } from 'lucide-react';
 
 interface VotingOverviewWidgetProps {
