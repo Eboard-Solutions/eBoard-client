@@ -1,6 +1,9 @@
 // src/lib/api/organizations.ts
 // CRUD operations for organizations table
 
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/config/api.config';
+
 export interface Organization {
   id: string;
   organisationName: string;
@@ -34,27 +37,9 @@ export async function createOrganization(data: CreateOrganizationDto): Promise<O
   try {
     console.log('📤 Creating organization:', data);
 
-    const res = await fetch('/api/v1/organisations/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-      credentials: 'include',     // changed — better for session auth
-      body: JSON.stringify(data),
-    });
-
-    if (!res.ok) {
-      let errorMsg = 'Failed to create organization';
-      try {
-        const errData = await res.json();
-        errorMsg = errData.message || errorMsg;
-      } catch {}
-      throw new Error(`${errorMsg} (HTTP ${res.status})`);
-    }
-
-    const result = await res.json();
+    const response = await apiClient.post('/organisations/register', data);
+    const result = response.data.data || response.data;
+    
     console.log('✅ Organization created:', result);
 
     // Try multiple common shapes
@@ -64,9 +49,9 @@ export async function createOrganization(data: CreateOrganizationDto): Promise<O
     }
 
     return org;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ createOrganization failed:', error);
-    throw error instanceof Error ? error : new Error('Failed to create organization');
+    throw new Error(error.response?.data?.message || error.message || 'Failed to create organization');
   }
 }
 
@@ -79,33 +64,15 @@ export async function updateOrganization(data: UpdateOrganizationDto): Promise<O
   try {
     console.log('📤 Updating organization:', id, updateData);
 
-    const res = await fetch(`/api/v1/organisations/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(updateData),
-    });
-
-    if (!res.ok) {
-      let errorMsg = 'Failed to update organization';
-      try {
-        const errData = await res.json();
-        errorMsg = errData.message || errorMsg;
-      } catch {}
-      throw new Error(`${errorMsg} (HTTP ${res.status})`);
-    }
-
-    const result = await res.json();
+    const response = await apiClient.patch(`/organisations/${id}`, updateData);
+    const result = response.data.data || response.data;
+    
     console.log('✅ Organization updated:', result);
 
     return result.organization || result.organisation || result;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ updateOrganization failed:', error);
-    throw error instanceof Error ? error : new Error('Failed to update organization');
+    throw new Error(error.response?.data?.message || error.message || 'Failed to update organization');
   }
 }
 
@@ -116,28 +83,12 @@ export async function deleteOrganization(id: string): Promise<void> {
   try {
     console.log('🗑️ Deleting organization:', id);
 
-    const res = await fetch(`/api/v1/organisations/${id}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-      credentials: 'include',
-    });
-
-    if (!res.ok) {
-      let errorMsg = 'Failed to delete organization';
-      try {
-        const errData = await res.json();
-        errorMsg = errData.message || errorMsg;
-      } catch {}
-      throw new Error(`${errorMsg} (HTTP ${res.status})`);
-    }
+    await apiClient.delete(`/organisations/${id}`);
 
     console.log('✅ Organization deleted');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ deleteOrganization failed:', error);
-    throw error instanceof Error ? error : new Error('Failed to delete organization');
+    throw new Error(error.response?.data?.message || error.message || 'Failed to delete organization');
   }
 }
 
@@ -146,23 +97,9 @@ export async function fetchOrganizations(): Promise<Organization[]> {
   try {
     console.log('🔍 Fetching all organizations (super-admin only?)');
 
-    const res = await fetch('/api/v1/organisations', {
-      credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (!res.ok) {
-      console.warn(`fetchOrganizations: ${res.status} → returning empty array`);
-      if (res.status === 403) {
-        console.warn('403 Forbidden → likely not SuperAdmin');
-      }
-      return [];
-    }
-
-    const data = await res.json();
+    const response = await apiClient.get('/organisations');
+    const data = response.data.data || response.data;
+    
     const list = Array.isArray(data) ? data : data.organisations || data.organizations || data.results || [];
 
     return list.map((org: any) => ({
@@ -178,13 +115,16 @@ export async function fetchOrganizations(): Promise<Organization[]> {
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ fetchOrganizations failed:', error);
+    if (error.response?.status === 403) {
+      console.warn('403 Forbidden → likely not SuperAdmin');
+    }
     return [];
   }
 }
 
-// ── NEW: Fetch single organization by ID (for OrgAdmin "my organization") ──
+// ── Fetch single organization by ID (for OrgAdmin "my organization") ──
 export async function fetchMyOrganization(orgId: string): Promise<Organization | null> {
   if (!orgId) {
     console.warn('fetchMyOrganization called without orgId');
@@ -194,20 +134,8 @@ export async function fetchMyOrganization(orgId: string): Promise<Organization |
   try {
     console.log('🔍 Fetching my organization:', orgId);
 
-    const res = await fetch(`/api/v1/organisations/${orgId}`, {
-      credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (!res.ok) {
-      console.warn(`fetchMyOrganization: ${res.status}`);
-      return null;
-    }
-
-    const data = await res.json();
+    const response = await apiClient.get(`/organisations/${orgId}`);
+    const data = response.data.data || response.data;
     const org = data.organization || data.organisation || data;
 
     if (!org?.id) return null;
