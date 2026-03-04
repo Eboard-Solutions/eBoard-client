@@ -4,7 +4,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash } from 'lucide-react';
 
-import type { User } from '@/lib/api/members';
+// User interface for member display
+interface User {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  avatar?: string;
+  profilePictureUrl?: string;
+  role: string;
+  title?: string;
+  position?: string;
+  phoneNumber?: string;
+  phone?: string;
+  committees?: string[];
+}
 
 interface Props {
   members: User[];
