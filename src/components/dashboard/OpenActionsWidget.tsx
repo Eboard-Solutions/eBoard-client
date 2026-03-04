@@ -2,30 +2,51 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Task } from '@/types';
-import { users } from '@/lib/store';
-import { Calendar, CheckCircle2 } from 'lucide-react';
+import type { Task as APITask } from '@/types/api.types';
+import { Calendar, CheckCircle2, User } from 'lucide-react';
 
-interface OpenActionsWidgetProps {
-  tasks: Task[];
+// Support both legacy and API task types
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  assigneeId?: string;
+  assignee?: { id: string; name?: string; firstName?: string; lastName?: string; avatar?: string };
+  dueDate?: string;
+  deadline?: string;
 }
 
-const priorityColors = {
-  urgent: 'destructive',
-  high: 'warning',
-  medium: 'secondary',
-  low: 'secondary'
-} as const;
+interface OpenActionsWidgetProps {
+  tasks: Task[] | APITask[];
+}
 
-const statusColors = {
+const priorityColors: Record<string, 'destructive' | 'warning' | 'secondary' | 'default'> = {
+  URGENT: 'destructive',
+  urgent: 'destructive',
+  HIGH: 'warning',
+  high: 'warning',
+  MEDIUM: 'secondary',
+  medium: 'secondary',
+  LOW: 'secondary',
+  low: 'secondary'
+};
+
+const statusColors: Record<string, 'secondary' | 'default' | 'warning'> = {
+  TODO: 'secondary',
   todo: 'secondary',
+  IN_PROGRESS: 'default',
   in_progress: 'default',
+  REVIEW: 'warning',
   review: 'warning',
-  completed: 'success'
-} as const;
+  COMPLETED: 'default',
+  completed: 'default'
+};
 
 export function OpenActionsWidget({ tasks }: OpenActionsWidgetProps) {
-  const formatDueDate = (dateStr: string) => {
+  const formatDueDate = (dateStr?: string) => {
+    if (!dateStr) return { text: 'No due date', variant: 'secondary' as const };
     const date = new Date(dateStr);
     const now = new Date();
     const days = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -36,13 +57,24 @@ export function OpenActionsWidget({ tasks }: OpenActionsWidgetProps) {
     return { text: `${days} days left`, variant: 'secondary' as const };
   };
 
-  const getAssignee = (assigneeId: string) => {
-    return users.find(u => u.id === assigneeId);
+  const getAssigneeName = (task: Task): string | null => {
+    if (task.assignee) {
+      if (task.assignee.name) return task.assignee.name;
+      if (task.assignee.firstName || task.assignee.lastName) {
+        return `${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim();
+      }
+    }
+    return null;
   };
 
   const sortedTasks = [...tasks].sort((a, b) => {
-    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-    return priorityOrder[a.priority] - priorityOrder[b.priority];
+    const priorityOrder: Record<string, number> = { 
+      URGENT: 0, urgent: 0, 
+      HIGH: 1, high: 1, 
+      MEDIUM: 2, medium: 2, 
+      LOW: 3, low: 3 
+    };
+    return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
   });
 
   return (
@@ -53,8 +85,10 @@ export function OpenActionsWidget({ tasks }: OpenActionsWidgetProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         {sortedTasks.map((task) => {
-          const assignee = getAssignee(task.assigneeId);
-          const dueDate = formatDueDate(task.dueDate);
+          const assigneeName = getAssigneeName(task);
+          const dueDate = formatDueDate(task.dueDate || task.deadline);
+          const status = task.status?.toLowerCase().replace('_', ' ') || 'pending';
+          const priority = task.priority?.toUpperCase() || 'MEDIUM';
 
           return (
             <div
@@ -69,8 +103,8 @@ export function OpenActionsWidget({ tasks }: OpenActionsWidgetProps) {
                 <div className="flex-1 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="font-medium text-sm leading-tight">{task.title}</h4>
-                    <Badge variant={priorityColors[task.priority]} className="text-xs shrink-0">
-                      {task.priority}
+                    <Badge variant={priorityColors[priority] || 'secondary'} className="text-xs shrink-0">
+                      {priority.toLowerCase()}
                     </Badge>
                   </div>
 
@@ -82,21 +116,25 @@ export function OpenActionsWidget({ tasks }: OpenActionsWidgetProps) {
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      {assignee && (
+                      {assigneeName ? (
                         <div className="flex items-center gap-1.5">
                           <Avatar className="h-5 w-5">
-                            <AvatarImage src={assignee.avatar} alt={assignee.name} />
                             <AvatarFallback className="text-xs">
-                              {assignee.name.split(' ').map(n => n[0]).join('')}
+                              {assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </AvatarFallback>
                           </Avatar>
                           <span className="text-xs text-muted-foreground">
-                            {assignee.name.split(' ')[0]}
+                            {assigneeName.split(' ')[0]}
                           </span>
                         </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Unassigned</span>
+                        </div>
                       )}
-                      <Badge variant={statusColors[task.status]} className="text-xs">
-                        {task.status.replace('_', ' ')}
+                      <Badge variant={statusColors[task.status] || 'secondary'} className="text-xs">
+                        {status}
                       </Badge>
                     </div>
 
@@ -115,7 +153,7 @@ export function OpenActionsWidget({ tasks }: OpenActionsWidgetProps) {
 
         {tasks.length === 0 && (
           <div className="text-center py-8 text-muted-foreground flex flex-col items-center gap-2">
-            <CheckCircle2 className="h-12 w-12 text-success" />
+            <CheckCircle2 className="h-12 w-12 text-green-500" />
             <p>All tasks completed!</p>
           </div>
         )}
