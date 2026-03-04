@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,11 +16,78 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { polls } from '@/lib/store';
-import { Vote, Clock, Plus, Search, CheckCircle2, XCircle } from 'lucide-react';
+import { usePolls, useCreatePoll, useVotePoll } from '@/hooks/api/usePolls';
+import { toast } from 'sonner';
+import { Vote, Clock, Plus, Search, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import type { Poll, CreatePollData, PollOption } from '@/types/api.types';
+
+// Poll display interface to normalize API response
+interface PollDisplay {
+  id: string;
+  question: string;
+  description?: string;
+  status: 'active' | 'closed' | 'draft';
+  options: { id: string; text: string; votes: number }[];
+  anonymous: boolean;
+  allowMultiple: boolean;
+  requireQuorum: boolean;
+  quorumPercentage?: number;
+  expiresAt: string;
+  hasVoted?: boolean;
+}
+
+// Local form state type (uses string options for easier form handling)
+interface PollFormState {
+  question?: string;
+  description?: string;
+  options: string[];
+  anonymous?: boolean;
+  multipleChoice?: boolean;
+  requireQuorum?: boolean;
+  quorumPercentage?: number;
+  expiresAt?: string;
+}
+
+// Compute default expiry outside component to avoid impure function in render
+const getDefaultExpiry = () => new Date(Date.now() + 86400000).toISOString();
 
 export function Voting() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newPoll, setNewPoll] = useState<PollFormState>({
+    options: ['', '', ''],
+    anonymous: false,
+    multipleChoice: false,
+    requireQuorum: false,
+  });
+
+  // Fetch polls from API
+  const { data: pollsData, isLoading } = usePolls();
+  const createPollMutation = useCreatePoll();
+  const votePollMutation = useVotePoll();
+
+  // Extract and normalize polls
+  const polls: PollDisplay[] = useMemo(() => {
+    const rawPolls = Array.isArray(pollsData) ? pollsData : (pollsData as { items?: Poll[] })?.items || [];
+    const defaultExpiry = getDefaultExpiry();
+    return rawPolls.map((poll: Poll) => ({
+      id: poll.id,
+      question: poll.question || '',
+      description: poll.description,
+      status: (poll.status?.toLowerCase() || 'active') as PollDisplay['status'],
+      options: (poll.options || []).map((opt: PollOption, idx: number) => ({
+        id: opt.id || `opt-${idx}`,
+        text: opt.text || '',
+        votes: opt.votes || 0,
+      })),
+      anonymous: poll.anonymous || false,
+      allowMultiple: poll.multipleChoice || false,
+      requireQuorum: poll.requireQuorum || false,
+      quorumPercentage: poll.quorumPercentage,
+      expiresAt: poll.expiresAt ? new Date(poll.expiresAt).toISOString() : defaultExpiry,
+      hasVoted: false, // This would need to come from API
+    }));
+  }, [pollsData]);
 
   const activePolls = polls.filter(p => p.status === 'active');
   const closedPolls = polls.filter(p => p.status === 'closed');
@@ -29,11 +96,11 @@ export function Voting() {
     poll.question.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getTotalVotes = (poll: typeof polls[0]) => {
+  const getTotalVotes = (poll: PollDisplay) => {
     return poll.options.reduce((sum, opt) => sum + opt.votes, 0);
   };
 
-  const getQuorumStatus = (poll: typeof polls[0]) => {
+  const getQuorumStatus = (poll: PollDisplay) => {
     if (!poll.requireQuorum) return null;
     const totalVotes = getTotalVotes(poll);
     const requiredVotes = Math.ceil((poll.quorumPercentage || 0) / 100 * 5);
@@ -57,6 +124,70 @@ export function Voting() {
     return `${daysLeft}d left`;
   };
 
+  const handleCreatePoll = async () => {
+    if (!newPoll.question) {
+      toast.error('Please enter a question');
+      return;
+    }
+    const validOptions = (newPoll.options || []).filter(opt => opt?.trim());
+    if (validOptions.length < 2) {
+      toast.error('Please add at least 2 options');
+      return;
+    }
+    
+    try {
+      const pollData: CreatePollData = {
+        question: newPoll.question,
+        description: newPoll.description,
+        options: validOptions.map(text => ({ text })),
+        anonymous: newPoll.anonymous,
+        multipleChoice: newPoll.multipleChoice,
+        requireQuorum: newPoll.requireQuorum,
+        quorumPercentage: newPoll.quorumPercentage,
+        expiresAt: newPoll.expiresAt ? new Date(newPoll.expiresAt).getTime() : undefined,
+      };
+      await createPollMutation.mutateAsync(pollData);
+      toast.success('Poll created successfully');
+      setIsCreateDialogOpen(false);
+      setNewPoll({ options: ['', '', ''], anonymous: false, multipleChoice: false, requireQuorum: false });
+    } catch {
+      toast.error('Failed to create poll');
+    }
+  };
+
+  const handleVote = async (pollId: string, optionId: string) => {
+    try {
+      await votePollMutation.mutateAsync({ pollId, optionId });
+      toast.success('Vote cast successfully');
+    } catch {
+      toast.error('Failed to cast vote');
+    }
+  };
+
+  const addOption = () => {
+    setNewPoll(prev => ({
+      ...prev,
+      options: [...(prev.options || []), ''],
+    }));
+  };
+
+  const updateOption = (index: number, value: string) => {
+    setNewPoll(prev => ({
+      ...prev,
+      options: (prev.options || []).map((opt, i) => i === index ? value : opt),
+    }));
+  };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-muted-foreground">Loading polls...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -68,7 +199,7 @@ export function Voting() {
           </p>
         </div>
         
-        <Dialog>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2">
               <Plus className="h-5 w-5" />
@@ -85,7 +216,12 @@ export function Voting() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="question">Question</Label>
-                <Input id="question" placeholder="What should we vote on?" />
+                <Input 
+                  id="question" 
+                  placeholder="What should we vote on?" 
+                  value={newPoll.question || ''}
+                  onChange={(e) => setNewPoll(prev => ({ ...prev, question: e.target.value }))}
+                />
               </div>
 
               <div className="space-y-2">
@@ -94,17 +230,24 @@ export function Voting() {
                   id="description" 
                   placeholder="Provide context for the vote"
                   rows={3}
+                  value={newPoll.description || ''}
+                  onChange={(e) => setNewPoll(prev => ({ ...prev, description: e.target.value }))}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label>Options</Label>
                 <div className="space-y-2">
-                  <Input placeholder="Option 1" />
-                  <Input placeholder="Option 2" />
-                  <Input placeholder="Option 3" />
+                  {(newPoll.options || []).map((option, index) => (
+                    <Input 
+                      key={index}
+                      placeholder={`Option ${index + 1}`}
+                      value={option}
+                      onChange={(e) => updateOption(index, e.target.value)}
+                    />
+                  ))}
                 </div>
-                <Button variant="outline" size="sm" className="mt-2">
+                <Button variant="outline" size="sm" className="mt-2" onClick={addOption}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Option
                 </Button>
@@ -113,11 +256,19 @@ export function Voting() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border">
                   <Label htmlFor="anonymous" className="cursor-pointer">Anonymous Voting</Label>
-                  <Switch id="anonymous" />
+                  <Switch 
+                    id="anonymous" 
+                    checked={newPoll.anonymous || false}
+                    onCheckedChange={(checked) => setNewPoll(prev => ({ ...prev, anonymous: checked }))}
+                  />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border">
                   <Label htmlFor="multiple" className="cursor-pointer">Multiple Choice</Label>
-                  <Switch id="multiple" />
+                  <Switch 
+                    id="multiple" 
+                    checked={newPoll.multipleChoice || false}
+                    onCheckedChange={(checked) => setNewPoll(prev => ({ ...prev, multipleChoice: checked }))}
+                  />
                 </div>
               </div>
 
@@ -126,17 +277,35 @@ export function Voting() {
                   <Label htmlFor="quorum" className="cursor-pointer">Require Quorum</Label>
                   <p className="text-xs text-muted-foreground">Minimum percentage of votes needed</p>
                 </div>
-                <Switch id="quorum" />
+                <Switch 
+                  id="quorum" 
+                  checked={newPoll.requireQuorum || false}
+                  onCheckedChange={(checked) => setNewPoll(prev => ({ ...prev, requireQuorum: checked }))}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="expires">Voting Deadline</Label>
-                <Input id="expires" type="datetime-local" />
+                <Input 
+                  id="expires" 
+                  type="datetime-local" 
+                  value={newPoll.expiresAt || ''}
+                  onChange={(e) => setNewPoll(prev => ({ ...prev, expiresAt: e.target.value }))}
+                />
               </div>
 
               <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline">Save as Draft</Button>
-                <Button>Create & Publish</Button>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreatePoll} disabled={createPollMutation.isPending}>
+                  {createPollMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create & Publish'
+                  )}
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -174,7 +343,7 @@ export function Voting() {
           {filteredActivePolls.map((poll) => {
             const totalVotes = getTotalVotes(poll);
             const quorumStatus = getQuorumStatus(poll);
-            const hasVoted = false; // In real app, check if current user has voted
+            const hasVoted = poll.hasVoted || false;
 
             return (
               <Card key={poll.id} className="glass">
@@ -201,7 +370,12 @@ export function Voting() {
                       return (
                         <div
                           key={option.id}
-                          className="p-4 rounded-lg border-2 border-border hover:border-primary transition-colors cursor-pointer"
+                          onClick={() => !hasVoted && handleVote(poll.id, option.id)}
+                          className={`p-4 rounded-lg border-2 transition-colors ${
+                            hasVoted 
+                              ? 'border-border cursor-default' 
+                              : 'border-border hover:border-primary cursor-pointer'
+                          }`}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-medium">{option.text}</span>
