@@ -23,13 +23,9 @@ import {
 } from 'lucide-react';
 
 import { authService } from '@/lib/auth';
-import { jwtDecode } from 'jwt-decode';
 
 const ROUTES = {
-  superAdmin: '/super-admin',
-  orgAdmin: '/dashboard/org-admin',
-  boardMember: '/dashboard/board-member',
-  default: '/dashboard',
+  dashboard: '/',
 };
 
 interface Notification {
@@ -38,12 +34,7 @@ interface Notification {
   description?: string;
 }
 
-interface DecodedToken {
-  role?: string;
-  // Add other fields if needed: sub, email, exp, iat, ...
-}
-
-export function SignIn() {
+export function SuperAdminLogin() {
   const [, setLocation] = useLocation();
 
   const [email, setEmail] = useState('');
@@ -73,38 +64,19 @@ export function SignIn() {
     setIsLoading(true);
 
     try {
-      const data = await authService.login({
+      const data = await authService.superAdminLogin({
         email: trimmedEmail,
         password,
       });
-
-      const token = data.access_token;
-
-      // Decode token to get role
-      const decoded = jwtDecode<DecodedToken>(token);
-      const userRole = (decoded.role || '').toLowerCase();
 
       showNotification(
         'success',
         `Welcome back${data.user?.firstName ? `, ${data.user.firstName}` : ''}!`
       );
 
-      // Role-based redirect
+      // Redirect to dashboard - it handles role-based views
       setTimeout(() => {
-        switch (userRole) {
-          case 'superadmin':
-            setLocation(ROUTES.superAdmin);
-            break;
-          case 'orgadmin':
-            setLocation(ROUTES.orgAdmin);
-            break;
-          case 'boardmember':
-          case 'secretary':
-            setLocation(ROUTES.boardMember);
-            break;
-          default:
-            setLocation(ROUTES.default);
-        }
+        setLocation(ROUTES.dashboard);
       }, 1200);
     } catch (err: any) {
       console.error('Login error:', err);
