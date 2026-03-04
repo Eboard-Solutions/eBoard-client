@@ -27,7 +27,7 @@ import {
 import authService from '@/lib/auth';
 
 const ROUTES = {
-  boardMember: '/dashboard/board-member',
+  dashboard: '/',
   adminLogin: '/auth/signin',
 };
 
@@ -81,16 +81,16 @@ export function UserLogin() {
 
       showNotification('success', 'Login successful!', `Welcome back, ${user.firstName}!`);
 
-      // Redirect to board member dashboard
+      // Redirect to dashboard - it handles role-based views
       setTimeout(() => {
-        setLocation(ROUTES.boardMember);
+        setLocation(ROUTES.dashboard);
       }, 1200);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[LOGIN ERROR]', err);
 
       let msg = 'Login failed. Please try again.';
 
-      if (err.message) {
+      if (err instanceof Error && err.message) {
         msg = err.message;
       }
 
