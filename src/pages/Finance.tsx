@@ -21,17 +21,56 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { budgets, expenses } from '@/lib/store';
-import { DollarSign, Plus, TrendingUp, TrendingDown, Download, Search } from 'lucide-react';
+import { useFinanceOverview } from '@/hooks/api/useOverview';
+import type { FinanceOverview } from '@/types/api.types';
+import { DollarSign, Plus, TrendingUp, TrendingDown, Download, Search, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+
+// Local interfaces derived from FinanceOverview
+interface Budget {
+  id: string;
+  category: string;
+  allocated: number;
+  spent: number;
+}
+
+interface Expense {
+  id: string;
+  title: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'paid';
+  date: string;
+  budgetId: string;
+}
 
 export function Finance() {
   const [searchQuery, setSearchQuery] = useState('');
+  const { data: financeData, isLoading } = useFinanceOverview();
+
+  const typedFinance = financeData as FinanceOverview | undefined;
+
+  // Extract budgets from categories
+  const budgets: Budget[] = (typedFinance?.categories || []).map((c, idx) => ({
+    id: `cat-${idx}`,
+    category: c.name,
+    allocated: c.allocated,
+    spent: c.spent,
+  }));
+
+  // Extract expenses from recent transactions
+  const expenses: Expense[] = (typedFinance?.recentTransactions || []).map((t) => ({
+    id: t.id,
+    title: t.description,
+    amount: t.amount,
+    status: 'approved' as const,
+    date: t.date,
+    budgetId: t.category,
+  }));
 
   const totalAllocated = budgets.reduce((sum, b) => sum + b.allocated, 0);
   const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
   const totalRemaining = totalAllocated - totalSpent;
-  const spentPercentage = (totalSpent / totalAllocated) * 100;
+  const spentPercentage = totalAllocated > 0 ? (totalSpent / totalAllocated) * 100 : 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -54,6 +93,14 @@ export function Finance() {
   );
 
   const pendingExpenses = expenses.filter(e => e.status === 'pending');
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -247,7 +294,7 @@ export function Finance() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value: number | string) => formatCurrency(Number(value) || 0)}
                   contentStyle={{
                     backgroundColor: 'hsl(var(--popover))',
                     border: '1px solid hsl(var(--border))',
