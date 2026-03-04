@@ -9,13 +9,28 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/di
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 
-import type { User } from '@/lib/api/members';
+// User interface for member editing
+interface User {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  avatar?: string;
+  profilePictureUrl?: string;
+  role: string;
+  title?: string;
+  position?: string;
+  phoneNumber?: string;
+  phone?: string;
+  committees?: string[];
+}
 
 const schema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email'),
-  role: z.enum(['OrgAdmin', 'Admin', 'board_member', 'guest']),
+  role: z.enum(['SuperAdmin', 'OrgAdmin', 'Admin', 'BoardMember', 'User']),
   title: z.string().optional(),
   phoneNumber: z.string().optional(),
   profilePictureUrl: z.string().url().optional(),
@@ -96,8 +111,8 @@ export default function EditMemberDialog({ member, onSubmit, committees, allowSu
               {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
               <SelectItem value="OrgAdmin">OrgAdmin</SelectItem>
               <SelectItem value="Admin">Admin</SelectItem>
-              <SelectItem value="board_member">Board Member</SelectItem>
-              <SelectItem value="guest">Guest</SelectItem>
+              <SelectItem value="BoardMember">Board Member</SelectItem>
+              <SelectItem value="User">User</SelectItem>
             </SelectContent>
           </Select>
         </div>
