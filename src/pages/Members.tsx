@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search,
@@ -40,6 +40,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -54,21 +55,31 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 import { usePermissions } from '@/lib/permissions';
 import {
-  fetchMembers,
-  createMember,
-  updateMember,
-  deleteMember,
-} from '@/lib/api/members';
+  useOrganisationUsers,
+  useCreateUser,
+  useUpdateUser,
+  useDeleteUser,
+} from '@/hooks/api/useUsers';
 
 import {
-  fetchOrganizations,
-  createOrganization,
-  updateOrganization,
-  deleteOrganization,
-} from '@/lib/api/organizations';
+  useOrganisations,
+  useRegisterOrganisation,
+  useUpdateOrganisation,
+  useDeleteOrganisation,
+} from '@/hooks/api/useOrganisations';
+
+import type { User as ApiUser, Organisation, CreateOrganisationData } from '@/types/api.types';
 
 import AddMemberDialog from '@/components/members/AddMemberDialog';
 import EditMemberDialog from '@/components/members/EditMemberDialog';
@@ -76,6 +87,21 @@ import MembersGrid from '@/components/members/MembersGrid';
 import MembersList from '@/components/members/MembersList';
 
 type ViewMode = 'grid' | 'list';
+
+// Local User type for members list compatibility
+interface User {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  avatar?: string;
+  role: string;
+  position?: string;
+  department?: string;
+  phone?: string;
+  [key: string]: unknown;
+}
 
 export default function MembersPage() {
   const {
@@ -96,119 +122,98 @@ export default function MembersPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [editMember, setEditMember] = useState<User | null>(null);
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
-  const [editOrg, setEditOrg] = useState<any | null>(null);
+  const [editOrg, setEditOrg] = useState<Organisation | null>(null);
   const [orgToDelete, setOrgToDelete] = useState<string | null>(null);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
 
-  // ── Members Query ───────────────────────────────────────────────────────────────
-  const membersQuery = useQuery({
-    queryKey: ['members', search.trim(), roleFilter, currentOrgId],
-    queryFn: () =>
-      fetchMembers({
-        search: search.trim() || undefined,
-        role: roleFilter !== 'all' ? roleFilter : undefined,
-        organizationId: currentOrgId ?? undefined,
-      }),
-    enabled: !authLoading && !authError && activeTab === 'members' && !!currentOrgId,
-  });
+  // ── Members Query (using new hooks) ─────────────────────────────────────────────
+  const { data: membersData, isLoading: membersLoading } = useOrganisationUsers();
+  
+  const members = useMemo(() => {
+    const rawMembers: ApiUser[] = Array.isArray(membersData) 
+      ? membersData 
+      : (membersData as { items?: ApiUser[] })?.items || [];
+    
+    return rawMembers
+      .filter((m: ApiUser) => {
+        if (search.trim()) {
+          const searchLower = search.toLowerCase();
+          const name = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
+          return name.includes(searchLower) || m.email?.toLowerCase().includes(searchLower);
+        }
+        return true;
+      })
+      .filter((m: ApiUser) => {
+        if (roleFilter !== 'all') {
+          return m.role?.toLowerCase() === roleFilter.toLowerCase();
+        }
+        return true;
+      })
+      .map((m: ApiUser): User => ({
+        id: m.id,
+        name: `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        email: m.email,
+        avatar: m.profilePictureUrl,
+        role: m.role,
+        position: m.title,
+        phone: m.phoneNumber,
+      }));
+  }, [membersData, search, roleFilter]);
 
-  const members = membersQuery.data?.members ?? [];
+  // ── Organizations Query (using new hooks) ───────────────────────────────────────
+  const { data: orgsData, isLoading: orgsLoading } = useOrganisations();
+  
+  const organizations: Organisation[] = useMemo(() => {
+    return Array.isArray(orgsData) 
+      ? orgsData 
+      : (orgsData as { items?: Organisation[] })?.items || [];
+  }, [orgsData]);
 
-  // ── Organizations Query ─────────────────────────────────────────────────────────
-  const organizationsQuery = useQuery({
-    queryKey: ['organizations'],
-    queryFn: fetchOrganizations,
-    enabled: !authLoading && !authError && activeTab === 'organizations',
-  });
+  // ── Mutations (using new hooks) ─────────────────────────────────────────────────
+  const registerOrgMutation = useRegisterOrganisation();
+  const updateOrgMutation = useUpdateOrganisation();
+  const deleteOrgMutation = useDeleteOrganisation();
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
 
-  const organizations = organizationsQuery.data ?? [];
-
-  // ── Mutations ───────────────────────────────────────────────────────────────────
-  const createOrgMutation = useMutation({
-    mutationFn: createOrganization,
-    onSuccess: async (response) => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
-
-      const newOrgId = response?.id || response?.organisationId || response?.organizationId;
-
-      if (newOrgId) {
-        localStorage.setItem('currentOrganizationId', newOrgId);
-        console.log('[createOrg] Stored new org ID:', newOrgId);
-        await refreshAuth();
-        toast.success('Organization created successfully. You can now manage members.');
-        setShowCreateOrg(false);
-      } else {
-        toast.warning('Organization created, but no ID was returned. Please refresh.');
-        await refreshAuth();
-      }
-    },
-    onError: (err) => toast.error((err as Error).message || 'Failed to create organization'),
-  });
-
-  const updateOrgMutation = useMutation({
-    mutationFn: updateOrganization,
-    onSuccess: async (response) => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
-      const updatedOrgId = response?.id || response?.organisationId;
-      if (updatedOrgId) localStorage.setItem('currentOrganizationId', updatedOrgId);
-      await refreshAuth();
-      toast.success('Organization updated successfully');
-      setEditOrg(null);
-    },
-    onError: (err) => toast.error((err as Error).message || 'Failed to update organization'),
-  });
-
-  const deleteOrgMutation = useMutation({
-    mutationFn: deleteOrganization,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
-      localStorage.removeItem('currentOrganizationId');
-      toast.success('Organization deleted');
-      setOrgToDelete(null);
-    },
-    onError: (err) => toast.error((err as Error).message || 'Failed to delete organization'),
-  });
-
-  const createMemberMutation = useMutation({
-    mutationFn: createMember,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members'] });
-      toast.success('Member added successfully');
-    },
-    onError: (err) => toast.error((err as Error).message || 'Failed to add member'),
-  });
-
-  const updateMemberMutation = useMutation({
-    mutationFn: updateMember,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members'] });
-      toast.success('Member updated');
-      setEditMember(null);
-    },
-    onError: (err) => toast.error((err as Error).message || 'Failed to update member'),
-  });
-
-  const deleteMemberMutation = useMutation({
-    mutationFn: deleteMember,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members'] });
-      toast.success('Member removed');
-      setMemberToDelete(null);
-    },
-    onError: (err) => toast.error((err as Error).message || 'Failed to remove member'),
-  });
+  // Alias mutations for compatibility
+  const createMemberMutation = createUserMutation;
+  const updateMemberMutation = updateUserMutation;
+  const deleteMemberMutation = deleteUserMutation;
+  const createOrgMutation = registerOrgMutation;
 
   // ── Handlers ────────────────────────────────────────────────────────────────────
   const handleMemberDelete = useCallback(() => {
-    if (memberToDelete) deleteMemberMutation.mutate(memberToDelete);
-  }, [memberToDelete]);
+    if (memberToDelete) {
+      deleteUserMutation.mutate(memberToDelete, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['users'] });
+          toast.success('Member removed');
+          setMemberToDelete(null);
+        },
+        onError: (err) => toast.error((err as Error).message || 'Failed to remove member'),
+      });
+    }
+  }, [memberToDelete, deleteUserMutation, queryClient]);
 
   const handleOrgDelete = useCallback(() => {
-    if (orgToDelete) deleteOrgMutation.mutate(orgToDelete);
-  }, [orgToDelete]);
+    if (orgToDelete) {
+      deleteOrgMutation.mutate(orgToDelete, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['organisations'] });
+          localStorage.removeItem('currentOrganizationId');
+          toast.success('Organization deleted');
+          setOrgToDelete(null);
+        },
+        onError: (err) => toast.error((err as Error).message || 'Failed to delete organization'),
+      });
+    }
+  }, [orgToDelete, deleteOrgMutation, queryClient]);
 
   const canInvite = useMemo(() => can('members:invite'), [can]);
-  const canEditMember = useMemo(() => can('members:update'), [can]);
   const canDeleteMember = useMemo(() => can('members:delete'), [can]);
 
   // Debug logging
@@ -249,7 +254,7 @@ export default function MembersPage() {
           {needsOrgSetup && (
             <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
                 <div className="flex-1">
                   <p className="font-medium">Organization setup required</p>
                   <p className="mt-1 text-amber-700">
@@ -325,7 +330,7 @@ export default function MembersPage() {
               <Card className="border shadow-sm">
                 <CardContent className="pt-6">
                   <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
-                    <div className="relative flex-1 min-w-[260px]">
+                    <div className="relative flex-1 min-w-65">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         placeholder="Search by name, email..."
@@ -343,8 +348,8 @@ export default function MembersPage() {
                         <SelectItem value="all">All roles</SelectItem>
                         <SelectItem value="OrgAdmin">OrgAdmin</SelectItem>
                         <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="board_member">Board Member</SelectItem>
-                        <SelectItem value="guest">Guest</SelectItem>
+                        <SelectItem value="BoardMember">Board Member</SelectItem>
+                        <SelectItem value="User">User</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -371,7 +376,7 @@ export default function MembersPage() {
               </Card>
 
               {/* Members content */}
-              {membersQuery.isLoading ? (
+              {membersLoading ? (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="h-72 animate-pulse rounded-xl bg-muted/70" />
@@ -392,13 +397,13 @@ export default function MembersPage() {
               ) : viewMode === 'grid' ? (
                 <MembersGrid
                   members={members}
-                  onEdit={canEditMember ? setEditMember : undefined}
+                  onEdit={(member) => setEditMember(member as User)}
                   onDelete={canDeleteMember ? setMemberToDelete : undefined}
                 />
               ) : (
                 <MembersList
                   members={members}
-                  onEdit={canEditMember ? setEditMember : undefined}
+                  onEdit={(member) => setEditMember(member as User)}
                   onDelete={canDeleteMember ? setMemberToDelete : undefined}
                 />
               )}
@@ -410,13 +415,13 @@ export default function MembersPage() {
         <TabsContent value="organizations" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold tracking-tight">Organizations</h2>
-            <Button onClick={() => setEditOrg({})} className="gap-2">
+            <Button onClick={() => setEditOrg({} as Organisation)} className="gap-2">
               <Plus className="h-4 w-4" />
               New Organization
             </Button>
           </div>
 
-          {organizationsQuery.isLoading ? (
+          {orgsLoading ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-64 animate-pulse rounded-xl bg-muted/70" />
@@ -442,7 +447,7 @@ export default function MembersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {organizations.map((org) => (
+                  {organizations.map((org: Organisation) => (
                     <TableRow key={org.id}>
                       <TableCell className="font-medium">
                         {org.organisationName || org.name || 'Unnamed'}
@@ -486,7 +491,7 @@ export default function MembersPage() {
           <DialogContent className="sm:max-w-lg">
             <EditMemberDialog
               member={editMember}
-              onSubmit={(data) => updateMemberMutation.mutate({ id: editMember.id, ...data })}
+              onSubmit={(data) => updateMemberMutation.mutate({ userId: editMember.id, data })}
               committees={[]}
               allowSuperAdminRole={isSuperAdmin}
             />
@@ -548,9 +553,9 @@ export default function MembersPage() {
                 console.log('[Organization Form] As JSON:', JSON.stringify(data, null, 2));
 
                 if (editOrg?.id) {
-                  updateOrgMutation.mutate({ id: editOrg.id, ...data });
+                  updateOrgMutation.mutate({ orgId: editOrg.id, data });
                 } else {
-                  createOrgMutation.mutate(data as any);
+                  createOrgMutation.mutate(data as CreateOrganisationData);
                 }
               }}
               className="space-y-6 py-4"
@@ -681,7 +686,7 @@ export default function MembersPage() {
                   <X className="h-4 w-4" />
                   Cancel
                 </Button>
-                <Button type="submit" className="gap-2 min-w-[140px]">
+                <Button type="submit" className="gap-2 min-w-35">
                   <Save className="h-4 w-4" />
                   {editOrg?.id ? 'Save Changes' : 'Create Organization'}
                 </Button>
