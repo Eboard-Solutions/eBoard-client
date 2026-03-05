@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { authService } from '@/lib/auth';
 
 interface SidebarProps {
   className?: string;

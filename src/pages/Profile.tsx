@@ -39,11 +39,7 @@ import {
   Camera,
   Save,
   X,
-  Check,
   Loader2,
-  LogOut,
-  Bell,
-  Globe,
   Clock,
 } from 'lucide-react';
 
@@ -175,7 +171,8 @@ async function uploadProfilePicture(file: File): Promise<{ url: string }> {
 // ── Main Component ─────────────────────────────────
 export default function Profile() {
   const queryClient = useQueryClient();
-  const { user: authUser, isSuperAdmin, isOrgAdmin } = usePermissions();
+  // Auth permissions available if needed: const { user: authUser, isSuperAdmin, isOrgAdmin } = usePermissions();
+  usePermissions(); // Ensures auth is initialized
 
   // State
   const [isEditing, setIsEditing] = useState(false);

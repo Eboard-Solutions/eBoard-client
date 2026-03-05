@@ -1,176 +1,35 @@
 // src/types/index.ts
-// Central type definitions – works perfectly with Vite + React + TypeScript
+// Central type definitions – Re-exports all types from specialized files
 
-// ============================================================================
-// Member Status Types
-// ============================================================================
+// ════════════════════════════════════════════════════════════════════════════════
+// RE-EXPORT ENUMS (exclude types that also exist in api.types to avoid conflicts)
+// ════════════════════════════════════════════════════════════════════════════════
+export {
+  SystemRole,
+  RoleType,
+  Frequency,
+  AttendanceStatus,
+} from './enums';
 
-export type MemberStatus = 'active' | 'inactive' | 'suspended' | 'pending_invite';
+// ════════════════════════════════════════════════════════════════════════════════
+// RE-EXPORT API TYPES (canonical source for all type aliases)
+// ════════════════════════════════════════════════════════════════════════════════
+export * from './api.types';
 
-export type Permission = 
-  | 'view_members'
-  | 'edit_members'
-  | 'delete_members'
-  | 'manage_roles'
-  | 'view_meetings'
-  | 'create_meetings'
-  | 'edit_meetings'
-  | 'delete_meetings'
-  | 'view_documents'
-  | 'upload_documents'
-  | 'delete_documents'
-  | 'view_finance'
-  | 'manage_finance'
-  | 'view_announcements'
-  | 'publish_announcements'
-  | 'view_reports'
-  | 'manage_settings'
-  | 'view_audit_log';
+// ════════════════════════════════════════════════════════════════════════════════
+// LEGACY TYPE ALIASES (for backward compatibility with existing components)
+// ════════════════════════════════════════════════════════════════════════════════
 
-export interface Role {
-  id: string;
-  name: string;
-  description: string;
-  permissions: Permission[];
-  isDefault: boolean;
-  isCritical: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+// Map old role types to new ones
+export type LegacyUserRole = 'super_admin' | 'admin' | 'board_member' | 'guest';
 
-export interface UserActivity {
-  id: string;
-  userId: string;
-  action: string;
-  ipAddress?: string;
-  userAgent?: string;
-  timestamp: string;
-  details?: Record<string, unknown>;
-}
-
-export interface AuditLogEntry {
-  id: string;
-  userId: string;
-  userName: string;
-  action: 'role_changed' | 'member_removed' | 'status_updated' | 'member_created' | 'department_changed' | 'bulk_action';
-  targetUserId?: string;
-  targetUserName?: string;
-  previousValue?: string;
-  newValue?: string;
-  timestamp: string;
-  ipAddress?: string;
-}
-
-export type UserRole = 'super_admin' | 'admin' | 'board_member' | 'guest';
-
-// <<<<<<< meeting-features-update
-// <<<<<<< Updated upstream
-// =======
-// =======
-// >>>>>>> main
-// ============================================================================
-// Meeting State Machine Types
-// ============================================================================
-
-export type MeetingState = 
-  | 'DRAFT' 
-  | 'SCHEDULED' 
-  | 'IN_PROGRESS' 
-  | 'PAUSED' 
-  | 'COMPLETED' 
-  | 'MINUTES_GENERATED' 
-  | 'MINUTES_APPROVED' 
-  | 'ARCHIVED';
-
-export type AgendaItemStatus = 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'SKIPPED';
-
-// Decision & Voting Types
-export type DecisionType = 'RESOLUTION' | 'MOTION' | 'INFORMAL';
-export type ApprovalMethod = 'VOTE' | 'CONSENSUS' | 'UNANIMOUS';
-export type VoteStatus = 'PENDING' | 'ACTIVE' | 'APPROVED' | 'REJECTED' | 'ABSTAINED';
-export type ActionItemStatus = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
-
-// Meeting Participation
-export type AttendanceStatus = 'PENDING' | 'PRESENT' | 'ABSENT' | 'LATE' | 'LEFT_EARLY';
-
-// Minutes Status
-export type MinutesStatus = 'DRAFT' | 'GENERATED' | 'PENDING_APPROVAL' | 'APPROVED' | 'ARCHIVED';
-
-// ============================================================================
-// <<<<<<< meeting-features-update
-// New Meeting Types
-// ============================================================================
-
-// Meeting Format Types
-export type MeetingFormat = 'physical' | 'online' | 'hybrid';
-
-// Meeting Type
-export type MeetingType = 'regular' | 'special' | 'emergency' | 'annual';
-
-// Priority Levels
-export type Priority = 'low' | 'medium' | 'high';
-
-// Recurring Frequency
-export type RecurringFrequency = 'none' | 'weekly' | 'monthly' | 'yearly';
-
-// RSVP Status
-export type RSVPStatus = 'invited' | 'accepted' | 'declined' | 'tentative';
-
-// Reminder Types
-export type ReminderType = 'email' | 'in_app' | 'whatsapp' | 'sms';
-
-// Meeting Reminder
-export interface MeetingReminder {
-  id: string;
-  meetingId: string;
-  type: ReminderType;
-  minutesBefore: number;
-  customMessage?: string;
-  userIds: string[];
-  isSent: boolean;
-  scheduledFor: string;
-  sentAt?: string;
-}
-
-// Check-in PIN
-export interface CheckInPIN {
-  meetingId: string;
-  pin: string;
-  expiresAt: string;
-  isActive: boolean;
-}
-
-// Meeting with enhanced fields
-export interface MeetingEnhanced extends Meeting {
-  format: MeetingFormat;
-  meetingType: MeetingType;
-  priority: Priority;
-  recurring: RecurringFrequency;
-  recurringEndDate?: string;
-  quorumRequired: number;
-  description?: string;
-  rsvpStatus: RSVPStatus[];
-  reminders: MeetingReminder[];
-  checkInPIN?: CheckInPIN;
-  virtualLink?: string;
-}
-
-// ============================================================================
-// Legacy Types (for backward compatibility)
-// ============================================================================
-// 
-// >>>>>>> Stashed changes
-// =======
-// Legacy Types (for backward compatibility)
-// ============================================================================
-
-// >>>>>>> main
-export type MeetingStatus = 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
-export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type DocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
-export type PollStatus = 'draft' | 'active' | 'closed';
-export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'paid';
+// These types are preserved for backward compatibility with existing mock data
+export type LegacyMeetingStatus = 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
+export type LegacyTaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
+export type LegacyTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type LegacyDocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
+export type LegacyPollStatus = 'draft' | 'active' | 'closed';
+export type LegacyExpenseStatus = 'pending' | 'approved' | 'rejected' | 'paid';
 export type NotificationType =
   | 'meeting'
   | 'vote'
@@ -179,43 +38,25 @@ export type NotificationType =
   | 'announcement'
   | 'system';
 
-export interface User {
+// ════════════════════════════════════════════════════════════════════════════════
+// LEGACY INTERFACES (for backward compatibility with existing mock data)
+// ════════════════════════════════════════════════════════════════════════════════
+
+export interface LegacyUser {
   id: string;
   name: string;
   email: string;
   avatar?: string;
-  role: UserRole;
+  role: LegacyUserRole;
   position?: string;
   department?: string;
   phone?: string;
   termStartDate?: string;
   termEndDate?: string;
   committees?: string[];
-  // New fields for enhanced member management
-  status?: MemberStatus;
-  lastLogin?: string;
-  createdAt?: string;
-  twoFactorEnabled?: boolean;
-  loginHistory?: UserActivity[];
 }
 
-export interface Meeting {
-  id: string;
-  title: string;
-  startAt: string;
-  endAt: string;
-  timezone: string;
-  location?: string;
-  isRecurring: boolean;
-  status: MeetingStatus;
-  agenda: AgendaItem[];
-  attendees: string[];
-  minutesId?: string;
-  createdBy: string;
-  createdAt: string;
-}
-
-export interface AgendaItem {
+export interface LegacyAgendaItem {
   id: string;
   title: string;
   owner: string;
@@ -225,71 +66,28 @@ export interface AgendaItem {
   order: number;
 }
 
-// Minutes related types
-export interface Minutes {
-  id: string;
-  meetingId: string;
-  title: string;
-  date: string;
-  time: string;
-  endTime?: string;
-  location: string;
-  attendance: AttendanceRecord[];
-  approvalOfPreviousMinutes?: string;
-  agendaSummaries: AgendaSummary[];
-  decisions: Decision[];
-  actionItems: ActionItem[];
-  nextMeetingDetails?: NextMeetingDetails;
-  attachments: string[];
-  preparedBy: string;
-  approvedBy?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AttendanceRecord {
-  userId: string;
-  present: boolean;
-  role?: string;
-}
-
-export interface AgendaSummary {
-  id: string;
-  topic: string;
-  discussion: string;
-  decision?: string;
-  presenter?: string;
-}
-
-export interface Decision {
+export interface LegacyMeeting {
   id: string;
   title: string;
-  description: string;
-  approvedBy?: string;
-  date?: string;
-}
-
-export interface ActionItem {
-  id: string;
-  action: string;
-  owner: string;
-  dueDate: string;
-  status: 'pending' | 'in_progress' | 'completed';
-}
-
-export interface NextMeetingDetails {
-  date?: string;
-  time?: string;
+  startAt: string;
+  endAt: string;
+  timezone: string;
   location?: string;
-  agenda?: string;
+  isRecurring: boolean;
+  status: LegacyMeetingStatus;
+  agenda: LegacyAgendaItem[];
+  attendees: string[];
+  minutesId?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
-export interface Task {
+export interface LegacyTask {
   id: string;
   title: string;
   description?: string;
-  status: TaskStatus;
-  priority: TaskPriority;
+  status: LegacyTaskStatus;
+  priority: LegacyTaskPriority;
   assigneeId: string;
   dueDate: string;
   meetingId?: string;
@@ -298,7 +96,7 @@ export interface Task {
   completedAt?: string;
 }
 
-export interface Document {
+export interface LegacyDocument {
   id: string;
   title: string;
   fileName: string;
@@ -310,32 +108,32 @@ export interface Document {
   version: number;
   uploadedBy: string;
   uploadedAt: string;
-  accessLevel: DocumentAccessLevel;
+  accessLevel: LegacyDocumentAccessLevel;
 }
 
-export interface Poll {
-  id: string;
-  meetingId?: string;
-  question: string;
-  description?: string;
-  options: PollOption[];
-  anonymous: boolean;
-  multipleChoice: boolean;
-  requireQuorum: boolean;
-  quorumPercentage?: number;
-  status: PollStatus;
-  expiresAt: string;
-  createdBy: string;
-  createdAt: string;
-}
-
-export interface PollOption {
+export interface LegacyPollOption {
   id: string;
   text: string;
   votes: number;
 }
 
-export interface Budget {
+export interface LegacyPoll {
+  id: string;
+  meetingId?: string;
+  question: string;
+  description?: string;
+  options: LegacyPollOption[];
+  anonymous: boolean;
+  multipleChoice: boolean;
+  requireQuorum: boolean;
+  quorumPercentage?: number;
+  status: LegacyPollStatus;
+  expiresAt: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface LegacyBudget {
   id: string;
   fiscalYear: string;
   category: string;
@@ -346,7 +144,7 @@ export interface Budget {
   approvedAt?: string;
 }
 
-export interface Expense {
+export interface LegacyExpense {
   id: string;
   budgetId: string;
   title: string;
@@ -355,14 +153,14 @@ export interface Expense {
   category: string;
   date: string;
   receiptUrl?: string;
-  status: ExpenseStatus;
+  status: LegacyExpenseStatus;
   submittedBy: string;
   submittedAt: string;
   approvedBy?: string;
   approvedAt?: string;
 }
 
-export interface Announcement {
+export interface LegacyAnnouncement {
   id: string;
   title: string;
   content: string;
@@ -373,7 +171,7 @@ export interface Announcement {
   expiresAt?: string;
 }
 
-export interface Notification {
+export interface LegacyNotification {
   id: string;
   userId: string;
   type: NotificationType;
@@ -384,282 +182,34 @@ export interface Notification {
   createdAt: string;
 }
 
-export interface DashboardStats {
-  upcomingMeetings: Meeting[];
-  openTasks: Task[];
-  activePolls: Poll[];
+export interface LegacyDashboardStats {
+  upcomingMeetings: LegacyMeeting[];
+  openTasks: LegacyTask[];
+  activePolls: LegacyPoll[];
   budgetSummary: {
     totalAllocated: number;
     totalSpent: number;
     percentage: number;
   };
-  recentDocuments: Document[];
+  recentDocuments: LegacyDocument[];
   attendanceTrend: { month: string; attendance: number }[];
 }
 
-// ============================================================================
-// Live Meeting Module Types
-// ============================================================================
-
-export interface MeetingVote {
-  id: string;
-  decisionId: string;
-  odlId: string;
-  voterName: string;
-  vote: 'YES' | 'NO' | 'ABSTAIN';
-  votedAt: string;
-  isLocked: boolean;
-}
-
-export interface MeetingDecision {
-  id: string;
-  meetingId: string;
-  agendaItemId?: string;
-  decisionText: string;
-  decisionType: DecisionType;
-  description?: string;
-  approvalMethod: ApprovalMethod;
-  majorityRule: number;
-  quorumRequired: number;
-  quorumPresent: number;
-  votes: MeetingVote[];
-  yesVotes: number;
-  noVotes: number;
-  abstentions: number;
-  result?: 'APPROVED' | 'REJECTED' | 'PENDING';
-  isLocked: boolean;
-  lockedAt?: string;
-  lockedBy?: string;
-  createdBy: string;
-  createdAt: string;
-  finalizedAt?: string;
-  actionItemIds: string[];
-}
-
-export interface MeetingSession {
-  id: string;
-  meetingId: string;
-  title: string;
-  description?: string;
-  state: MeetingState;
-  scheduledStart: string;
-  scheduledEnd: string;
-  actualStart?: string;
-  actualEnd?: string;
-  location?: string;
-  virtualLink?: string;
-  quorumRequired: number;
-  quorumPresent: number;
-  chairpersonId: string;
-  secretaryId: string;
-  participants: Participant[];
-  agendaItems: AgendaItemSession[];
-  activeAgendaItemId?: string;
-  decisions: Decision[];
-  votes: MeetingVote[];
-  actionItems: MeetingActionItem[];
-  liveNotes: LiveNote[];
-  minutesId?: string;
-  minutes?: MeetingMinutes;
-  aiSummary?: string;
-  aiDraftResolution?: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  endedAt?: string;
-}
-
-export interface Participant {
-  id: string;
-  odlId: string;
-  name: string;
-  email: string;
-  role: 'CHAIR' | 'SECRETARY' | 'MEMBER' | 'OBSERVER' | 'GUEST';
-  attendanceStatus: AttendanceStatus;
-  joinedAt?: string;
-  leftAt?: string;
-  isPresent: boolean;
-  canVote: boolean;
-  hasVoted: boolean;
-}
-
-export interface AgendaItemSession {
-  id: string;
-  meetingId: string;
-  title: string;
-  description?: string;
-  ownerId: string;
-  ownerName: string;
-  duration: number;
-  order: number;
-  status: AgendaItemStatus;
-  startedAt?: string;
-  endedAt?: string;
-  actualDuration?: number;
-  notes: string[];
-  decisionId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MeetingActionItem {
-  id: string;
-  meetingId: string;
-  decisionId?: string;
-  agendaItemId?: string;
-  title: string;
-  description?: string;
-  ownerId: string;
-  ownerName: string;
-  dueDate: string;
-  status: ActionItemStatus;
-  priority: TaskPriority;
-  notes?: string;
-  createdBy: string;
-  createdAt: string;
-  completedAt?: string;
-  closedAt?: string;
-}
-
-export interface LiveNote {
-  id: string;
-  meetingId: string;
-  agendaItemId?: string;
-  content: string;
-  summary?: string;
-  version: number;
-  previousVersionId?: string;
-  createdBy: string;
-  createdByName: string;
-  createdAt: string;
-  updatedAt: string;
-  isAutoSaved: boolean;
-  timestamp?: string;
-}
-
-export interface MeetingMinutes {
-  id: string;
-  meetingId: string;
-  title: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  location: string;
-  attendance: AttendanceRecordEnhanced[];
-  agendaSummaries: AgendaSummaryEnhanced[];
-  decisions: Decision[];
-  actionItems: MeetingActionItem[];
-  nextMeetingDetails?: NextMeetingDetails;
-  attachments: string[];
-  status: MinutesStatus;
-  version: number;
-  preparedBy: string;
-  preparedByName: string;
-  preparedAt: string;
-  approvedBy?: string;
-  approvedByName?: string;
-  approvedAt?: string;
-  isLocked: boolean;
-  lockedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AttendanceRecordEnhanced {
-  odlId: string;
-  name: string;
-  email: string;
-  role: string;
-  status: AttendanceStatus;
-  joinedAt?: string;
-  leftAt?: string;
-}
-
-export interface AgendaSummaryEnhanced {
-  id: string;
-  agendaItemId: string;
-  topic: string;
-  discussion: string;
-  decision?: string;
-  presenterId: string;
-  presenterName: string;
-  duration: number;
-  actualDuration?: number;
-}
-
-export interface AuditLog {
-  id: string;
-  meetingId: string;
-  action: string;
-  entityType: 'MEETING' | 'AGENDA_ITEM' | 'DECISION' | 'VOTE' | 'ACTION_ITEM' | 'NOTE' | 'MINUTES' | 'PARTICIPANT';
-  entityId: string;
-  actorId: string;
-  actorName: string;
-  actorRole: string;
-  previousValue?: string;
-  newValue?: string;
-  timestamp: string;
-  ipAddress?: string;
-  userAgent?: string;
-}
-
-export type MeetingEventType = 
-  | 'MEETING_STATE_CHANGED'
-  | 'AGENDA_ITEM_ACTIVATED'
-  | 'AGENDA_ITEM_COMPLETED'
-  | 'AGENDA_ITEM_SKIPPED'
-  | 'DECISION_CREATED'
-  | 'DECISION_UPDATED'
-  | 'DECISION_LOCKED'
-  | 'VOTE_CAST'
-  | 'ACTION_ITEM_CREATED'
-  | 'ACTION_ITEM_UPDATED'
-  | 'NOTE_CREATED'
-  | 'NOTE_UPDATED'
-  | 'PARTICIPANT_JOINED'
-  | 'PARTICIPANT_LEFT'
-  | 'MINUTES_GENERATED'
-  | 'MINUTES_APPROVED';
-
-export interface MeetingEvent {
-  type: MeetingEventType;
-  meetingId: string;
-  data: Record<string, unknown>;
-  timestamp: string;
-  actorId: string;
-  actorName: string;
-}
-
-export interface AISummarizeRequest {
-  meetingId: string;
-  agendaItemId?: string;
-  content: string[];
-}
-
-export interface AISummarizeResponse {
-  summary: string;
-  keyPoints: string[];
-  actionItems: string[];
-}
-
-export interface AIDraftResolutionRequest {
-  decisionText: string;
-  discussion: string;
-}
-
-export interface AIDraftResolutionResponse {
-  draftResolution: string;
-  suggestedWording: string[];
-}
-
-export interface AIGenerateMinutesRequest {
-  meetingId: string;
-}
-
-export interface AIGenerateMinutesResponse {
-  draft: MeetingMinutes;
-  confidence: number;
-}
+// ════════════════════════════════════════════════════════════════════════════════
+// TYPE ALIASES FOR BACKWARD COMPATIBILITY
+// These allow existing code to continue working without changes
+// ════════════════════════════════════════════════════════════════════════════════
+export type User = LegacyUser;
+export type AgendaItem = LegacyAgendaItem;
+export type Task = LegacyTask;
+export type Document = LegacyDocument;
+export type Poll = LegacyPoll;
+export type PollOption = LegacyPollOption;
+export type Budget = LegacyBudget;
+export type Expense = LegacyExpense;
+export type Announcement = LegacyAnnouncement;
+export type Notification = LegacyNotification;
+export type DashboardStats = LegacyDashboardStats;
 
 // THIS LINE IS THE KEY – forces Vite to treat the module as having runtime exports
-export default {};
+export default {} as const;

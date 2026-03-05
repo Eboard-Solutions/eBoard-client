@@ -1,6 +1,9 @@
 // src/lib/api/members.ts
 // CRUD for users table (members are users)
 
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/config/api.config';
+
 export interface User {
   id: string;
   firstName: string;
@@ -12,7 +15,6 @@ export interface User {
   phoneNumber?: string;
   profilePictureUrl?: string;
   organizationId?: string;
-  // committees removed — no endpoint exists
 }
 
 export interface CreateUserDto {
@@ -22,8 +24,7 @@ export interface CreateUserDto {
   role: string;
   title?: string;
   phoneNumber?: string;
-  // profilePictureUrl?: string;   // optional — add if needed
-  organizationId?: string;         // optional — backend may assign
+  organizationId?: string;
 }
 
 export interface UpdateUserDto extends Partial<CreateUserDto> {
@@ -37,40 +38,20 @@ export interface FetchUsersParams {
 }
 
 // ── LIST USERS (MEMBERS) ──────────────────────────────────────────
-// From logs: most likely /api/v1/user/organisation-users or /api/v1/user
 export async function fetchMembers(params?: FetchUsersParams): Promise<{ members: User[]; total: number }> {
   try {
-    // Try this first — matches one of your logged routes
-    let url = '/api/v1/user';
+    const queryParams: Record<string, string> = {};
+    if (params?.search) queryParams.search = params.search;
+    if (params?.role) queryParams.role = params.role;
+    if (params?.organizationId) queryParams.organizationId = params.organizationId;
 
-    const query = new URLSearchParams();
-    if (params?.search) query.set('search', params.search);
-    if (params?.role) query.set('role', params.role);
-    if (params?.organizationId && params.organizationId !== null) {
-      query.set('organizationId', params.organizationId);
-    }
+    console.log('🔍 Fetching members with params:', queryParams);
 
-    if (query.toString()) url += `?${query}`;
+    const response = await apiClient.get(ENDPOINTS.USERS.ORGANISATION_USERS, { params: queryParams });
+    const data = response.data.data || response.data;
 
-    console.log('🔍 Fetching members:', url);
-
-    const res = await fetch(url, {
-      credentials: 'omit',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (!res.ok) {
-      console.warn(`fetchMembers: ${res.status} → empty list`);
-      return { members: [], total: 0 };
-    }
-
-    const data = await res.json();
-
-    // Flexible parsing — backend might return users, members, or array
-    const raw = data.users || data.members || data || [];
+    // Flexible parsing — backend might return different shapes
+    const raw = Array.isArray(data) ? data : (data.users || data.members || []);
     const members = raw.map((u: any) => ({
       ...u,
       name: u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim(),
@@ -87,7 +68,6 @@ export async function fetchMembers(params?: FetchUsersParams): Promise<{ members
 }
 
 // ── CREATE MEMBER ─────────────────────────────────────────────────
-// POST /api/v1/user
 export async function createMember(data: CreateUserDto): Promise<User> {
   try {
     const payload = { ...data };
@@ -95,95 +75,51 @@ export async function createMember(data: CreateUserDto): Promise<User> {
 
     console.log('📤 Creating user/member:', payload);
 
-    const res = await fetch('/api/v1/user', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-      credentials: 'omit',
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({ message: 'Failed to create member' }));
-      throw new Error(errData.message || `HTTP ${res.status}`);
-    }
-
-    const result = await res.json();
+    const response = await apiClient.post(ENDPOINTS.USERS.BASE, payload);
+    const result = response.data.data || response.data;
     const user = result.user || result;
 
     return {
       ...user,
       name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
     };
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ createMember error:', err);
-    throw err instanceof Error ? err : new Error('Failed to create member');
+    throw new Error(err.response?.data?.message || err.message || 'Failed to create member');
   }
 }
 
 // ── UPDATE MEMBER ─────────────────────────────────────────────────
-// PATCH /api/v1/user/:id
 export async function updateMember(data: UpdateUserDto): Promise<User> {
   const { id, ...updateData } = data;
 
   try {
     console.log('📤 Updating user/member:', id, updateData);
 
-    const res = await fetch(`/api/v1/user/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-      credentials: 'omit',
-      body: JSON.stringify(updateData),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({ message: 'Failed to update member' }));
-      throw new Error(errData.message || `HTTP ${res.status}`);
-    }
-
-    const result = await res.json();
+    const response = await apiClient.patch(ENDPOINTS.USERS.BY_ID(id), updateData);
+    const result = response.data.data || response.data;
     const user = result.user || result;
 
     return {
       ...user,
       name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
     };
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ updateMember error:', err);
-    throw err instanceof Error ? err : new Error('Failed to update member');
+    throw new Error(err.response?.data?.message || err.message || 'Failed to update member');
   }
 }
 
 // ── DELETE MEMBER ─────────────────────────────────────────────────
-// DELETE /api/v1/user/:id
 export async function deleteMember(id: string): Promise<void> {
   try {
     console.log('🗑️ Deleting user/member:', id);
 
-    const res = await fetch(`/api/v1/user/${id}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        Accept: 'application/json',
-      },
-      credentials: 'omit',
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({ message: 'Failed to delete member' }));
-      throw new Error(errData.message || `HTTP ${res.status}`);
-    }
+    await apiClient.delete(ENDPOINTS.USERS.BY_ID(id));
 
     console.log('✅ Member deleted');
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ deleteMember error:', err);
-    throw err instanceof Error ? err : new Error('Failed to delete member');
+    throw new Error(err.response?.data?.message || err.message || 'Failed to delete member');
   }
 }

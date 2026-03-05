@@ -27,10 +27,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { notifications } from '@/lib/store';
-import authService from '@/lib/auth'; // assuming default export
+import { useNotifications, useUnreadNotificationsCount } from '@/hooks/api/useNotifications';
+import { authService } from '@/api/services';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import type { Notification } from '@/types/api.types';
 
 // ────────────────────────────────────────────────
 // Type (strongly recommended – prevents many bugs)
@@ -39,15 +40,6 @@ interface User {
   email: string;
   avatar?: string;
   role: string;
-}
-
-// If your notifications have a known shape, define it too
-interface Notification {
-  id: string | number;
-  title: string;
-  message: string;
-  read: boolean;
-  createdAt: string | number | Date;
 }
 
 // ────────────────────────────────────────────────
@@ -60,7 +52,15 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
   const [, setLocation] = useLocation();
   const [darkMode, setDarkMode] = useState<boolean>(false);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Fetch notifications from API (page param for pagination)
+  const { data: notificationsData } = useNotifications({ page: 1 });
+  const { data: unreadCountData } = useUnreadNotificationsCount();
+
+  // Extract items from PaginatedResponse
+  const notificationsList: Notification[] = notificationsData?.items || [];
+  const unreadCount = typeof unreadCountData === 'number' 
+    ? unreadCountData 
+    : notificationsList.filter((n) => !n.isRead).length;
 
   // Safest access pattern
   const currentUser = authService?.getCurrentUser?.() as User | null ?? null;
@@ -69,8 +69,17 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
     return null;
   }
 
-  const handleSignOut = () => {
-    authService?.signOut?.();
+  const handleSignOut = async () => {
+    try {
+      const user = authService.getUser();
+      if (user?.userId) {
+        await authService.logout(user.userId);
+      } else {
+        authService.clearAuth();
+      }
+    } catch {
+      authService.clearAuth();
+    }
     toast.success('Signed out successfully');
     setLocation('/auth/signin');
   };
@@ -109,7 +118,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-30 h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-300',
+        'fixed top-0 right-0 z-30 h-16 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 transition-all duration-300',
         sidebarCollapsed ? 'left-16' : 'left-64',
       )}
     >
@@ -205,13 +214,13 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
               <DropdownMenuSeparator />
 
               <div className="max-h-96 overflow-y-auto">
-                {notifications.length > 0 ? (
-                  notifications.slice(0, 8).map((notification) => (
+                {notificationsList.length > 0 ? (
+                  notificationsList.slice(0, 8).map((notification) => (
                     <DropdownMenuItem
                       key={notification.id}
                       className={cn(
                         'mx-2 mt-1 cursor-pointer rounded-lg p-4',
-                        !notification.read && 'bg-accent/50',
+                        !notification.isRead && 'bg-accent/50',
                       )}
                     >
                       <div className="flex w-full items-start justify-between gap-3">
@@ -223,10 +232,10 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                             {notification.message}
                           </p>
                           <p className="mt-2 text-xs text-muted-foreground">
-                            {new Date(notification.createdAt).toLocaleString()}
+                            {notification.createdAt ? new Date(notification.createdAt).toLocaleString() : ''}
                           </p>
                         </div>
-                        {!notification.read && (
+                        {!notification.isRead && (
                           <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
                         )}
                       </div>
@@ -239,7 +248,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                 )}
               </div>
 
-              {notifications.length > 8 && (
+              {notificationsList.length > 8 && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="justify-center font-medium text-primary">

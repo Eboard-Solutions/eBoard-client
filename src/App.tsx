@@ -2,8 +2,8 @@ import { Route, Router, Switch } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/sonner";
-import { AppLayout } from "@/pages/components/layout/AppLayout";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
 import { UserLogin } from "@/pages/auth/UserLogin";
@@ -159,14 +159,13 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Finance - admin only */}
-          <Route path="/finance">
-            <ProtectedRoute requiredRole={["admin", "super_admin"]}>
-              <AppLayout>
-                <Finance />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/finance">
+          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
+            <AppLayout>
+              <Finance />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
           {/* Announcements */}
           <Route path="/announcements">
@@ -177,14 +176,13 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Reports - admin only */}
-          <Route path="/reports">
-            <ProtectedRoute requiredRole={["admin", "super_admin"]}>
-              <AppLayout>
-                <Reports />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/reports">
+          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
+            <AppLayout>
+              <Reports />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
           {/* Settings */}
           <Route path="/settings">
@@ -204,13 +202,13 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          <Route path="/admin/create">
-            <ProtectedRoute requiredRole="super_admin">
-              <AppLayout>
-                <CreateAdmin />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/admin/create">
+          <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <AppLayout>
+              <CreateAdmin />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
           {/* 404 Fallback */}
           <Route component={NotFoundPage} />

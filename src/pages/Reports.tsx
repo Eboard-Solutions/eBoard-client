@@ -2,11 +2,45 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { getDashboardStats, meetings, tasks, budgets } from '@/lib/store';
-import { Download, TrendingUp, Calendar, CheckCircle2, DollarSign, Users, FileText } from 'lucide-react';
+import { useFinanceOverview, useDashboardSummary } from '@/hooks/api/useOverview';
+import { useTasks } from '@/hooks/api/useTasks';
+import { useMeetings } from '@/hooks/api/useMeetings';
+import { Download, TrendingUp, Calendar, CheckCircle2, DollarSign, Users, FileText, Loader2 } from 'lucide-react';
+
+import type { Task, Meeting, FinanceOverview, DashboardStats, PaginatedResponse } from '@/types/api.types';
+
+// Local interfaces
+interface AttendanceDataPoint {
+  month: string;
+  attendance: number;
+}
+
+interface BudgetItem {
+  category: string;
+  allocated: number;
+  spent: number;
+}
+
+interface TaskStatusData {
+  status: string;
+  count: number;
+}
 
 export function Reports() {
-  const stats = getDashboardStats();
+  const { data: financeData, isLoading: financeLoading } = useFinanceOverview();
+  const { data: dashboardData, isLoading: dashboardLoading } = useDashboardSummary();
+  const { data: tasksData, isLoading: tasksLoading } = useTasks();
+  const { data: meetingsData, isLoading: meetingsLoading } = useMeetings();
+
+  const isLoading = financeLoading || dashboardLoading || tasksLoading || meetingsLoading;
+
+  // Safely extract tasks and meetings arrays
+  const tasks: Task[] = Array.isArray(tasksData) 
+    ? tasksData 
+    : (tasksData as PaginatedResponse<Task>)?.items || [];
+  const meetings: Meeting[] = Array.isArray(meetingsData) 
+    ? meetingsData 
+    : (meetingsData as PaginatedResponse<Meeting>)?.items || [];
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -16,11 +50,17 @@ export function Reports() {
     }).format(amount);
   };
 
-  // Meeting attendance data
-  const attendanceData = stats.attendanceTrend;
+  // Meeting attendance data from dashboard or fallback
+  const attendanceData: AttendanceDataPoint[] = (dashboardData as DashboardStats)?.attendanceTrend || 
+    [{ month: 'Jan', attendance: 0 }, { month: 'Feb', attendance: 0 }, { month: 'Mar', attendance: 0 }];
 
-  // Budget spending by category
-  const budgetData = budgets.map(b => ({
+  // Budget data from finance overview or fallback
+  const budgets: BudgetItem[] = ((financeData as FinanceOverview)?.categories || []).map(c => ({
+    category: c.name,
+    allocated: c.allocated,
+    spent: c.spent,
+  }));
+  const budgetData = budgets.map((b: BudgetItem) => ({
     category: b.category,
     allocated: b.allocated,
     spent: b.spent,
@@ -28,12 +68,35 @@ export function Reports() {
   }));
 
   // Task completion data
-  const taskStatusData = [
-    { status: 'To Do', count: tasks.filter(t => t.status === 'todo').length },
-    { status: 'In Progress', count: tasks.filter(t => t.status === 'in_progress').length },
-    { status: 'Review', count: tasks.filter(t => t.status === 'review').length },
-    { status: 'Completed', count: tasks.filter(t => t.status === 'completed').length },
+  const taskStatusData: TaskStatusData[] = [
+    { status: 'To Do', count: tasks.filter((t: Task) => t.status === 'TODO').length },
+    { status: 'In Progress', count: tasks.filter((t: Task) => t.status === 'IN_PROGRESS').length },
+    { status: 'Completed', count: tasks.filter((t: Task) => t.status === 'COMPLETED').length },
   ];
+
+  // Dashboard stats from financeData and dashboardData with proper typing
+  const typedFinance = financeData as FinanceOverview | undefined;
+  const typedDashboard = dashboardData as DashboardStats | undefined;
+  
+  const stats = {
+    budgetSummary: {
+      totalAllocated: typedFinance?.allocatedBudget || 0,
+      totalSpent: typedFinance?.spentBudget || 0,
+      percentage: typedFinance?.budgetUtilization || 0,
+    },
+    recentDocuments: typedDashboard?.recentDocuments || [],
+    activePolls: typedDashboard?.activePolls || 0,
+    upcomingMeetings: typedDashboard?.upcomingMeetings || [],
+    attendanceTrend: attendanceData,
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -74,9 +137,9 @@ export function Reports() {
               <span className="text-sm text-muted-foreground">Open Tasks</span>
               <CheckCircle2 className="h-4 w-4 text-warning" />
             </div>
-            <p className="text-3xl font-bold">{tasks.filter(t => t.status !== 'completed').length}</p>
+            <p className="text-3xl font-bold">{tasks.filter((t: Task) => t.status !== 'COMPLETED').length}</p>
             <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-              <span>{tasks.filter(t => t.status === 'completed').length} completed</span>
+              <span>{tasks.filter((t: Task) => t.status === 'COMPLETED').length} completed</span>
             </div>
           </CardContent>
         </Card>
@@ -182,7 +245,7 @@ export function Reports() {
                     fontSize={12}
                   />
                   <Tooltip
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: number | string) => formatCurrency(Number(value) || 0)}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',
@@ -263,7 +326,7 @@ export function Reports() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Active Polls</p>
-                  <p className="text-2xl font-bold">{stats.activePolls.length}</p>
+                  <p className="text-2xl font-bold">{stats.activePolls}</p>
                 </div>
               </div>
               <Badge variant="warning">Pending</Badge>
@@ -277,7 +340,7 @@ export function Reports() {
                 <div>
                   <p className="text-sm text-muted-foreground">Completion Rate</p>
                   <p className="text-2xl font-bold">
-                    {((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100).toFixed(0)}%
+                    {tasks.length > 0 ? ((tasks.filter((t: Task) => t.status === 'COMPLETED').length / tasks.length) * 100).toFixed(0) : 0}%
                   </p>
                 </div>
               </div>

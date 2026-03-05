@@ -26,7 +26,7 @@ const addMemberSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['OrgAdmin', 'Admin', 'board_member', 'guest'], {
+  role: z.enum(['SuperAdmin', 'OrgAdmin', 'Admin', 'BoardMember', 'User'], {
     required_error: 'Please select a role',
   }),
   title: z.string().optional(),
@@ -158,7 +158,7 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
             Role <span className="text-red-500 text-sm">*</span>
           </Label>
           <Select
-            defaultValue="board_member"
+            defaultValue="BoardMember"
             onValueChange={(value) => {
               setValue('role', value as any, { shouldValidate: true });
               trigger('role');
@@ -171,8 +171,8 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
               {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
               <SelectItem value="OrgAdmin">OrgAdmin</SelectItem>
               <SelectItem value="Admin">Admin</SelectItem>
-              <SelectItem value="board_member">Board Member</SelectItem>
-              <SelectItem value="guest">Guest</SelectItem>
+              <SelectItem value="BoardMember">Board Member</SelectItem>
+              <SelectItem value="User">User</SelectItem>
             </SelectContent>
           </Select>
           {errors.role && (

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { useLocation } from 'wouter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -9,173 +9,58 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { meetings, users } from '@/lib/store';
 import {
-  Calendar, Clock, MapPin, Users as UsersIcon, Plus, Search, Video,
-  ClipboardList, FileText, Play, Radio, Building, Building2, Monitor,
-  Flag, Repeat, Bell, Mail, MessageSquare, Smartphone, QrCode,
-  UsersRound, CheckCircle,
-} from 'lucide-react';
-import { AgendaManager } from '@/components/meetings/AgendaManager';
-import { MinutesManager } from '@/components/meetings/MinutesManager';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Calendar, Clock, MapPin, Plus, Search, Loader2 } from 'lucide-react';
 
-type MeetingFormat = 'physical' | 'online' | 'hybrid';
-type MeetingType = 'regular' | 'special' | 'emergency' | 'annual';
-type Priority = 'low' | 'medium' | 'high';
-type RecurringFrequency = 'none' | 'weekly' | 'monthly' | 'yearly';
-type RSVPStatus = 'invited' | 'accepted' | 'declined' | 'tentative';
-
-interface MeetingAttendee {
-  odlId: string;
-  userId: string;
-  rsvpStatus: RSVPStatus;
-  checkedIn: boolean;
-  checkedInAt?: string;
-}
-
-interface MeetingReminder {
-  id: string;
-  meetingId: string;
-  type: 'email' | 'in_app' | 'whatsapp' | 'sms';
-  minutesBefore: number;
-  customMessage?: string;
-  userIds: string[];
-  isSent: boolean;
-  scheduledFor: string;
-  sentAt?: string;
-}
-
-interface EnhancedMeeting {
-  id: string;
-  title: string;
-  startAt: string;
-  endAt: string;
-  timezone: string;
-  location?: string;
-  isRecurring: boolean;
-  status: 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
-  agenda: {
-    id: string;
-    title: string;
-    owner: string;
-    duration: number;
-    description?: string;
-    attachments: string[];
-    order: number;
-  }[];
-  attendees: string[];
-  minutesId?: string;
-  createdBy: string;
-  createdAt: string;
-  format: MeetingFormat;
-  meetingType: MeetingType;
-  priority: Priority;
-  recurring: RecurringFrequency;
-  recurringEndDate?: string;
-  quorumRequired: number;
-  description?: string;
-  virtualLink?: string;
-  attendeeDetails: MeetingAttendee[];
-  reminders: MeetingReminder[];
-  checkInPIN?: string;
-}
-
-interface MeetingFormData {
-  title: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  format: MeetingFormat;
-  meetingType: MeetingType;
-  priority: Priority;
-  recurring: RecurringFrequency;
-  location: string;
-  virtualLink: string;
-  description: string;
-  quorumRequired: number;
-  attendees: string[];
-  enableReminders: boolean;
-  reminderTypes: string[];
-  reminderMinutes: number;
-  enableCheckIn: boolean;
-}
-
-const MEETING_FORMATS: { value: MeetingFormat; label: string; icon: React.ReactNode }[] = [
-  { value: 'physical', label: 'Physical', icon: <Building className="h-4 w-4" /> },
-  { value: 'online', label: 'Online', icon: <Monitor className="h-4 w-4" /> },
-  { value: 'hybrid', label: 'Hybrid', icon: <Building2 className="h-4 w-4" /> },
-];
-
-const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
-  { value: 'regular', label: 'Regular', color: 'bg-blue-500' },
-  { value: 'special', label: 'Special', color: 'bg-purple-500' },
-  { value: 'emergency', label: 'Emergency', color: 'bg-red-500' },
-  { value: 'annual', label: 'Annual', color: 'bg-amber-500' },
-];
-
-const PRIORITIES: { value: Priority; label: string; color: string }[] = [
-  { value: 'low', label: 'Low', color: 'bg-gray-500' },
-  { value: 'medium', label: 'Medium', color: 'bg-yellow-500' },
-  { value: 'high', label: 'High', color: 'bg-red-500' },
-];
-
-const RECURRING_OPTIONS: { value: RecurringFrequency; label: string }[] = [
-  { value: 'none', label: 'Does not repeat' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'yearly', label: 'Yearly' },
-];
-
-const RSVP_STATUS_LABELS: { value: RSVPStatus; label: string; color: string }[] = [
-  { value: 'invited', label: 'Invited', color: 'bg-gray-100 text-gray-700' },
-  { value: 'accepted', label: 'Accepted', color: 'bg-green-100 text-green-700' },
-  { value: 'declined', label: 'Declined', color: 'bg-red-100 text-red-700' },
-  { value: 'tentative', label: 'Tentative', color: 'bg-yellow-100 text-yellow-700' },
-];
+// Import React Query hooks
+import { useMeetings, useCreateMeeting } from '@/hooks/api/useMeetings';
+import type { CreateMeetingData, MeetingFormat, MeetingType, MeetingPriority, MeetingFrequency } from '@/types/api.types';
 
 export function Meetings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedFormat, setSelectedFormat] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [selectedMeeting, setSelectedMeeting] = useState<EnhancedMeeting | null>(null);
-  const [formData, setFormData] = useState<MeetingFormData>({
+
+  // Form state for creating meetings
+  const [newMeeting, setNewMeeting] = useState<Partial<CreateMeetingData>>({
     title: '',
+    description: '',
+    meetingFormat: 'online',
+    meetingFrequency: 'once',
+    meetingType: 'regular',
+    meetingPriority: 'medium',
+    location: '',
+    onlineMeetingLink: '',
     date: '',
     startTime: '',
     endTime: '',
-    format: 'physical',
-    meetingType: 'regular',
-    priority: 'medium',
-    recurring: 'none',
-    location: '',
-    virtualLink: '',
-    description: '',
-    quorumRequired: 5,
-    attendees: [],
-    enableReminders: true,
-    reminderTypes: ['email'],
-    reminderMinutes: 60,
-    enableCheckIn: true,
   });
-  const [, setLocation] = useLocation();
 
-  const liveMeetings = (meetings as EnhancedMeeting[]).filter(m => m.status === 'in_progress');
+  // Fetch data from API
+  const { data: meetingsData, isLoading, error } = useMeetings({ page: 1, limit: 50 });
+  const createMeetingMutation = useCreateMeeting();
 
-  const filteredMeetings = (meetings as EnhancedMeeting[]).filter(meeting => {
+  const meetings = meetingsData?.items || [];
+
+  const filteredMeetings = meetings.filter(meeting => {
     const matchesSearch = meeting.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatus === 'all' || meeting.status === selectedStatus;
     const matchesFormat = selectedFormat === 'all' || meeting.format === selectedFormat;
     return matchesSearch && matchesStatus && matchesFormat;
   });
 
-  const upcomingMeetings = filteredMeetings.filter(m => m.status === 'upcoming');
-  const pastMeetings = filteredMeetings.filter(m => m.status === 'completed');
+  const upcomingMeetings = filteredMeetings.filter(m => 
+    m.status === 'scheduled' || (m.date && new Date(m.date) > new Date())
+  );
+  const pastMeetings = filteredMeetings.filter(m => 
+    m.status === 'completed' || (m.date && new Date(m.date) < new Date())
+  );
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
@@ -195,55 +80,54 @@ export function Meetings() {
     return `In ${days} days`;
   };
 
-  const handleStartLive = (meetingId: string) => setLocation(`/meetings/live/${meetingId}`);
+  const handleCreateMeeting = async () => {
+    if (!newMeeting.title || !newMeeting.date || !newMeeting.startTime || !newMeeting.endTime) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
 
-  const handleViewDetails = (meeting: EnhancedMeeting) => {
-    setSelectedMeeting(meeting);
-    setIsDetailsDialogOpen(true);
-  };
-
-  const handleToggleAttendee = (userId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      attendees: prev.attendees.includes(userId)
-        ? prev.attendees.filter(id => id !== userId)
-        : [...prev.attendees, userId],
-    }));
-  };
-
-  const getRSVPStatusCount = (meeting: EnhancedMeeting, status: RSVPStatus) =>
-    meeting.attendeeDetails?.filter((a: MeetingAttendee) => a.rsvpStatus === status).length || 0;
-
-  const getFormatIcon = (format: MeetingFormat) => {
-    switch (format) {
-      case 'physical': return <Building className="h-4 w-4" />;
-      case 'online': return <Monitor className="h-4 w-4" />;
-      case 'hybrid': return <Building2 className="h-4 w-4" />;
+    try {
+      await createMeetingMutation.mutateAsync({
+        title: newMeeting.title,
+        description: newMeeting.description || '',
+        meetingFormat: (newMeeting.meetingFormat || 'online') as MeetingFormat,
+        meetingFrequency: (newMeeting.meetingFrequency || 'once') as MeetingFrequency,
+        meetingType: (newMeeting.meetingType || 'regular') as MeetingType,
+        meetingPriority: (newMeeting.meetingPriority || 'medium') as MeetingPriority,
+        location: newMeeting.location || '',
+        onlineMeetingLink: newMeeting.onlineMeetingLink || '',
+        date: newMeeting.date,
+        startTime: new Date(`${newMeeting.date}T${newMeeting.startTime}`).toISOString(),
+        endTime: new Date(`${newMeeting.date}T${newMeeting.endTime}`).toISOString(),
+      });
+      toast.success('Meeting scheduled successfully!');
+      setIsCreateDialogOpen(false);
+      setNewMeeting({
+        title: '',
+        description: '',
+        meetingFormat: 'online',
+        meetingFrequency: 'once',
+        meetingType: 'regular',
+        meetingPriority: 'medium',
+        location: '',
+        onlineMeetingLink: '',
+        date: '',
+        startTime: '',
+        endTime: '',
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create meeting');
     }
   };
 
-  const getPriorityBadge = (priority: Priority) => {
-    const p = PRIORITIES.find(pr => pr.value === priority);
-    return p ? (
-      <Badge className={`${p.color} text-white text-xs`}>
-        <Flag className="h-3 w-3 mr-1" />{p.label}
-      </Badge>
-    ) : null;
-  };
-
-  const getMeetingTypeBadge = (type: MeetingType) => {
-    const t = MEETING_TYPES.find(mt => mt.value === type);
-    return t ? (
-      <Badge className={`${t.color} text-white text-xs`}>{t.label}</Badge>
-    ) : null;
-  };
-
-  const getRSVPBadge = (status: RSVPStatus) => {
-    const r = RSVP_STATUS_LABELS.find(rs => rs.value === status);
-    return r ? (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.color}`}>{r.label}</span>
-    ) : null;
-  };
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-2xl font-semibold text-destructive">Error loading meetings</h2>
+        <p className="mt-2 text-muted-foreground">{(error as Error).message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -253,7 +137,7 @@ export function Meetings() {
           <h1 className="text-3xl font-bold">Meetings</h1>
           <p className="text-muted-foreground mt-1">Manage board meetings, agendas, and minutes</p>
         </div>
-
+        
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2">
@@ -265,263 +149,163 @@ export function Meetings() {
               <DialogTitle>Schedule New Meeting</DialogTitle>
               <DialogDescription>Create a new board meeting with full configuration options</DialogDescription>
             </DialogHeader>
-            <div className="space-y-6 py-4">
-              {/* Basic Information */}
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />Basic Information
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label>Meeting Title</Label>
-                    <Input placeholder="e.g., Q1 Strategic Planning" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Meeting Type</Label>
-                    <Select
-                      value={formData.meetingType}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, meetingType: v as MeetingType }))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {MEETING_TYPES.map(type => (
-                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Priority</Label>
-                    <Select
-                      value={formData.priority}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, priority: v as Priority }))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {PRIORITIES.map(p => (
-                          <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Meeting Title *</Label>
+                <Input 
+                  id="title" 
+                  placeholder="e.g., Q1 Strategic Planning" 
+                  value={newMeeting.title}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, title: e.target.value })}
+                />
               </div>
-
-              <Separator />
-
-              {/* Schedule & Format */}
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Clock className="h-4 w-4" />Schedule & Format
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Meeting Format</Label>
-                    <Select
-                      value={formData.format}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, format: v as MeetingFormat }))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {MEETING_FORMATS.map(f => (
-                          <SelectItem key={f.value} value={f.value}>
-                            <div className="flex items-center gap-2">{f.icon}{f.label}</div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Recurring</Label>
-                    <Select
-                      value={formData.recurring}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, recurring: v as RecurringFrequency }))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {RECURRING_OPTIONS.map(r => (
-                          <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input type="date" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Time</Label>
-                    <div className="flex gap-2">
-                      <Input type="time" placeholder="Start" />
-                      <Input type="time" placeholder="End" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Location</Label>
-                    <Input placeholder="Conference Room A" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Virtual Link</Label>
-                    <Input placeholder="https://zoom.us/..." />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Quorum & Description */}
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <UsersRound className="h-4 w-4" />Quorum & Description
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Quorum Required</Label>
-                    <Input type="number" min={1} defaultValue={5} />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Description</Label>
-                    <Textarea placeholder="Meeting description..." rows={3} />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Attendees */}
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <UsersIcon className="h-4 w-4" />Attendees
-                </h3>
-                <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto">
-                  {users.filter(u => u.status !== 'suspended').map(user => (
-                    <div
-                      key={user.id}
-                      className="flex items-center gap-3 p-2 rounded-lg border cursor-pointer hover:bg-muted"
-                      onClick={() => handleToggleAttendee(user.id)}
-                    >
-                      <Checkbox
-                        checked={formData.attendees.includes(user.id)}
-                        onCheckedChange={() => handleToggleAttendee(user.id)}
-                      />
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.avatar} />
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium">{user.name}</p>
-                        <p className="text-xs text-muted-foreground">{user.position || user.role}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Reminders */}
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Bell className="h-4 w-4" />Reminders
-                </h3>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.enableReminders}
-                      onCheckedChange={(v) => setFormData(prev => ({ ...prev, enableReminders: v }))}
-                    />
-                    <Label>Enable Reminders</Label>
-                  </div>
-                  {formData.enableReminders && (
-                    <Select
-                      value={String(formData.reminderMinutes)}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, reminderMinutes: parseInt(v) }))}
-                    >
-                      <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="15">15 minutes before</SelectItem>
-                        <SelectItem value="30">30 minutes before</SelectItem>
-                        <SelectItem value="60">1 hour before</SelectItem>
-                        <SelectItem value="1440">1 day before</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                {formData.enableReminders && (
-                  <div className="flex gap-4">
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={formData.reminderTypes.includes('email')} />
-                      <Mail className="h-4 w-4" /><span className="text-sm">Email</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={formData.reminderTypes.includes('in_app')} />
-                      <Bell className="h-4 w-4" /><span className="text-sm">In-App</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={formData.reminderTypes.includes('whatsapp')} />
-                      <MessageSquare className="h-4 w-4" /><span className="text-sm">WhatsApp</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={formData.reminderTypes.includes('sms')} />
-                      <Smartphone className="h-4 w-4" /><span className="text-sm">SMS</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              {/* Digital Check-In */}
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <QrCode className="h-4 w-4" />Digital Check-In
-                </h3>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={formData.enableCheckIn}
-                    onCheckedChange={(v) => setFormData(prev => ({ ...prev, enableCheckIn: v }))}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date *</Label>
+                  <Input 
+                    id="date" 
+                    type="date" 
+                    value={newMeeting.date}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, date: e.target.value })}
                   />
-                  <Label>Enable Check-In PIN for Physical Meetings</Label>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meetingType">Meeting Type</Label>
+                  <Select 
+                    value={newMeeting.meetingType}
+                    onValueChange={(value) => setNewMeeting({ ...newMeeting, meetingType: value as MeetingType })}
+                  >
+                    <SelectTrigger id="meetingType">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Regular</SelectItem>
+                      <SelectItem value="special">Special</SelectItem>
+                      <SelectItem value="emergency">Emergency</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">Start Time *</Label>
+                  <Input 
+                    id="startTime" 
+                    type="time" 
+                    value={newMeeting.startTime}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, startTime: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">End Time *</Label>
+                  <Input 
+                    id="endTime" 
+                    type="time" 
+                    value={newMeeting.endTime}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="meetingFormat">Format</Label>
+                  <Select 
+                    value={newMeeting.meetingFormat}
+                    onValueChange={(value) => setNewMeeting({ ...newMeeting, meetingFormat: value as MeetingFormat })}
+                  >
+                    <SelectTrigger id="meetingFormat">
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="in-person">In-Person</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meetingPriority">Priority</Label>
+                  <Select 
+                    value={newMeeting.meetingPriority}
+                    onValueChange={(value) => setNewMeeting({ ...newMeeting, meetingPriority: value as MeetingPriority })}
+                  >
+                    <SelectTrigger id="meetingPriority">
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                <Input 
+                  id="location" 
+                  placeholder="Conference Room A" 
+                  value={newMeeting.location}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="onlineMeetingLink">Online Meeting Link</Label>
+                <Input 
+                  id="onlineMeetingLink" 
+                  placeholder="https://zoom.us/j/..." 
+                  value={newMeeting.onlineMeetingLink}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, onlineMeetingLink: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea 
+                  id="description" 
+                  placeholder="Meeting description and agenda items..."
+                  rows={4}
+                  value={newMeeting.description}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, description: e.target.value })}
+                />
               </div>
 
               <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-                <Button variant="outline">Save as Draft</Button>
-                <Button onClick={() => setIsCreateDialogOpen(false)}>Schedule & Send Invites</Button>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateMeeting}
+                  disabled={createMeetingMutation.isPending}
+                >
+                  {createMeetingMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Schedule Meeting'
+                  )}
+                </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Live Meetings Banner */}
-      {liveMeetings.length > 0 && (
-        <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Radio className="h-5 w-5 text-green-600 animate-pulse" />
-                <span className="font-semibold text-green-700 dark:text-green-400">
-                  Live Meeting{liveMeetings.length > 1 ? 's' : ''} In Progress
-                </span>
-              </div>
-              <div className="flex gap-2">
-                {liveMeetings.map(meeting => (
-                  <Button
-                    key={meeting.id}
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 border-green-300 text-green-700 hover:bg-green-100"
-                    onClick={() => handleStartLive(meeting.id)}
-                  >
-                    <Play className="h-4 w-4" />{meeting.title}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Loading meetings...</span>
+        </div>
       )}
 
       {/* Filters and Search */}
@@ -709,58 +493,36 @@ export function Meetings() {
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
-          {upcomingMeetings.map((meeting: EnhancedMeeting) => {
-            const attendeeAvatars = users.filter(u => meeting.attendees.includes(u.id));
-            const acceptedCount =
-              meeting.attendeeDetails?.filter((a: MeetingAttendee) => a.rsvpStatus === 'accepted').length || 0;
+          {upcomingMeetings.map((meeting) => {
             return (
               <Card key={meeting.id} className="glass hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-6">
                     <div className="flex flex-col items-center justify-center w-20 h-20 rounded-lg bg-primary text-primary-foreground shrink-0">
-                      <span className="text-2xl font-bold">{new Date(meeting.startAt).getDate()}</span>
+                      <span className="text-2xl font-bold">
+                        {new Date(meeting.date || meeting.startTime).getDate()}
+                      </span>
                       <span className="text-xs uppercase">
-                        {new Date(meeting.startAt).toLocaleDateString('en-US', { month: 'short' })}
+                        {new Date(meeting.date || meeting.startTime).toLocaleDateString('en-US', { month: 'short' })}
                       </span>
                     </div>
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-xl font-semibold">{meeting.title}</h3>
-                            {getMeetingTypeBadge(meeting.meetingType)}
-                            {getPriorityBadge(meeting.priority)}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">{getDaysUntil(meeting.startAt)}</Badge>
-                            <Badge variant="outline" className="text-xs gap-1">
-                              {getFormatIcon(meeting.format)}
-                              <span className="capitalize">{meeting.format}</span>
-                            </Badge>
-                            {meeting.recurring !== 'none' && (
-                              <Badge variant="outline" className="text-xs gap-1">
-                                <Repeat className="h-3 w-3" />
-                                <span className="capitalize">{meeting.recurring}</span>
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="gap-1" onClick={() => handleViewDetails(meeting)}>
-                            <UsersIcon className="h-4 w-4" />Details
-                          </Button>
-                          <Button variant="outline" size="sm" className="gap-1" onClick={() => handleStartLive(meeting.id)}>
-                            <Video className="h-4 w-4" />Start Live
-                          </Button>
+                          <h3 className="text-xl font-semibold mb-1">{meeting.title}</h3>
+                          <Badge variant="secondary" className="text-xs">
+                            {getDaysUntil(meeting.date || meeting.startTime)}
+                          </Badge>
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" /><span>{formatDate(meeting.startAt)}</span>
+                          <Calendar className="h-4 w-4" />
+                          <span>{formatDate(meeting.date || meeting.startTime)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4" />
-                          <span>{formatTime(meeting.startAt)} - {formatTime(meeting.endAt)}</span>
+                          <span>{formatTime(meeting.startTime)} - {formatTime(meeting.endTime)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" /><span>{meeting.location || 'TBD'}</span>
@@ -771,56 +533,40 @@ export function Meetings() {
                           </div>
                         )}
                       </div>
-                      {meeting.attendeeDetails && (
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-muted-foreground">RSVP:</span>
-                          <span className="text-green-600 font-medium">{acceptedCount} accepted</span>
-                          {meeting.attendeeDetails.filter((a: MeetingAttendee) => a.rsvpStatus === 'declined').length > 0 && (
-                            <span className="text-red-600">
-                              {meeting.attendeeDetails.filter((a: MeetingAttendee) => a.rsvpStatus === 'declined').length} declined
-                            </span>
-                          )}
-                          {meeting.attendeeDetails.filter((a: MeetingAttendee) => a.rsvpStatus === 'tentative').length > 0 && (
-                            <span className="text-yellow-600">
-                              {meeting.attendeeDetails.filter((a: MeetingAttendee) => a.rsvpStatus === 'tentative').length} tentative
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {meeting.agenda && meeting.agenda.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-semibold">Agenda:</h4>
-                          <ul className="space-y-1">
-                            {meeting.agenda.slice(0, 2).map((item) => (
-                              <li key={item.id} className="text-sm text-muted-foreground flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                                {item.title}
-                              </li>
-                            ))}
-                            {meeting.agenda.length > 2 && (
-                              <li className="text-sm text-muted-foreground pl-3.5">
-                                +{meeting.agenda.length - 2} more items
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-3 pt-2">
-                        <div className="flex -space-x-2">
-                          {attendeeAvatars.slice(0, 5).map((user) => (
-                            <Avatar key={user.id} className="h-8 w-8 border-2 border-background">
-                              <AvatarImage src={user.avatar} alt={user.name} />
-                              <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                            </Avatar>
-                          ))}
-                        </div>
-                        <span className="text-sm text-muted-foreground">{meeting.attendees.length} attendees</span>
-                        {meeting.checkInPIN && (
-                          <Badge variant="outline" className="gap-1 ml-2">
-                            <QrCode className="h-3 w-3" />PIN: {meeting.checkInPIN}
+
+                      {/* Meeting Info */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {meeting.meetingType}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {meeting.meetingFormat}
+                        </Badge>
+                        {meeting.meetingPriority === 'high' || meeting.meetingPriority === 'urgent' ? (
+                          <Badge variant="destructive" className="text-xs capitalize">
+                            {meeting.meetingPriority}
                           </Badge>
-                        )}
+                        ) : null}
                       </div>
+
+                      {/* Attendees */}
+                      {meeting.attendees && meeting.attendees.length > 0 && (
+                        <div className="flex items-center gap-3 pt-2">
+                          <div className="flex -space-x-2">
+                            {meeting.attendees.slice(0, 5).map((attendee) => (
+                              <Avatar key={attendee.userId} className="h-8 w-8 border-2 border-background">
+                                <AvatarImage src={attendee.user?.profilePictureUrl} alt={attendee.user?.firstName} />
+                                <AvatarFallback>
+                                  {attendee.user?.firstName?.[0]}{attendee.user?.lastName?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {meeting.attendees.length} attendees
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -846,9 +592,11 @@ export function Meetings() {
               <CardContent className="p-6">
                 <div className="flex items-start gap-6">
                   <div className="flex flex-col items-center justify-center w-20 h-20 rounded-lg bg-muted shrink-0">
-                    <span className="text-2xl font-bold">{new Date(meeting.startAt).getDate()}</span>
+                    <span className="text-2xl font-bold">
+                      {new Date(meeting.date || meeting.startTime).getDate()}
+                    </span>
                     <span className="text-xs uppercase">
-                      {new Date(meeting.startAt).toLocaleDateString('en-US', { month: 'short' })}
+                      {new Date(meeting.date || meeting.startTime).toLocaleDateString('en-US', { month: 'short' })}
                     </span>
                   </div>
                   <div className="flex-1">
@@ -859,7 +607,7 @@ export function Meetings() {
                           {getMeetingTypeBadge(meeting.meetingType)}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {formatDate(meeting.startAt)} • {formatTime(meeting.startAt)}
+                          {formatDate(meeting.date || meeting.startTime)} • {formatTime(meeting.startTime)}
                         </p>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => handleViewDetails(meeting)}>

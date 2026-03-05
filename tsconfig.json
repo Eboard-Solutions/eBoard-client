@@ -1,10 +1,27 @@
 {
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ],
   "compilerOptions": {
-    "jsx": "react",
-    "baseUrl": ".",
+    /* Path Aliases */
     "paths": {
-      "@/*": ["src/*"],
-      "@/types": ["src/types/index.ts"]
-    }
+      "@/*": ["./src/*"]
+    },
+
+    /* Build Output - Vite handles bundling, so noEmit is used */
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "noEmit": true,
+
+    /* Type Checking */
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   }
 }

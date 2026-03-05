@@ -1,0 +1,141 @@
+// src/api/client.ts
+// Centralized Axios client with interceptors for authentication and error handling
+
+import axios, { AxiosError } from 'axios';
+import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import { API_CONFIG } from '@/config/api.config';
+
+// Token management utilities
+const TokenService = {
+  getAccessToken: (): string | null => localStorage.getItem('token'),
+  getRefreshToken: (): string | null => localStorage.getItem('refreshToken'),
+  setTokens: (accessToken: string, refreshToken: string): void => {
+    localStorage.setItem('token', accessToken);
+    localStorage.setItem('refreshToken', refreshToken);
+  },
+  clearTokens: (): void => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+  },
+  getUser: <T>(): T | null => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr) as T;
+    } catch {
+      return null;
+    }
+  },
+  setUser: <T>(user: T): void => {
+    localStorage.setItem('user', JSON.stringify(user));
+  },
+};
+
+// Create axios instance
+const apiClient: AxiosInstance = axios.create({
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+});
+
+// Request interceptor - Add auth token to requests
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = TokenService.getAccessToken();
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor - Handle errors and token refresh
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: Error) => void;
+}> = [];
+
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Handle 401 Unauthorized - attempt token refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return apiClient(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = TokenService.getRefreshToken();
+
+      if (!refreshToken) {
+        TokenService.clearTokens();
+        window.location.href = '/auth/signin';
+        return Promise.reject(error);
+      }
+
+      try {
+        const response = await axios.post(
+          `${API_CONFIG.BASE_URL}/auth/refresh-tokens`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${refreshToken}`,
+            },
+          }
+        );
+
+        const { at, rt } = response.data.data || response.data;
+        TokenService.setTokens(at, rt);
+        processQueue(null, at);
+
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${at}`;
+        }
+
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError as Error, null);
+        TokenService.clearTokens();
+        window.location.href = '/auth/signin';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export { apiClient, TokenService };
+export default apiClient;

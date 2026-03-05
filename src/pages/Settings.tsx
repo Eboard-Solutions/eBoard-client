@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { currentUser } from '@/lib/store';
 import { 
   Building, 
   Users, 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,22 +22,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { announcements, users } from '@/lib/store';
-import { Megaphone, Plus, Search, Pin, Calendar } from 'lucide-react';
+import { useAnnouncements, useCreateAnnouncement } from '@/hooks/api/useAnnouncements';
+import { authService } from '@/lib/auth';
+import type { CreateAnnouncementData, AnnouncementAudienceType, Announcement } from '@/types/api.types';
+import { Megaphone, Plus, Search, Pin, Calendar, Loader2 } from 'lucide-react';
 
 export function Announcements() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  
+  // Get current user info
+  const user = authService.getUser();
 
-  const filteredAnnouncements = announcements.filter(ann =>
+  // Form state for creating announcements
+  const [newAnnouncement, setNewAnnouncement] = useState<{
+    title: string;
+    content: string;
+    isPinned: boolean;
+    audienceType: AnnouncementAudienceType;
+    expiresAt: string;
+  }>({
+    title: '',
+    content: '',
+    isPinned: false,
+    audienceType: 'ALL' as AnnouncementAudienceType,
+    expiresAt: '',
+  });
+
+  // Fetch announcements from API
+  const { data: announcementsData, isLoading, error } = useAnnouncements({ query: searchQuery });
+  const createAnnouncementMutation = useCreateAnnouncement();
+
+  const announcements: Announcement[] = Array.isArray(announcementsData)
+    ? announcementsData
+    : (announcementsData as { items?: Announcement[] })?.items || [];
+
+  const filteredAnnouncements = announcements.filter((ann: Announcement) =>
     ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     ann.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const pinnedAnnouncements = filteredAnnouncements.filter(a => a.isPinned);
-  const regularAnnouncements = filteredAnnouncements.filter(a => !a.isPinned);
+  const pinnedAnnouncements = filteredAnnouncements.filter((a: Announcement) => a.isPinned);
+  const regularAnnouncements = filteredAnnouncements.filter((a: Announcement) => !a.isPinned);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const formatDate = (timestamp: number | string) => {
+    const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -46,6 +76,50 @@ export function Announcements() {
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
+
+  const handleCreateAnnouncement = async () => {
+    if (!newAnnouncement.title || !newAnnouncement.content) {
+      toast.error('Please fill in title and content');
+      return;
+    }
+
+    try {
+      const data: CreateAnnouncementData = {
+        title: newAnnouncement.title,
+        content: newAnnouncement.content,
+        isPinned: newAnnouncement.isPinned,
+        audience: {
+          type: newAnnouncement.audienceType,
+        },
+        publishedBy: user?.userId || '',
+        publishedByName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+        publishedAt: Date.now(),
+        expiresAt: newAnnouncement.expiresAt ? new Date(newAnnouncement.expiresAt).getTime() : undefined,
+      };
+
+      await createAnnouncementMutation.mutateAsync(data);
+      toast.success('Announcement published successfully!');
+      setIsCreateDialogOpen(false);
+      setNewAnnouncement({
+        title: '',
+        content: '',
+        isPinned: false,
+        audienceType: 'ALL' as AnnouncementAudienceType,
+        expiresAt: '',
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create announcement');
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-2xl font-semibold text-destructive">Error loading announcements</h2>
+        <p className="mt-2 text-muted-foreground">{(error as Error).message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,7 +132,7 @@ export function Announcements() {
           </p>
         </div>
         
-        <Dialog>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2">
               <Plus className="h-5 w-5" />
@@ -74,29 +148,39 @@ export function Announcements() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="ann-title">Title</Label>
-                <Input id="ann-title" placeholder="Announcement title" />
+                <Label htmlFor="ann-title">Title *</Label>
+                <Input 
+                  id="ann-title" 
+                  placeholder="Announcement title"
+                  value={newAnnouncement.title}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="content">Content</Label>
+                <Label htmlFor="content">Content *</Label>
                 <Textarea 
                   id="content" 
                   placeholder="Write your announcement..."
                   rows={6}
+                  value={newAnnouncement.content}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="audience">Target Audience</Label>
-                <Select>
+                <Select 
+                  value={newAnnouncement.audienceType}
+                  onValueChange={(value) => setNewAnnouncement({ ...newAnnouncement, audienceType: value as AnnouncementAudienceType })}
+                >
                   <SelectTrigger id="audience">
                     <SelectValue placeholder="Select audience" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Members</SelectItem>
-                    <SelectItem value="board_only">Board Members Only</SelectItem>
-                    <SelectItem value="admin_only">Admins Only</SelectItem>
+                    <SelectItem value="ALL">All Members</SelectItem>
+                    <SelectItem value="BOARD_MEMBERS">Board Members Only</SelectItem>
+                    <SelectItem value="ADMINS">Admins Only</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -108,22 +192,53 @@ export function Announcements() {
                     Pinned announcements appear at the top
                   </p>
                 </div>
-                <Switch id="pin" />
+                <Switch 
+                  id="pin" 
+                  checked={newAnnouncement.isPinned}
+                  onCheckedChange={(checked) => setNewAnnouncement({ ...newAnnouncement, isPinned: checked })}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="expires">Expires On (optional)</Label>
-                <Input id="expires" type="date" />
+                <Input 
+                  id="expires" 
+                  type="date"
+                  value={newAnnouncement.expiresAt}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, expiresAt: e.target.value })}
+                />
               </div>
 
               <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline">Save Draft</Button>
-                <Button>Publish</Button>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateAnnouncement}
+                  disabled={createAnnouncementMutation.isPending}
+                >
+                  {createAnnouncementMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Publishing...
+                    </>
+                  ) : (
+                    'Publish'
+                  )}
+                </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Loading announcements...</span>
+        </div>
+      )}
 
       {/* Search */}
       <Card className="glass">
@@ -147,81 +262,27 @@ export function Announcements() {
             <Pin className="h-5 w-5" />
             Pinned Announcements
           </h2>
-          {pinnedAnnouncements.map((announcement) => {
-            const author = users.find(u => u.id === announcement.publishedBy);
-
-            return (
-              <Card key={announcement.id} className="glass border-primary/50 bg-primary/5">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 shrink-0">
-                      <Megaphone className="h-6 w-6 text-primary" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-xl font-semibold">{announcement.title}</h3>
-                            <Badge variant="secondary" className="text-xs">Pinned</Badge>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>By {author?.name || 'Unknown'}</span>
-                            <span>•</span>
-                            <span>{formatDate(announcement.publishedAt)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-muted-foreground mt-3 whitespace-pre-line">
-                        {announcement.content}
-                      </p>
-
-                      {announcement.expiresAt && (
-                        <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Expires: {formatDate(announcement.expiresAt)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Regular Announcements */}
-      <div className="space-y-3">
-        {pinnedAnnouncements.length > 0 && (
-          <h2 className="text-lg font-semibold">Recent Announcements</h2>
-        )}
-        
-        {regularAnnouncements.map((announcement) => {
-          const author = users.find(u => u.id === announcement.publishedBy);
-
-          return (
-            <Card key={announcement.id} className="glass hover:shadow-lg transition-all">
+          {pinnedAnnouncements.map((announcement) => (
+            <Card key={announcement.id} className="glass border-primary/50 bg-primary/5">
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-accent shrink-0">
-                    <Megaphone className="h-6 w-6" />
+                  <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 shrink-0">
+                    <Megaphone className="h-6 w-6 text-primary" />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4 mb-2">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold mb-1">{announcement.title}</h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xl font-semibold">{announcement.title}</h3>
+                          <Badge variant="secondary" className="text-xs">Pinned</Badge>
+                        </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>By {author?.name || 'Unknown'}</span>
+                          <span>By {announcement.publishedByName || 'Unknown'}</span>
                           <span>•</span>
                           <span>{formatDate(announcement.publishedAt)}</span>
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
                     </div>
 
                     <p className="text-muted-foreground mt-3 whitespace-pre-line">
@@ -238,8 +299,54 @@ export function Announcements() {
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
+          ))}
+        </div>
+      )}
+
+      {/* Regular Announcements */}
+      <div className="space-y-3">
+        {pinnedAnnouncements.length > 0 && (
+          <h2 className="text-lg font-semibold">Recent Announcements</h2>
+        )}
+        
+        {regularAnnouncements.map((announcement) => (
+          <Card key={announcement.id} className="glass hover:shadow-lg transition-all">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-accent shrink-0">
+                  <Megaphone className="h-6 w-6" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold mb-1">{announcement.title}</h3>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>By {announcement.publishedByName || 'Unknown'}</span>
+                        <span>•</span>
+                        <span>{formatDate(announcement.publishedAt)}</span>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      Edit
+                    </Button>
+                  </div>
+
+                  <p className="text-muted-foreground mt-3 whitespace-pre-line">
+                    {announcement.content}
+                  </p>
+
+                  {announcement.expiresAt && (
+                    <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>Expires: {formatDate(announcement.expiresAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {filteredAnnouncements.length === 0 && (

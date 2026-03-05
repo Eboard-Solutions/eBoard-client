@@ -10,10 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { authService } from '@/lib/auth';
 import { toast } from 'sonner';
 import { ShieldAlert, UserPlus, Loader2, Shield, Crown } from 'lucide-react';
+import axios from 'axios';
 
 export function CreateAdmin() {
   const currentUser = authService.getCurrentUser();
@@ -28,7 +28,7 @@ export function CreateAdmin() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Only super admin can access this page
-  if (!currentUser || currentUser.role !== 'super_admin') {
+  if (!currentUser || currentUser.role !== 'SuperAdmin') {
     return (
       <div className="space-y-6">
         <Card className="glass border-destructive/50">
@@ -61,19 +61,21 @@ export function CreateAdmin() {
 
     setIsLoading(true);
 
-    const result = await authService.createAdmin({
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      role: formData.role,
-      position: formData.position,
-    });
-
-    if (result.success) {
-      toast.success('Admin account created successfully!', {
-        description: `${result.user?.name} has been added as ${formData.role === 'super_admin' ? 'Super Admin' : 'Admin'}`,
+    try {
+      const API_BASE = 'https://eboard-server-6auf.onrender.com/api/v1';
+      const response = await axios.post(`${API_BASE}/auth/register/org-admin`, {
+        firstName: formData.name.split(' ')[0] || formData.name,
+        lastName: formData.name.split(' ').slice(1).join(' ') || '',
+        email: formData.email,
+        password: formData.password,
+        organisationName: formData.position || 'Admin',
+        phoneNumber: '',
       });
-      
+
+      toast.success('Admin account created successfully!', {
+        description: `${formData.name} has been added as ${formData.role === 'super_admin' ? 'Super Admin' : 'Admin'}`,
+      });
+
       // Reset form
       setFormData({
         name: '',
@@ -83,9 +85,9 @@ export function CreateAdmin() {
         role: 'admin',
         position: '',
       });
-    } else {
+    } catch (err: any) {
       toast.error('Failed to create admin', {
-        description: result.error,
+        description: err?.response?.data?.message || err.message || 'Unknown error',
       });
     }
 
