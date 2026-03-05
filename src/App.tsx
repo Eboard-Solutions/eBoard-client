@@ -1,13 +1,17 @@
-import { Route, Router, Switch, Redirect } from "wouter";
+import { Route, Router, Switch } from "wouter";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/sonner";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
+import { UserLogin } from "@/pages/auth/UserLogin";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
-import Members from "@/pages/Members";
+import { LiveMeeting } from "@/pages/LiveMeeting";
+import { Members } from "@/pages/Members";
 import { Documents } from "@/pages/Documents";
 import { Voting } from "@/pages/Voting";
 import { Tasks } from "@/pages/Tasks";
@@ -15,13 +19,15 @@ import { Finance } from "@/pages/Finance";
 import { Announcements } from "@/pages/Announcements";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
-import Profile from "@/pages/Profile";
 import { CreateAdmin } from "@/pages/admin/CreateAdmin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Home } from "lucide-react";
+import React from "react";
+import { useLocation } from "wouter";
 
 function UnauthorizedPage() {
+  const [, setLocation] = useLocation();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="glass max-w-md w-full border-destructive/50">
@@ -32,7 +38,7 @@ function UnauthorizedPage() {
             <p className="text-muted-foreground mb-6">
               You don't have permission to access this page.
             </p>
-            <Button onClick={() => window.location.href = '/'}>
+            <Button onClick={() => setLocation("/")}>
               <Home className="mr-2 h-4 w-4" />
               Go to Dashboard
             </Button>
@@ -44,6 +50,7 @@ function UnauthorizedPage() {
 }
 
 function NotFoundPage() {
+  const [, setLocation] = useLocation();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="text-center">
@@ -51,7 +58,7 @@ function NotFoundPage() {
         <p className="text-xl text-muted-foreground mb-6">
           Sorry, this page doesn't exist.
         </p>
-        <Button onClick={() => window.location.href = '/'}>
+        <Button onClick={() => setLocation("/")}>
           <Home className="mr-2 h-4 w-4" />
           Go to Dashboard
         </Button>
@@ -62,68 +69,95 @@ function NotFoundPage() {
 
 function App() {
   return (
-    <Router base="/">
-      <Switch>
-        {/* Auth Routes - No Layout */}
-        <Route path="/auth/signin" component={SignIn} />
-        <Route path="/auth/signup" component={SignUp} />
-        <Route path="/auth/user-login">
-          <Redirect to="/auth/signin" />
-        </Route>
-        <Route path="/auth/superadmin">
-          <Redirect to="/auth/signin" />
-        </Route>
-        <Route path="/auth/forgot-password" component={ForgotPassword} />
-        <Route path="/unauthorized" component={UnauthorizedPage} />
+    <QueryClientProvider client={queryClient}>
+      <Router base="/">
+        <Switch>
+          {/* Auth Routes - No Layout */}
+          <Route path="/auth/signin" component={SignIn} />
+          <Route path="/auth/sign-up" component={SignUp} />
+          <Route path="/auth/signup" component={SignUp} />
+          <Route path="/auth/userLogin" component={UserLogin} />
+          <Route path="/auth/forgot-password" component={ForgotPassword} />
+          <Route path="/unauthorized" component={UnauthorizedPage} />
 
-        {/* Protected Routes - With Layout */}
-        <Route path="/">
-          <ProtectedRoute>
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Root */}
+          <Route path="/">
+            <ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-        <Route path="/meetings">
-          <ProtectedRoute>
-            <AppLayout>
-              <Meetings />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Dashboard */}
+          <Route path="/dashboard">
+            <ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-        <Route path="/members">
-          <ProtectedRoute>
-            <AppLayout>
-              <Members />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          <Route path="/dashboard/board-member">
+            <ProtectedRoute requiredRole={["board_member", "admin", "super_admin"]}>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-        <Route path="/documents">
-          <ProtectedRoute>
-            <AppLayout>
-              <Documents />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Meetings */}
+          <Route path="/meetings">
+            <ProtectedRoute>
+              <AppLayout>
+                <Meetings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-        <Route path="/voting">
-          <ProtectedRoute>
-            <AppLayout>
-              <Voting />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          <Route path="/meetings/live/:id">
+            <ProtectedRoute>
+              <AppLayout>
+                <LiveMeeting />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-        <Route path="/tasks">
-          <ProtectedRoute>
-            <AppLayout>
-              <Tasks />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Members */}
+          <Route path="/members">
+            <ProtectedRoute>
+              <AppLayout>
+                <Members />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* Documents */}
+          <Route path="/documents">
+            <ProtectedRoute>
+              <AppLayout>
+                <Documents />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* Voting */}
+          <Route path="/voting">
+            <ProtectedRoute>
+              <AppLayout>
+                <Voting />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* Tasks */}
+          <Route path="/tasks">
+            <ProtectedRoute>
+              <AppLayout>
+                <Tasks />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
         <Route path="/finance">
           <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
@@ -133,13 +167,14 @@ function App() {
           </ProtectedRoute>
         </Route>
 
-        <Route path="/announcements">
-          <ProtectedRoute>
-            <AppLayout>
-              <Announcements />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Announcements */}
+          <Route path="/announcements">
+            <ProtectedRoute>
+              <AppLayout>
+                <Announcements />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
         <Route path="/reports">
           <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
@@ -149,21 +184,23 @@ function App() {
           </ProtectedRoute>
         </Route>
 
-        <Route path="/settings">
-          <ProtectedRoute>
-            <AppLayout>
-              <Settings />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Settings */}
+          <Route path="/settings">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-        <Route path="/profile">
-          <ProtectedRoute>
-            <AppLayout>
-              <Profile />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* Super Admin */}
+          <Route path="/super-admin">
+            <ProtectedRoute requiredRole="super_admin">
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
         <Route path="/admin/create">
           <ProtectedRoute allowedRoles={['SuperAdmin']}>
@@ -173,11 +210,12 @@ function App() {
           </ProtectedRoute>
         </Route>
 
-        {/* 404 */}
-        <Route component={NotFoundPage} />
-      </Switch>
-      <Toaster />
-    </Router>
+          {/* 404 Fallback */}
+          <Route component={NotFoundPage} />
+        </Switch>
+        <Toaster />
+      </Router>
+    </QueryClientProvider>
   );
 }
 

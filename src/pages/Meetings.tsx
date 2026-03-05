@@ -5,14 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -58,7 +51,8 @@ export function Meetings() {
   const filteredMeetings = meetings.filter(meeting => {
     const matchesSearch = meeting.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatus === 'all' || meeting.status === selectedStatus;
-    return matchesSearch && matchesStatus;
+    const matchesFormat = selectedFormat === 'all' || meeting.format === selectedFormat;
+    return matchesSearch && matchesStatus && matchesFormat;
   });
 
   const upcomingMeetings = filteredMeetings.filter(m => 
@@ -68,30 +62,18 @@ export function Meetings() {
     m.status === 'completed' || (m.date && new Date(m.date) < new Date())
   );
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short',
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
-  };
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true,
     });
-  };
 
   const getDaysUntil = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const days = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+    const days = Math.ceil((new Date(dateStr).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
     if (days === 0) return 'Today';
     if (days === 1) return 'Tomorrow';
     if (days < 0) return 'Past';
@@ -153,24 +135,19 @@ export function Meetings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Meetings</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage board meetings, agendas, and minutes
-          </p>
+          <p className="text-muted-foreground mt-1">Manage board meetings, agendas, and minutes</p>
         </div>
         
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2">
-              <Plus className="h-5 w-5" />
-              Schedule Meeting
+              <Plus className="h-5 w-5" />Schedule Meeting
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Schedule New Meeting</DialogTitle>
-              <DialogDescription>
-                Create a new board meeting and send invitations
-              </DialogDescription>
+              <DialogDescription>Create a new board meeting with full configuration options</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -334,7 +311,7 @@ export function Meetings() {
       {/* Filters and Search */}
       <Card className="glass">
         <CardContent className="p-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -344,44 +321,175 @@ export function Meetings() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            
             <div className="flex items-center gap-2">
-              <Button
-                variant={selectedStatus === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedStatus('all')}
-              >
-                All
-              </Button>
-              <Button
-                variant={selectedStatus === 'upcoming' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedStatus('upcoming')}
-              >
-                Upcoming
-              </Button>
-              <Button
-                variant={selectedStatus === 'completed' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedStatus('completed')}
-              >
-                Past
-              </Button>
+              <Button variant={selectedStatus === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setSelectedStatus('all')}>All</Button>
+              <Button variant={selectedStatus === 'upcoming' ? 'default' : 'outline'} size="sm" onClick={() => setSelectedStatus('upcoming')}>Upcoming</Button>
+              <Button variant={selectedStatus === 'completed' ? 'default' : 'outline'} size="sm" onClick={() => setSelectedStatus('completed')}>Past</Button>
             </div>
+            <Select value={selectedFormat} onValueChange={setSelectedFormat}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="All Formats" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Formats</SelectItem>
+                <SelectItem value="physical">Physical</SelectItem>
+                <SelectItem value="online">Online</SelectItem>
+                <SelectItem value="hybrid">Hybrid</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Meetings Tabs */}
+      {/* Meeting Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {selectedMeeting && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <span>{selectedMeeting.title}</span>
+                  {getMeetingTypeBadge(selectedMeeting.meetingType)}
+                  {getPriorityBadge(selectedMeeting.priority)}
+                </DialogTitle>
+                <DialogDescription>{selectedMeeting.description || 'No description'}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6 py-4">
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <Calendar className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+                    <p className="text-sm font-medium">{formatDate(selectedMeeting.startAt)}</p>
+                    <p className="text-xs text-muted-foreground">Date</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+                    <p className="text-sm font-medium">
+                      {formatTime(selectedMeeting.startAt)} - {formatTime(selectedMeeting.endAt)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Time</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    {getFormatIcon(selectedMeeting.format)}
+                    <p className="text-sm font-medium capitalize">{selectedMeeting.format}</p>
+                    <p className="text-xs text-muted-foreground">Format</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <UsersRound className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+                    <p className="text-sm font-medium">{selectedMeeting.quorumRequired} required</p>
+                    <p className="text-xs text-muted-foreground">Quorum</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="font-semibold mb-3">RSVP Status</h3>
+                  <div className="grid grid-cols-4 gap-3">
+                    {RSVP_STATUS_LABELS.map(status => (
+                      <div key={status.value} className="text-center p-3 rounded-lg bg-muted">
+                        <p className="text-2xl font-bold">
+                          {getRSVPStatusCount(selectedMeeting, status.value as RSVPStatus)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{status.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="font-semibold mb-3">Attendees</h3>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {selectedMeeting.attendeeDetails?.map((att: MeetingAttendee) => {
+                      const user = users.find(u => u.id === att.userId);
+                      return user ? (
+                        <div key={att.odlId} className="flex items-center justify-between p-2 rounded-lg border">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={user.avatar} />
+                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium">{user.name}</p>
+                              <p className="text-xs text-muted-foreground">{user.position || user.role}</p>
+                            </div>
+                          </div>
+                          {getRSVPBadge(att.rsvpStatus)}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+
+                {selectedMeeting.checkInPIN && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="font-semibold mb-3">Check-In PIN</h3>
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">
+                        <QrCode className="h-6 w-6" />
+                        <span className="text-2xl font-mono font-bold tracking-wider">
+                          {selectedMeeting.checkInPIN}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {selectedMeeting.reminders && selectedMeeting.reminders.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="font-semibold mb-3">Reminders</h3>
+                      <div className="space-y-2">
+                        {selectedMeeting.reminders.map((rem: MeetingReminder) => (
+                          <div key={rem.id} className="flex items-center justify-between p-2 rounded-lg border">
+                            <div className="flex items-center gap-2">
+                              {rem.type === 'email' && <Mail className="h-4 w-4" />}
+                              {rem.type === 'in_app' && <Bell className="h-4 w-4" />}
+                              {rem.type === 'whatsapp' && <MessageSquare className="h-4 w-4" />}
+                              {rem.type === 'sms' && <Smartphone className="h-4 w-4" />}
+                              <span className="text-sm capitalize">{rem.type.replace('_', '-')}</span>
+                              <span className="text-sm text-muted-foreground">- {rem.minutesBefore} min before</span>
+                            </div>
+                            {rem.isSent ? (
+                              <Badge variant="secondary" className="bg-green-100 text-green-700">
+                                <CheckCircle className="h-3 w-3 mr-1" />Sent
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">Pending</Badge>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
+                <Button variant="outline">Edit Meeting</Button>
+                <Button onClick={() => handleStartLive(selectedMeeting.id)}>
+                  <Video className="h-4 w-4 mr-2" />Start Meeting
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tabs */}
       <Tabs defaultValue="upcoming" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="upcoming">
-            Upcoming ({upcomingMeetings.length})
-          </TabsTrigger>
-          <TabsTrigger value="past">
-            Past ({pastMeetings.length})
-          </TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming ({upcomingMeetings.length})</TabsTrigger>
+          <TabsTrigger value="past">Past ({pastMeetings.length})</TabsTrigger>
           <TabsTrigger value="calendar">Calendar View</TabsTrigger>
+          <TabsTrigger value="agenda" className="gap-2">
+            <ClipboardList className="h-4 w-4" />Agenda
+          </TabsTrigger>
+          <TabsTrigger value="minutes" className="gap-2">
+            <FileText className="h-4 w-4" />Minutes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
@@ -390,7 +498,6 @@ export function Meetings() {
               <Card key={meeting.id} className="glass hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-6">
-                    {/* Date Badge */}
                     <div className="flex flex-col items-center justify-center w-20 h-20 rounded-lg bg-primary text-primary-foreground shrink-0">
                       <span className="text-2xl font-bold">
                         {new Date(meeting.date || meeting.startTime).getDate()}
@@ -399,8 +506,6 @@ export function Meetings() {
                         {new Date(meeting.date || meeting.startTime).toLocaleDateString('en-US', { month: 'short' })}
                       </span>
                     </div>
-
-                    {/* Meeting Details */}
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -409,9 +514,7 @@ export function Meetings() {
                             {getDaysUntil(meeting.date || meeting.startTime)}
                           </Badge>
                         </div>
-                        <Button variant="outline">View Details</Button>
                       </div>
-
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
@@ -422,9 +525,13 @@ export function Meetings() {
                           <span>{formatTime(meeting.startTime)} - {formatTime(meeting.endTime)}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>{meeting.location || 'TBD'}</span>
+                          <MapPin className="h-4 w-4" /><span>{meeting.location || 'TBD'}</span>
                         </div>
+                        {meeting.virtualLink && (
+                          <div className="flex items-center gap-2">
+                            <Monitor className="h-4 w-4" /><span>Virtual Link Available</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Meeting Info */}
@@ -466,7 +573,6 @@ export function Meetings() {
               </Card>
             );
           })}
-
           {upcomingMeetings.length === 0 && (
             <Card className="glass">
               <CardContent className="p-12">
@@ -481,7 +587,7 @@ export function Meetings() {
         </TabsContent>
 
         <TabsContent value="past" className="space-y-4">
-          {pastMeetings.map((meeting) => (
+          {pastMeetings.map((meeting: EnhancedMeeting) => (
             <Card key={meeting.id} className="glass opacity-75">
               <CardContent className="p-6">
                 <div className="flex items-start gap-6">
@@ -493,23 +599,26 @@ export function Meetings() {
                       {new Date(meeting.date || meeting.startTime).toLocaleDateString('en-US', { month: 'short' })}
                     </span>
                   </div>
-
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className="text-xl font-semibold mb-1">{meeting.title}</h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xl font-semibold">{meeting.title}</h3>
+                          {getMeetingTypeBadge(meeting.meetingType)}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {formatDate(meeting.date || meeting.startTime)} • {formatTime(meeting.startTime)}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm">View Minutes</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleViewDetails(meeting)}>
+                        View Minutes
+                      </Button>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
-
           {pastMeetings.length === 0 && (
             <Card className="glass">
               <CardContent className="p-12">
@@ -532,6 +641,14 @@ export function Meetings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="agenda">
+          <AgendaManager />
+        </TabsContent>
+
+        <TabsContent value="minutes">
+          <MinutesManager />
         </TabsContent>
       </Tabs>
     </div>

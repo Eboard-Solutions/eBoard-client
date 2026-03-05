@@ -4,27 +4,13 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Search,
-  Plus,
-  Grid,
-  List as ListIcon,
-  Users,
-  AlertTriangle,
-  Building2,
-  Edit,
-  Trash2,
-  Save,
-  X,
-  Globe,
-  Mail,
-  Phone,
-  MapPin,
-  FileText,
-  Image as ImageIcon,
-} from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -278,20 +264,52 @@ export default function MembersPage() {
         {activeTab === 'members' && canInvite && !needsOrgSetup && (
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="gap-2 shadow-sm">
-                <Plus className="h-4 w-4" />
-                Add Member
+              <Button size="lg" className="gap-2">
+                <Plus className="h-5 w-5" />
+                Invite Member
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <AddMemberDialog
-                onSubmit={createMemberMutation.mutate}
-                committees={[]}
-                allowSuperAdminRole={isSuperAdmin}
-              />
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Invite New Member</DialogTitle>
+                <DialogDescription>
+                  Send an invitation to join the board
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input id="name" placeholder="John Doe" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input id="email" type="email" placeholder="john@example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select>
+                    <SelectTrigger id="role">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="board_member">Board Member</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="guest">Guest</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="position">Position</Label>
+                  <Input id="position" placeholder="e.g., Treasurer" />
+                </div>
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button variant="outline">Cancel</Button>
+                  <Button>Send Invitation</Button>
+                </div>
+              </div>
             </DialogContent>
           </Dialog>
-        )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -690,32 +708,69 @@ export default function MembersPage() {
                   <Save className="h-4 w-4" />
                   {editOrg?.id ? 'Save Changes' : 'Create Organization'}
                 </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
-
-      <AlertDialog open={!!orgToDelete} onOpenChange={() => setOrgToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Organization</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the organization and cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={handleOrgDelete}
-              disabled={deleteOrgMutation.isPending}
-            >
-              {deleteOrgMutation.isPending ? 'Deleting…' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      
+      {/* Bulk Action Bar */}
+      {selectedMembers.size > 0 && (
+        <BulkActionBar
+          selectedCount={selectedMembers.size}
+          onClearSelection={() => setSelectedMembers(new Set())}
+          onBulkAction={handleBulkAction}
+        />
+      )}
+      
+      {/* Modals */}
+      <EditMemberModal
+        user={editingUser}
+        open={showEditModal}
+        onOpenChange={(open) => { setShowEditModal(open); if (!open) setEditingUser(null) }}
+        onSave={handleSaveUser}
+      />
+      
+      <ActivityModal
+        user={activityUser}
+        open={!!activityUser}
+        onOpenChange={(open) => { if (!open) setActivityUser(null) }}
+      />
+      
+      <ConfirmationModal
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Remove Member"
+        description={`Are you sure you want to remove ${deletingUser?.name}? This action cannot be undone.`}
+        confirmLabel="Remove"
+        variant="destructive"
+        onConfirm={handleDeleteUser}
+      />
+      
+      <ConfirmationModal
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        title="Remove Members"
+        description={`Are you sure you want to remove ${selectedMembers.size} members? This action cannot be undone.`}
+        confirmLabel="Remove All"
+        variant="destructive"
+        onConfirm={handleBulkDelete}
+      />
+      
+      <AuditLogModal
+        open={showAuditLog}
+        onOpenChange={setShowAuditLog}
+      />
+      
+      <ImportExportModal
+        open={showImportExport}
+        onOpenChange={setShowImportExport}
+      />
+      
+      <RoleManagementModal
+        open={showRoleManagement}
+        onOpenChange={setShowRoleManagement}
+      />
     </div>
-  );
+  )
 }

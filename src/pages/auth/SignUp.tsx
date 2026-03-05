@@ -1,15 +1,102 @@
+// src/pages/auth/SignUp.tsx
 'use client';
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User, Mail, Lock, Eye, EyeOff, Phone, Building2, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  Loader2, User, Mail, Lock, Eye, EyeOff, Phone,
+  Building2, CheckCircle2, XCircle, ArrowRight,
+  ShieldCheck, Users, Globe, Zap, ChevronRight,
+} from 'lucide-react';
 import { authService } from '@/lib/auth';
+
+/* ─── tiny helpers ─── */
+const cx = (...classes: (string | false | undefined)[]) => classes.filter(Boolean).join(' ');
+
+const inputBase =
+  'h-12 w-full pl-11 pr-4 rounded-xl text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800/80 border transition-all duration-200 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500';
+const inputNormal =
+  'border-gray-200 dark:border-gray-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20';
+const inputError =
+  'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20';
+const inputSuccess =
+  'border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20';
+
+/* ─── field wrapper with leading icon ─── */
+function Field({
+  id, label, icon, hint, error, success, children,
+}: {
+  id: string; label: string; icon: React.ReactNode;
+  hint?: string; error?: string; success?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+        {label}
+      </Label>
+      <div className="relative">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
+          {icon}
+        </span>
+        {children}
+        {success && !error && (
+          <CheckCircle2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 pointer-events-none" />
+        )}
+      </div>
+      {error && (
+        <p className="flex items-center gap-1 text-xs text-red-500 mt-1">
+          <XCircle className="h-3 w-3 flex-shrink-0" />{error}
+        </p>
+      )}
+      {hint && !error && (
+        <p className="text-xs text-gray-400 dark:text-gray-500">{hint}</p>
+      )}
+    </div>
+  );
+}
+
+/* ─── password strength ─── */
+function PasswordMeter({ value }: { value: string }) {
+  if (!value) return null;
+  const score = value.length < 8 ? 1 : value.length < 12 ? 2 : 3;
+  const labels = ['', 'Weak', 'Good', 'Strong'];
+  const colors = ['', 'bg-red-500', 'bg-amber-400', 'bg-emerald-500'];
+  const textColors = ['', 'text-red-500', 'text-amber-500', 'text-emerald-600'];
+  return (
+    <div className="flex items-center gap-3 mt-2">
+      <div className="flex gap-1 flex-1">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={cx(
+              'h-1 flex-1 rounded-full transition-all duration-300',
+              i <= score ? colors[score] : 'bg-gray-200 dark:bg-gray-700'
+            )}
+          />
+        ))}
+      </div>
+      <span className={cx('text-xs font-medium', textColors[score])}>{labels[score]}</span>
+    </div>
+  );
+}
+
+/* ─── animated counter badge ─── */
+function StatBadge({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-indigo-200 text-xs mt-0.5">{label}</div>
+    </div>
+  );
+}
 
 export function SignUp() {
   const [, setLocation] = useLocation();
+  const [mounted, setMounted] = useState(false);
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [organizationName, setOrganizationName] = useState('');
@@ -20,34 +107,27 @@ export function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string, description?: string } | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error'; message: string; description?: string;
+  } | null>(null);
 
-  const isFirstNameValid = firstName.trim().length >= 3;
-  const isLastNameValid = lastName.trim().length >= 3;
-  const isorganisationNameValid = organizationName.trim().length >= 3;
-  const isPhoneValid = phoneNumber.trim().length >= 10;
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const isPasswordValid = password.length >= 8;
-  const passwordsMatch = password === confirmPassword || confirmPassword === '';
+  useEffect(() => { setMounted(true); }, []);
 
-  const isFormValid =
-    isFirstNameValid &&
-    isLastNameValid &&
-    isorganisationNameValid &&
-    isPhoneValid &&
-    isEmailValid &&
-    isPasswordValid &&
-    passwordsMatch &&
-    confirmPassword.length > 0; // Ensure confirm password is filled
+  const touch = (field: string) => setTouched(p => ({ ...p, [field]: true }));
 
-  const getPasswordStrength = () => {
-    if (password.length === 0) return { label: '', color: '' };
-    if (password.length < 8) return { label: 'Weak', color: 'bg-red-500/70' };
-    if (password.length < 12) return { label: 'Good', color: 'bg-amber-500/70' };
-    return { label: 'Strong', color: 'bg-emerald-500/70' };
+  /* ─── validation ─── */
+  const v = {
+    firstName: firstName.trim().length >= 3,
+    lastName: lastName.trim().length >= 3,
+    org: organizationName.trim().length >= 3,
+    phone: /^\+?[\d\s\-()]{10,}$/.test(phoneNumber.trim()),
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()),
+    password: password.length >= 8,
+    confirm: confirmPassword.length > 0 && password === confirmPassword,
   };
 
-  const strength = getPasswordStrength();
+  const isFormValid = Object.values(v).every(Boolean);
 
   const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
     setNotification({ type, message, description });
@@ -56,342 +136,451 @@ export function SignUp() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    // touch all fields to show errors
+    setTouched({ firstName: true, lastName: true, org: true, phone: true, email: true, password: true, confirm: true });
     if (!isFormValid) {
-      if (!passwordsMatch) {
-        showNotification('error', 'Passwords do not match');
-      } else if (!confirmPassword) {
-        showNotification('error', 'Please confirm your password');
-      } else {
-        showNotification('error', 'Please complete all fields correctly');
-      }
+      showNotification('error', 'Please fix the errors above before continuing.');
       return;
     }
-
     setIsLoading(true);
-
     try {
-      console.log('🚀 Starting signup process...');
-      
       await authService.signUp({
-        firstName,
-        lastName,
-        organisationName: organizationName, // Map to backend field name
-        phoneNumber,
-        email,
-        password,
+        firstName, lastName,
+        organisationName: organizationName,
+        phoneNumber, email, password,
       });
-      
       setIsLoading(false);
-      showNotification('success', 'Account created successfully!', 'Redirecting to sign in...');
-
-      // Clear form
-      setTimeout(() => {
-        setFirstName('');
-        setLastName('');
-        setOrganizationName('');
-        setPhoneNumber('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-        setLocation('/auth/signin');
-      }, 2000);
+      showNotification('success', 'Account created!', 'Redirecting you to sign in…');
+      setTimeout(() => setLocation('/auth/signin'), 2000);
     } catch (error) {
       setIsLoading(false);
-      console.error('Signup error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Signup failed unexpectedly';
-      showNotification('error', 'Signup Failed', errorMessage);
+      const msg = error instanceof Error ? error.message : 'Signup failed unexpectedly';
+      showNotification('error', 'Signup failed', msg);
     }
   };
 
+  /* ─── perks ─── */
+  const perks = [
+    { icon: <ShieldCheck className="h-4 w-4" />, text: 'Enterprise-grade security & encryption' },
+    { icon: <Users className="h-4 w-4" />, text: 'Manage unlimited board members' },
+    { icon: <Globe className="h-4 w-4" />, text: 'Access from any device, anywhere' },
+    { icon: <Zap className="h-4 w-4" />, text: 'Real-time meetings, votes & tasks' },
+  ];
+
+  /* ─── stagger delays ─── */
+  const delays = ['0ms', '60ms', '120ms', '180ms', '240ms', '300ms', '360ms', '420ms'];
+
   return (
-    <div className="min-h-screen flex">
-      {/* Notification Toast */}
+    <div className="min-h-screen flex font-sans">
+      {/* ════════════════ TOAST ════════════════ */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 min-w-[320px] max-w-md animate-in slide-in-from-top-5 ${notification.type === 'success'
-          ? 'bg-emerald-50 border border-emerald-200'
-          : 'bg-red-50 border border-red-200'
-          } rounded-lg shadow-lg p-4`}>
+        <div
+          className={cx(
+            'fixed top-6 right-6 z-50 max-w-sm w-full border rounded-2xl shadow-2xl backdrop-blur-sm p-4',
+            'animate-in slide-in-from-top-4 fade-in duration-300',
+            notification.type === 'success'
+              ? 'bg-emerald-50/95 border-emerald-200 text-emerald-900'
+              : 'bg-red-50/95 border-red-200 text-red-900'
+          )}
+        >
           <div className="flex items-start gap-3">
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-            ) : (
-              <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-            )}
-            <div className="flex-1">
-              <p className={`text-sm font-semibold ${notification.type === 'success' ? 'text-emerald-900' : 'text-red-900'
-                }`}>
-                {notification.message}
-              </p>
+            {notification.type === 'success'
+              ? <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+              : <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />}
+            <div>
+              <p className="font-semibold text-sm">{notification.message}</p>
               {notification.description && (
-                <p className={`text-sm mt-1 ${notification.type === 'success' ? 'text-emerald-700' : 'text-red-700'
-                  }`}>
-                  {notification.description}
-                </p>
+                <p className="mt-0.5 text-sm opacity-80">{notification.description}</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Left Panel - Branding Section */}
-      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-indigo-600 via-indigo-600 to-blue-700 p-16 flex-col justify-center items-center relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-24 left-12 w-24 h-24 bg-indigo-400 rounded-full opacity-20 blur-xl"></div>
-        <div className="absolute bottom-32 right-20 w-40 h-40 bg-blue-400 rounded-full opacity-20 blur-xl"></div>
-        <div className="absolute top-1/3 right-16 w-32 h-32 border-4 border-indigo-300 opacity-15 transform rotate-45"></div>
+      {/* ════════════════ LEFT PANEL ════════════════ */}
+      <div className="hidden lg:flex lg:w-[40%] flex-col justify-between relative overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-600 p-14">
+        {/* background texture */}
+        <div className="absolute inset-0"
+          style={{
+            backgroundImage: `radial-gradient(circle at 20% 20%, rgba(255,255,255,0.07) 0%, transparent 50%),
+              radial-gradient(circle at 80% 80%, rgba(99,102,241,0.3) 0%, transparent 50%)`,
+          }}
+        />
+        {/* dot grid */}
+        <div className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+          }}
+        />
+        {/* diagonal accent stripe */}
+        <div className="absolute -right-20 top-0 h-full w-40 bg-white/5 transform -skew-x-6 pointer-events-none" />
 
-        {/* Content */}
-        <div className="relative z-10 text-center max-w-md">
-          <div className="mx-auto mb-10 w-56 h-56 bg-white/10 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-white/20 shadow-2xl">
-            <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="EBoard Logo" className="w-full h-full object-cover rounded-3xl" />
+        {/* Logo */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 overflow-hidden shadow-lg flex-shrink-0">
+            <img
+              src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
+              alt="E-Board"
+              className="w-full h-full object-cover"
+            />
           </div>
-          <h1 className="text-white text-5xl font-bold leading-tight mb-6">
-            Welcome to<br />EBoard Portal
-          </h1>
-          <p className="text-indigo-100 text-xl">
-            Streamline your organization's<br />management and collaboration
+          <span className="text-white font-semibold text-lg tracking-tight">E-Board</span>
+        </div>
+
+        {/* Main copy */}
+        <div className="relative z-10 space-y-8">
+          <div>
+            <p className="text-indigo-200 text-sm font-medium uppercase tracking-widest mb-4">
+              Admin Registration
+            </p>
+            <h2 className="text-white text-4xl font-bold leading-snug">
+              One platform.<br />Every board need.
+            </h2>
+            <p className="text-indigo-200 mt-4 text-base leading-relaxed">
+              Set up your organization in minutes and invite your board members to collaborate.
+            </p>
+          </div>
+
+          {/* Perks */}
+          <div className="space-y-3">
+            {perks.map((p, i) => (
+              <div
+                key={p.text}
+                className="flex items-start gap-3 group"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                <div className="flex-shrink-0 mt-0.5 w-7 h-7 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center text-indigo-100 group-hover:bg-white/25 transition-colors duration-200">
+                  {p.icon}
+                </div>
+                <p className="text-indigo-100 text-sm leading-relaxed">{p.text}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/15">
+            <StatBadge value="500+" label="Organizations" />
+            <StatBadge value="12k+" label="Members" />
+            <StatBadge value="99.9%" label="Uptime" />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="relative z-10">
+          <p className="text-indigo-300/50 text-xs">
+            © {new Date().getFullYear()} E-Board • All rights reserved
           </p>
         </div>
       </div>
 
-      {/* Right Panel - Form */}
-      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-100/70 to-indigo-50/30 dark:from-slate-950 dark:via-slate-950/90 dark:to-indigo-950/30 px-6 py-12 lg:px-12">
-        <div className="w-full max-w-2xl">
-          {/* Header */}
-          <div className="text-center mb-10">
-            <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600/90 to-blue-700/90 shadow-lg shadow-indigo-500/30 overflow-hidden">
-              <img src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4" alt="EBoard Logo" className="w-full h-full object-cover" />
+      {/* ════════════════ RIGHT PANEL ════════════════ */}
+      <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 overflow-y-auto">
+        <div
+          className="min-h-full flex items-center justify-center px-6 py-14 lg:px-14"
+          style={{
+            opacity: mounted ? 1 : 0,
+            transition: 'opacity 0.4s ease-out',
+          }}
+        >
+          <div className="w-full max-w-xl space-y-8">
+
+            {/* Mobile logo */}
+            <div className="flex items-center gap-3 lg:hidden">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-700 overflow-hidden shadow-lg">
+                <img
+                  src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
+                  alt="E-Board"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <span className="font-semibold text-gray-900 dark:text-white text-lg">E-Board</span>
             </div>
-            <h1 className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 mb-3">
-              Create Organization Admin Account
-            </h1>
-            <p className="text-lg text-slate-600 dark:text-slate-400">
-              Register as organization administrator
-            </p>
-          </div>
 
-          {/* Card */}
-          <Card className="border border-slate-200/70 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl shadow-2xl shadow-slate-200/50 dark:shadow-black/50 rounded-2xl overflow-hidden">
-            <CardHeader className="px-10 pt-10 pb-6">
-              <CardTitle className="text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                Admin Registration
-              </CardTitle>
-              <CardDescription className="mt-2 text-base text-slate-600 dark:text-slate-400">
-                Please fill in your information below
-              </CardDescription>
-            </CardHeader>
+            {/* Heading */}
+            <div
+              style={{
+                opacity: mounted ? 1 : 0,
+                transform: mounted ? 'translateY(0)' : 'translateY(10px)',
+                transition: 'opacity 0.5s ease-out 80ms, transform 0.5s ease-out 80ms',
+              }}
+            >
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                Create your account
+              </h1>
+              <p className="mt-1.5 text-gray-500 dark:text-gray-400 text-sm">
+                Set up your admin profile and organization
+              </p>
+            </div>
 
-            <CardContent className="px-10 pb-10">
-              <form onSubmit={handleSubmit} className="space-y-7">
-                {/* First Name & Last Name */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2.5">
-                    <Label htmlFor="firstName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      First Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                      <Input
+            {/* ── FORM CARD ── */}
+            <div
+              className="bg-white/95 dark:bg-gray-900/80 rounded-3xl shadow-2xl border border-gray-200/60 dark:border-gray-800/50 overflow-hidden backdrop-blur-md"
+              style={{
+                opacity: mounted ? 1 : 0,
+                transform: mounted ? 'translateY(0)' : 'translateY(16px)',
+                transition: 'opacity 0.5s ease-out 160ms, transform 0.5s ease-out 160ms',
+              }}
+            >
+              {/* accent bar */}
+              <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-400" />
+
+              {/* section label */}
+              <div className="px-8 pt-8 pb-2">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
+                  Personal details
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit} noValidate>
+                <div className="px-8 pb-8 space-y-5">
+
+                  {/* Name row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                    style={{
+                      opacity: mounted ? 1 : 0,
+                      transform: mounted ? 'translateY(0)' : 'translateY(8px)',
+                      transition: `opacity 0.4s ease-out ${delays[0]}, transform 0.4s ease-out ${delays[0]}`,
+                    }}
+                  >
+                    <Field
+                      id="firstName" label="First name"
+                      icon={<User className="h-4 w-4" />}
+                      error={touched.firstName && !v.firstName ? 'Min. 3 characters' : undefined}
+                      success={touched.firstName && v.firstName}
+                    >
+                      <input
                         id="firstName"
-                        placeholder="Enter First Name"
+                        placeholder="John"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
-                        className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                        onBlur={() => touch('firstName')}
+                        className={cx(inputBase, touched.firstName && !v.firstName ? inputError : touched.firstName && v.firstName ? inputSuccess : inputNormal)}
                         required
-                        minLength={3}
                       />
-                    </div>
+                    </Field>
+
+                    <Field
+                      id="lastName" label="Last name"
+                      icon={<User className="h-4 w-4" />}
+                      error={touched.lastName && !v.lastName ? 'Min. 3 characters' : undefined}
+                      success={touched.lastName && v.lastName}
+                    >
+                      <input
+                        id="lastName"
+                        placeholder="Doe"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        onBlur={() => touch('lastName')}
+                        className={cx(inputBase, touched.lastName && !v.lastName ? inputError : touched.lastName && v.lastName ? inputSuccess : inputNormal)}
+                        required
+                      />
+                    </Field>
                   </div>
 
-                  <div className="space-y-2.5">
-                    <Label htmlFor="lastName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Last Name
-                    </Label>
-                    <Input
-                      id="lastName"
-                      placeholder="Enter Last Name"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="h-12 px-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
-                      required
-                      minLength={3}
-                    />
+                  {/* Divider label */}
+                  <div className="pt-2 pb-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
+                      Organization & contact
+                    </p>
                   </div>
-                </div>
 
-                {/* Organization Name */}
-                <div className="space-y-2.5">
-                  <Label htmlFor="organizationName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Organization Name
-                  </Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                    <Input
-                      id="organizationName"
-                      placeholder="Enter Organization Name"
-                      value={organizationName}
-                      onChange={(e) => setOrganizationName(e.target.value)}
-                      className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
-                      required
-                      minLength={3}
-                    />
+                  {/* Org */}
+                  <div style={{ opacity: mounted ? 1 : 0, transform: mounted ? 'translateY(0)' : 'translateY(8px)', transition: `opacity 0.4s ease-out ${delays[1]}, transform 0.4s ease-out ${delays[1]}` }}>
+                    <Field
+                      id="organizationName" label="Organization name"
+                      icon={<Building2 className="h-4 w-4" />}
+                      hint="This will be your organization's display name"
+                      error={touched.org && !v.org ? 'Min. 3 characters' : undefined}
+                      success={touched.org && v.org}
+                    >
+                      <input
+                        id="organizationName"
+                        placeholder="Acme Corporation"
+                        value={organizationName}
+                        onChange={(e) => setOrganizationName(e.target.value)}
+                        onBlur={() => touch('org')}
+                        className={cx(inputBase, touched.org && !v.org ? inputError : touched.org && v.org ? inputSuccess : inputNormal)}
+                        required
+                      />
+                    </Field>
                   </div>
-                </div>
 
-                {/* Phone Number & Email */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2.5">
-                    <Label htmlFor="phoneNumber" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Phone Number
-                    </Label>
-                    <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                      <Input
+                  {/* Phone + Email */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                    style={{ opacity: mounted ? 1 : 0, transform: mounted ? 'translateY(0)' : 'translateY(8px)', transition: `opacity 0.4s ease-out ${delays[2]}, transform 0.4s ease-out ${delays[2]}` }}
+                  >
+                    <Field
+                      id="phoneNumber" label="Phone number"
+                      icon={<Phone className="h-4 w-4" />}
+                      error={touched.phone && !v.phone ? 'Enter a valid number' : undefined}
+                      success={touched.phone && v.phone}
+                    >
+                      <input
                         id="phoneNumber"
                         type="tel"
                         placeholder="+254 712 345 678"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                        onBlur={() => touch('phone')}
+                        className={cx(inputBase, touched.phone && !v.phone ? inputError : touched.phone && v.phone ? inputSuccess : inputNormal)}
                         required
                       />
-                    </div>
-                  </div>
+                    </Field>
 
-                  <div className="space-y-2.5">
-                    <Label htmlFor="email" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Email Address
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                      <Input
+                    <Field
+                      id="email" label="Email address"
+                      icon={<Mail className="h-4 w-4" />}
+                      error={touched.email && !v.email ? 'Enter a valid email' : undefined}
+                      success={touched.email && v.email}
+                    >
+                      <input
                         id="email"
                         type="email"
-                        placeholder="Enter Email Address"
+                        placeholder="admin@company.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value.trim())}
-                        className="h-12 pl-11 pr-4 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
+                        onBlur={() => touch('email')}
+                        className={cx(inputBase, touched.email && !v.email ? inputError : touched.email && v.email ? inputSuccess : inputNormal)}
                         required
                       />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Password */}
-                <div className="space-y-2.5">
-                  <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Password
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Enter Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="h-12 pl-11 pr-12 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200"
-                      required
-                      minLength={8}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
+                    </Field>
                   </div>
 
-                  {password && (
-                    <div className="space-y-2 pt-2">
-                      <div className="h-2 w-full bg-slate-200/70 dark:bg-slate-700/50 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${strength.color}`}
-                          style={{ width: password.length < 8 ? '33%' : password.length < 12 ? '66%' : '100%' }}
-                        />
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Password strength:{' '}
-                        <span className={
-                          strength.color.includes('red')
-                            ? 'text-red-600 dark:text-red-400 font-medium'
-                            : strength.color.includes('amber')
-                              ? 'text-amber-600 dark:text-amber-400 font-medium'
-                              : 'text-emerald-600 dark:text-emerald-400 font-medium'
-                        }>
-                          {strength.label}
-                        </span>
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Confirm Password */}
-                <div className="space-y-2.5">
-                  <Label htmlFor="confirmPassword" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Confirm Password
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="Re-enter Password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`h-12 pl-11 pr-12 bg-white/70 dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/70 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl transition-all duration-200 ${confirmPassword && !passwordsMatch ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''
-                        }`}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-
-                  {confirmPassword && !passwordsMatch && (
-                    <p className="text-sm text-red-600 dark:text-red-400 mt-2">
-                      Passwords do not match
+                  {/* Divider label */}
+                  <div className="pt-2 pb-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
+                      Security
                     </p>
-                  )}
+                  </div>
+
+                  {/* Password */}
+                  <div style={{ opacity: mounted ? 1 : 0, transform: mounted ? 'translateY(0)' : 'translateY(8px)', transition: `opacity 0.4s ease-out ${delays[3]}, transform 0.4s ease-out ${delays[3]}` }}>
+                    <Field
+                      id="password" label="Password"
+                      icon={<Lock className="h-4 w-4" />}
+                      error={touched.password && !v.password ? 'Min. 8 characters required' : undefined}
+                    >
+                      <input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Min. 8 characters"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onBlur={() => touch('password')}
+                        className={cx(inputBase, 'pr-11', touched.password && !v.password ? inputError : inputNormal)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </Field>
+                    <PasswordMeter value={password} />
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div style={{ opacity: mounted ? 1 : 0, transform: mounted ? 'translateY(0)' : 'translateY(8px)', transition: `opacity 0.4s ease-out ${delays[4]}, transform 0.4s ease-out ${delays[4]}` }}>
+                    <Field
+                      id="confirmPassword" label="Confirm password"
+                      icon={<Lock className="h-4 w-4" />}
+                      error={
+                        touched.confirm && confirmPassword && !v.confirm
+                          ? 'Passwords do not match'
+                          : undefined
+                      }
+                      success={touched.confirm && v.confirm}
+                    >
+                      <input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Re-enter your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onBlur={() => touch('confirm')}
+                        className={cx(
+                          inputBase, 'pr-11',
+                          touched.confirm && confirmPassword && !v.confirm ? inputError :
+                          touched.confirm && v.confirm ? inputSuccess : inputNormal
+                        )}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </Field>
+                  </div>
+
+                  {/* Submit */}
+                  <div
+                    className="pt-3"
+                    style={{ opacity: mounted ? 1 : 0, transform: mounted ? 'translateY(0)' : 'translateY(8px)', transition: `opacity 0.4s ease-out ${delays[5]}, transform 0.4s ease-out ${delays[5]}` }}
+                  >
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className={cx(
+                        'w-full h-12 rounded-xl text-white text-sm font-semibold relative overflow-hidden',
+                        'bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-lg',
+                        'hover:from-indigo-700 hover:to-blue-700 hover:shadow-xl hover:shadow-indigo-500/25',
+                        'disabled:opacity-60 disabled:cursor-not-allowed',
+                        'transition-all duration-200 group',
+                      )}
+                    >
+                      {/* shimmer */}
+                      <span
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%)' }}
+                      />
+                      <span className="relative flex items-center justify-center gap-2">
+                        {isLoading ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" />Creating account…</>
+                        ) : (
+                          <>Create Admin Account <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" /></>
+                        )}
+                      </span>
+                    </button>
+
+                    <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">
+                      By creating an account you agree to our{' '}
+                      <span className="text-indigo-500 cursor-pointer hover:underline">Terms of Service</span>
+                      {' '}and{' '}
+                      <span className="text-indigo-500 cursor-pointer hover:underline">Privacy Policy</span>
+                    </p>
+                  </div>
                 </div>
 
-                {/* Submit Button */}
-                <div className="pt-6">
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !isFormValid}
-                    className="w-full h-12 text-lg font-medium bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                {/* Card footer */}
+                <div
+                  className="px-8 py-5 bg-gray-50/70 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between"
+                  style={{ opacity: mounted ? 1 : 0, transition: `opacity 0.4s ease-out ${delays[6]}` }}
+                >
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Already have an account?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLocation('/auth/signin')}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors group"
                   >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      'Create Admin Account'
-                    )}
-                  </Button>
+                    Sign in
+                    <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
                 </div>
               </form>
+            </div>
 
-              <div className="mt-8 text-center text-sm text-slate-600 dark:text-slate-400">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium hover:underline"
-                  onClick={() => setLocation('/auth/signin')}
-                >
-                  Sign in
-                </button>
-              </div>
-            </CardContent>
-          </Card>
+            <p className="text-center text-xs text-gray-400 dark:text-gray-600">
+              © {new Date().getFullYear()} E-Board • All rights reserved
+            </p>
+          </div>
         </div>
       </div>
     </div>

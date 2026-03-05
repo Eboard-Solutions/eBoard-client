@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import {
   Loader2,
   Mail,
@@ -24,6 +25,8 @@ import {
   User,
   Building2,
   Shield,
+  UserPlus,
+  ArrowRight,
 } from 'lucide-react';
 
 import { authService } from '@/lib/auth';
@@ -144,6 +147,7 @@ export function SignIn() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+
       {/* Notification Toast */}
       {notification && (
         <div
@@ -170,6 +174,7 @@ export function SignIn() {
       )}
 
       <div className="w-full max-w-md">
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
@@ -187,7 +192,7 @@ export function SignIn() {
           </p>
         </div>
 
-        {/* Card */}
+        {/* Sign In Card */}
         <Card className="border-gray-200/60 dark:border-gray-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
           <CardHeader className="px-8 pt-8 pb-4">
             {/* Login Type Tabs */}
@@ -284,7 +289,6 @@ export function SignIn() {
                     Forgot password?
                   </Button>
                 </div>
-
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" />
                   <Input
@@ -308,7 +312,7 @@ export function SignIn() {
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Sign In Button */}
               <Button
                 type="submit"
                 disabled={
@@ -325,7 +329,10 @@ export function SignIn() {
                     Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  <>
+                    Sign In
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
                 )}
               </Button>
             </form>

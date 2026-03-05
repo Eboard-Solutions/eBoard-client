@@ -1,5 +1,4 @@
 // src/pages/Dashboard.tsx
-import { useState } from 'react';
 import { UpcomingMeetingsWidget } from '@/components/dashboard/UpcomingMeetingsWidget';
 import { OpenActionsWidget } from '@/components/dashboard/OpenActionsWidget';
 import { BudgetSummaryWidget } from '@/components/dashboard/BudgetSummaryWidget';
@@ -495,7 +494,7 @@ function UserDashboard({ userName }: { userName: string }) {
         <h1 className="text-3xl font-bold tracking-tight">
           Welcome back, {userName?.split(' ')[0] ?? 'User'}!
         </h1>
-        <p className="mt-1 text-muted-foreground">
+        <p className="text-muted-foreground mt-1">
           Here's what's happening with your board today.
         </p>
       </div>
@@ -518,17 +517,15 @@ function UserDashboard({ userName }: { userName: string }) {
             >
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 shrink-0">
                     <Megaphone className="h-6 w-6 text-primary" />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      <h3 className="text-lg font-semibold">{announcement.title}</h3>
-                      <Badge variant="secondary" className="text-xs">
-                        Pinned
-                      </Badge>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-lg">{announcement.title}</h3>
+                      <Badge variant="secondary" className="text-xs">Pinned</Badge>
                     </div>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       {announcement.content}
                     </p>
                   </div>
