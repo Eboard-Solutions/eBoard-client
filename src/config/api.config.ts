@@ -12,6 +12,7 @@ export const ENDPOINTS = {
   // Auth endpoints
   AUTH: {
     LOGIN: '/auth/login',
+    // /api/v1/auth/org-admin/login
     ORG_ADMIN_LOGIN: '/auth/org-admin/login',
     SUPER_ADMIN_LOGIN: '/auth/super-admin/login',
     REGISTER_ORG_ADMIN: '/auth/register/org-admin',

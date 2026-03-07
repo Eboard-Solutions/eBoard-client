@@ -1,4 +1,5 @@
 // src/pages/Dashboard.tsx
+import { useState } from 'react'; 
 import { UpcomingMeetingsWidget } from '@/components/dashboard/UpcomingMeetingsWidget';
 import { OpenActionsWidget } from '@/components/dashboard/OpenActionsWidget';
 import { BudgetSummaryWidget } from '@/components/dashboard/BudgetSummaryWidget';
