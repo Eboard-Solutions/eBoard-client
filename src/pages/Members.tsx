@@ -1,16 +1,32 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import {
+  AlertTriangle,
+  Plus,
+  Search,
+  Grid,
+  List as ListIcon,
+  Users,
+  Building2,
+  Edit,
+  Trash2,
+  Mail,
+  UserPlus,
+  Send,
+} from 'lucide-react';
+
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -31,7 +47,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -40,6 +56,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 import { usePermissions } from '@/lib/permissions';
 import {
@@ -48,7 +68,6 @@ import {
   useUpdateUser,
   useDeleteUser,
 } from '@/hooks/api/useUsers';
-
 import {
   useOrganisations,
   useRegisterOrganisation,
@@ -56,28 +75,26 @@ import {
   useDeleteOrganisation,
 } from '@/hooks/api/useOrganisations';
 
-import type { User as ApiUser, Organisation, CreateOrganisationData } from '@/types/api.types';
+import type { User as ApiUser, Organisation } from '@/types/api.types';
 
 import AddMemberDialog from '@/components/members/AddMemberDialog';
 import EditMemberDialog from '@/components/members/EditMemberDialog';
+import InviteDialog from '@/components/members/InviteDialog';
 import MembersGrid from '@/components/members/MembersGrid';
 import MembersList from '@/components/members/MembersList';
 
 type ViewMode = 'grid' | 'list';
 
-// Local User type for members list compatibility
-interface User {
+interface DisplayUser {
   id: string;
-  name?: string;
+  name: string;
   firstName?: string;
   lastName?: string;
   email: string;
   avatar?: string;
   role: string;
   position?: string;
-  department?: string;
   phone?: string;
-  [key: string]: unknown;
 }
 
 export default function MembersPage() {
@@ -97,118 +114,118 @@ export default function MembersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [editMember, setEditMember] = useState<User | null>(null);
+
+  const [editMember, setEditMember] = useState<DisplayUser | null>(null);
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+
   const [editOrg, setEditOrg] = useState<Organisation | null>(null);
   const [orgToDelete, setOrgToDelete] = useState<string | null>(null);
-  const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [showCreateOrgOverlay, setShowCreateOrgOverlay] = useState(false);
 
-  // ── Members Query (using new hooks) ─────────────────────────────────────────────
-  const { data: membersData, isLoading: membersLoading } = useOrganisationUsers();
-  
-  const members = useMemo(() => {
-    const rawMembers: ApiUser[] = Array.isArray(membersData) 
-      ? membersData 
-      : (membersData as { items?: ApiUser[] })?.items || [];
-    
-    return rawMembers
-      .filter((m: ApiUser) => {
-        if (search.trim()) {
-          const searchLower = search.toLowerCase();
-          const name = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
-          return name.includes(searchLower) || m.email?.toLowerCase().includes(searchLower);
-        }
-        return true;
+  // ── Data fetching ───────────────────────────────────────
+  const { data: membersRaw, isLoading: membersLoading } = useOrganisationUsers();
+  const { data: orgsRaw, isLoading: orgsLoading } = useOrganisations();
+
+  const members = useMemo<DisplayUser[]>(() => {
+    const items = Array.isArray(membersRaw) ? membersRaw : membersRaw?.items ?? [];
+    return items
+      .filter((user: ApiUser) => {
+        if (!search.trim()) return true;
+        const term = search.toLowerCase();
+        const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.toLowerCase();
+        return fullName.includes(term) || user.email?.toLowerCase().includes(term);
       })
-      .filter((m: ApiUser) => {
-        if (roleFilter !== 'all') {
-          return m.role?.toLowerCase() === roleFilter.toLowerCase();
-        }
-        return true;
-      })
-      .map((m: ApiUser): User => ({
-        id: m.id,
-        name: `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email,
-        firstName: m.firstName,
-        lastName: m.lastName,
-        email: m.email,
-        avatar: m.profilePictureUrl,
-        role: m.role,
-        position: m.title,
-        phone: m.phoneNumber,
-      }));
-  }, [membersData, search, roleFilter]);
+      .filter((user: ApiUser) =>
+        roleFilter === 'all' ? true : user.role?.toLowerCase() === roleFilter.toLowerCase()
+      )
+      .map(
+        (user: ApiUser): DisplayUser => ({
+          id: user.id,
+          name: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          avatar: user.profilePictureUrl,
+          role: user.role,
+          position: user.title,
+          phone: user.phoneNumber,
+        })
+      );
+  }, [membersRaw, search, roleFilter]);
 
-  // ── Organizations Query (using new hooks) ───────────────────────────────────────
-  const { data: orgsData, isLoading: orgsLoading } = useOrganisations();
-  
-  const organizations: Organisation[] = useMemo(() => {
-    return Array.isArray(orgsData) 
-      ? orgsData 
-      : (orgsData as { items?: Organisation[] })?.items || [];
-  }, [orgsData]);
+  const organizations = useMemo<Organisation[]>(() => {
+    return Array.isArray(orgsRaw) ? orgsRaw : orgsRaw?.items ?? [];
+  }, [orgsRaw]);
 
-  // ── Mutations (using new hooks) ─────────────────────────────────────────────────
-  const registerOrgMutation = useRegisterOrganisation();
-  const updateOrgMutation = useUpdateOrganisation();
-  const deleteOrgMutation = useDeleteOrganisation();
-  const createUserMutation = useCreateUser();
-  const updateUserMutation = useUpdateUser();
-  const deleteUserMutation = useDeleteUser();
+  // ── Mutations ───────────────────────────────────────────
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
 
-  // Alias mutations for compatibility
-  const createMemberMutation = createUserMutation;
-  const updateMemberMutation = updateUserMutation;
-  const deleteMemberMutation = deleteUserMutation;
-  const createOrgMutation = registerOrgMutation;
+  const registerOrg = useRegisterOrganisation();
+  const updateOrg = useUpdateOrganisation();
+  const deleteOrg = useDeleteOrganisation();
 
-  // ── Handlers ────────────────────────────────────────────────────────────────────
-  const handleMemberDelete = useCallback(() => {
-    if (memberToDelete) {
-      deleteUserMutation.mutate(memberToDelete, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['users'] });
-          toast.success('Member removed');
-          setMemberToDelete(null);
-        },
-        onError: (err) => toast.error((err as Error).message || 'Failed to remove member'),
-      });
-    }
-  }, [memberToDelete, deleteUserMutation, queryClient]);
+  const canInvite = can('members:invite');
+  const canDelete = can('members:delete');
 
-  const handleOrgDelete = useCallback(() => {
-    if (orgToDelete) {
-      deleteOrgMutation.mutate(orgToDelete, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['organisations'] });
-          localStorage.removeItem('currentOrganizationId');
-          toast.success('Organization deleted');
-          setOrgToDelete(null);
-        },
-        onError: (err) => toast.error((err as Error).message || 'Failed to delete organization'),
-      });
-    }
-  }, [orgToDelete, deleteOrgMutation, queryClient]);
+  const needsOrgSetup = isOrgAdmin && !currentOrgId;
 
-  const canInvite = useMemo(() => can('members:invite'), [can]);
-  const canDeleteMember = useMemo(() => can('members:delete'), [can]);
+  // ── Stats ───────────────────────────────────────────────
+  const boardMembers = members.filter(m => m.role === 'BoardMember').length;
+  const admins = members.filter(m => m.role === 'Admin' || m.role === 'OrgAdmin').length;
 
-  // Debug logging
-  useEffect(() => {
-    console.log('[MembersPage] currentOrgId:', currentOrgId);
-    console.log('[MembersPage] isOrgAdmin:', isOrgAdmin);
-  }, [currentOrgId, isOrgAdmin]);
+  // ── Handlers ────────────────────────────────────────────
+  const handleDeleteMemberConfirm = useCallback(() => {
+    if (!memberToDelete) return;
+    deleteUser.mutate(memberToDelete, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['users', 'organisation-users'] });
+        toast.success('Member removed successfully');
+        setMemberToDelete(null);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to remove member'),
+    });
+  }, [memberToDelete, deleteUser, queryClient]);
 
-  // ── Render ──────────────────────────────────────────────────────────────────────
-  if (authLoading) return <div className="flex min-h-[60vh] items-center justify-center">Loading...</div>;
+  const handleDeleteOrgConfirm = useCallback(() => {
+    if (!orgToDelete) return;
+    deleteOrg.mutate(orgToDelete, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['organisations'] });
+        localStorage.removeItem('currentOrganizationId');
+        toast.success('Organization deleted');
+        setOrgToDelete(null);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete organization'),
+    });
+  }, [orgToDelete, deleteOrg, queryClient]);
+
+  // ── Render states ───────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          Loading permissions...
+        </div>
+      </div>
+    );
+  }
 
   if (authError) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-        <AlertTriangle className="h-12 w-12 text-destructive" />
-        <h2 className="text-2xl font-semibold">Access Issue</h2>
-        <p className="max-w-md text-muted-foreground">{authError}</p>
-        <div className="flex gap-4">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+          <AlertTriangle className="h-8 w-8 text-destructive" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-semibold">Access Problem</h2>
+          <p className="mt-2 max-w-md text-muted-foreground">{authError}</p>
+        </div>
+        <div className="flex gap-3">
           <Button variant="outline" onClick={refreshAuth}>Retry</Button>
           <Button asChild><a href="/auth/signin">Sign In</a></Button>
         </div>
@@ -216,273 +233,327 @@ export default function MembersPage() {
     );
   }
 
-  const needsOrgSetup = isOrgAdmin && !currentOrgId;
-
   return (
-    <div className="container mx-auto space-y-8 py-8 px-4 md:px-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Members & Organizations</h1>
-          <p className="text-muted-foreground mt-1.5">
-            {isSuperAdmin ? 'Full admin control' : isOrgAdmin ? 'Manage your organization' : 'Limited view'}
+    <div className="container mx-auto space-y-7 py-8 px-4 md:px-6 max-w-7xl">
+      {/* ── Page Header ─────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Members & Organizations
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {isSuperAdmin
+              ? 'Full administrative control across all organizations'
+              : isOrgAdmin
+              ? 'Manage members and settings for your organization'
+              : 'View members and organization details'}
           </p>
-
-          {needsOrgSetup && (
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="font-medium">Organization setup required</p>
-                  <p className="mt-1 text-amber-700">
-                    Your organization was created during signup, but is not yet fully linked.  
-                    Please complete the organization details to start managing members.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3 border-amber-400 hover:bg-amber-100"
-                    onClick={() => setShowCreateOrg(true)}
-                  >
-                    Complete Organization Setup
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
+        {/* CTA Buttons */}
         {activeTab === 'members' && canInvite && !needsOrgSetup && (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button size="lg" className="gap-2">
-                <Plus className="h-5 w-5" />
-                Invite Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Invite New Member</DialogTitle>
-                <DialogDescription>
-                  Send an invitation to join the board
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="John Doe" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="john@example.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Select>
-                    <SelectTrigger id="role">
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="board_member">Board Member</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="guest">Guest</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="position">Position</Label>
-                  <Input id="position" placeholder="e.g., Treasurer" />
-                </div>
-                <div className="flex gap-2 justify-end pt-4">
-                  <Button variant="outline">Cancel</Button>
-                  <Button>Send Invitation</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Invite Board Member — primary CTA */}
+            <Button
+              size="sm"
+              className="gap-2 h-9"
+              onClick={() => setShowInviteDialog(true)}
+            >
+              <Send className="h-4 w-4" />
+              Invite Board Member
+            </Button>
+
+            {/* Add Member directly */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 h-9"
+              onClick={() => setShowAddDialog(true)}
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Member
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="members" className="text-base">
-            <Users className="mr-2 h-4 w-4" />
+      {/* Org Setup Warning */}
+      {needsOrgSetup && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+          <div className="flex gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="flex-1">
+              <p className="font-medium">Organization setup required</p>
+              <p className="mt-0.5 text-amber-800 text-xs leading-relaxed">
+                Complete your organization profile to unlock full member management features.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 h-7 text-xs border-amber-400 hover:bg-amber-100"
+                onClick={() => setShowCreateOrgOverlay(true)}
+              >
+                Finish Setup
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Quick Stats ─────────────────────────────────── */}
+      {activeTab === 'members' && !needsOrgSetup && !membersLoading && members.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'Total Members', value: members.length, icon: Users, color: 'text-blue-600 bg-blue-50' },
+            { label: 'Board Members', value: boardMembers, icon: UserPlus, color: 'text-emerald-600 bg-emerald-50' },
+            { label: 'Admins', value: admins, icon: Building2, color: 'text-violet-600 bg-violet-50' },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="border border-border/60 shadow-sm">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${color}`}>
+                  <Icon className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-foreground leading-none">{value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── Tabs ────────────────────────────────────────── */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'members' | 'organizations')}>
+        <TabsList className="h-10 p-1 bg-muted/50 border border-border/60">
+          <TabsTrigger value="members" className="gap-2 text-sm h-8 px-4">
+            <Users className="h-4 w-4" />
             Members
+            {members.length > 0 && (
+              <Badge variant="secondary" className="h-4 px-1.5 text-xs ml-0.5">
+                {members.length}
+              </Badge>
+            )}
           </TabsTrigger>
-          <TabsTrigger value="organizations" className="text-base">
-            <Building2 className="mr-2 h-4 w-4" />
+          <TabsTrigger value="organizations" className="gap-2 text-sm h-8 px-4">
+            <Building2 className="h-4 w-4" />
             Organizations
+            {organizations.length > 0 && (
+              <Badge variant="secondary" className="h-4 px-1.5 text-xs ml-0.5">
+                {organizations.length}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
-        {/* Members Tab */}
-        <TabsContent value="members" className="space-y-6">
+        {/* ── Members Tab ─────────────────────────────────── */}
+        <TabsContent value="members" className="mt-5 space-y-5">
           {needsOrgSetup ? (
-            <Card className="py-16 text-center border-dashed bg-amber-50/30">
-              <CardContent className="space-y-6">
-                <Building2 className="mx-auto h-16 w-16 text-amber-600" />
-                <h3 className="text-2xl font-semibold text-amber-900">
-                  Finish Setting Up Your Organization
-                </h3>
-                <p className="text-muted-foreground max-w-lg mx-auto">
-                  As a new OrgAdmin, your organization needs to be fully configured before you can add or view members.
+            <Card className="border-dashed py-20 text-center">
+              <CardContent className="space-y-4">
+                <div className="flex justify-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                    <Building2 className="h-8 w-8 text-muted-foreground/50" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-semibold">Organization Setup Required</h3>
+                <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+                  Configure your organization details to begin managing members.
                 </p>
-                <Button size="lg" onClick={() => setShowCreateOrg(true)}>
-                  Set Up Organization Now
+                <Button onClick={() => setShowCreateOrgOverlay(true)}>
+                  Set Up Organization
                 </Button>
               </CardContent>
             </Card>
           ) : (
             <>
               {/* Filters */}
-              <Card className="border shadow-sm">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
-                    <div className="relative flex-1 min-w-65">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by name, email..."
-                        className="pl-10"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                    </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or email…"
+                    className="h-9 pl-9 text-sm"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
 
-                    <Select value={roleFilter} onValueChange={setRoleFilter}>
-                      <SelectTrigger className="w-44">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All roles</SelectItem>
-                        <SelectItem value="OrgAdmin">OrgAdmin</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="BoardMember">Board Member</SelectItem>
-                        <SelectItem value="User">User</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger className="h-9 w-40 text-sm shrink-0">
+                    <SelectValue placeholder="Filter role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    <SelectItem value="OrgAdmin">Org Admin</SelectItem>
+                    <SelectItem value="Admin">Admin</SelectItem>
+                    <SelectItem value="BoardMember">Board Member</SelectItem>
+                    <SelectItem value="User">User</SelectItem>
+                  </SelectContent>
+                </Select>
 
-                    <div className="flex items-center gap-1 rounded-md border p-1 sm:ml-auto">
-                      <Button
-                        size="icon"
-                        variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                        className="h-9 w-9"
-                        onClick={() => setViewMode('grid')}
-                      >
-                        <Grid className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant={viewMode === 'list' ? 'default' : 'ghost'}
-                        className="h-9 w-9"
-                        onClick={() => setViewMode('list')}
-                      >
-                        <ListIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-1 shrink-0">
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setViewMode('grid')}
+                    title="Grid view"
+                  >
+                    <Grid className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setViewMode('list')}
+                    title="List view"
+                  >
+                    <ListIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
 
-              {/* Members content */}
               {membersLoading ? (
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="h-72 animate-pulse rounded-xl bg-muted/70" />
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {Array(8).fill(0).map((_, i) => (
+                    <div key={i} className="h-72 animate-pulse rounded-xl bg-muted/50" />
                   ))}
                 </div>
               ) : members.length === 0 ? (
-                <Card className="py-16 text-center border-dashed">
+                <Card className="border-dashed py-20 text-center">
                   <CardContent className="space-y-4">
-                    <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="text-xl font-medium">No members found</h3>
-                    <p className="text-muted-foreground">
-                      {canInvite
-                        ? 'Add your first member to get started'
-                        : 'No members available in your organization yet'}
+                    <div className="flex justify-center">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                        <Users className="h-7 w-7 text-muted-foreground/50" />
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-medium">No members found</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {search || roleFilter !== 'all'
+                        ? 'Try adjusting your search or filter.'
+                        : canInvite
+                        ? 'Get started by inviting your first team member.'
+                        : 'No members in this organization yet.'}
                     </p>
+                    {canInvite && !search && roleFilter === 'all' && (
+                      <Button size="sm" className="gap-2" onClick={() => setShowInviteDialog(true)}>
+                        <Send className="h-4 w-4" />
+                        Invite Board Member
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ) : viewMode === 'grid' ? (
                 <MembersGrid
                   members={members}
-                  onEdit={(member) => setEditMember(member as User)}
-                  onDelete={canDeleteMember ? setMemberToDelete : undefined}
+                  onEdit={setEditMember}
+                  onDelete={canDelete ? setMemberToDelete : undefined}
                 />
               ) : (
                 <MembersList
                   members={members}
-                  onEdit={(member) => setEditMember(member as User)}
-                  onDelete={canDeleteMember ? setMemberToDelete : undefined}
+                  onEdit={setEditMember}
+                  onDelete={canDelete ? setMemberToDelete : undefined}
                 />
               )}
             </>
           )}
         </TabsContent>
 
-        {/* Organizations Tab */}
-        <TabsContent value="organizations" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold tracking-tight">Organizations</h2>
-            <Button onClick={() => setEditOrg({} as Organisation)} className="gap-2">
+        {/* ── Organizations Tab ────────────────────────────── */}
+        <TabsContent value="organizations" className="mt-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Organizations</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {organizations.length} organization{organizations.length !== 1 ? 's' : ''} registered
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="gap-2 h-9"
+              onClick={() => setEditOrg({} as Organisation)}
+            >
               <Plus className="h-4 w-4" />
               New Organization
             </Button>
           </div>
 
           {orgsLoading ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-64 animate-pulse rounded-xl bg-muted/70" />
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {Array(6).fill(0).map((_, i) => (
+                <div key={i} className="h-48 animate-pulse rounded-xl bg-muted/50" />
               ))}
             </div>
           ) : organizations.length === 0 ? (
-            <Card className="py-16 text-center border-dashed">
+            <Card className="border-dashed py-20 text-center">
               <CardContent className="space-y-4">
-                <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="text-xl font-medium">No organizations yet</h3>
-                <p className="text-muted-foreground">Create your first organization</p>
+                <div className="flex justify-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                    <Building2 className="h-7 w-7 text-muted-foreground/50" />
+                  </div>
+                </div>
+                <h3 className="text-lg font-medium">No organizations yet</h3>
+                <p className="text-sm text-muted-foreground">Create your first organization to get started.</p>
+                <Button size="sm" onClick={() => setEditOrg({} as Organisation)}>
+                  Create Organization
+                </Button>
               </CardContent>
             </Card>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-xl border border-border/60 overflow-hidden bg-card shadow-sm">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Website</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
+                    <TableHead className="font-semibold text-foreground pl-5 py-3">Name</TableHead>
+                    <TableHead className="font-semibold text-foreground py-3">Email</TableHead>
+                    <TableHead className="font-semibold text-foreground py-3">Website</TableHead>
+                    <TableHead className="w-24 text-right font-semibold text-foreground pr-5 py-3">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {organizations.map((org: Organisation) => (
-                    <TableRow key={org.id}>
-                      <TableCell className="font-medium">
-                        {org.organisationName || org.name || 'Unnamed'}
+                  {organizations.map((org) => (
+                    <TableRow key={org.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors group">
+                      <TableCell className="pl-5 py-3.5 font-medium text-sm">
+                        {org.organisationName ?? org.name ?? '—'}
                       </TableCell>
-                      <TableCell>{org.OrgEmail || org.email || '—'}</TableCell>
-                      <TableCell>
+                      <TableCell className="py-3.5 text-sm text-muted-foreground">
+                        {org.OrgEmail ?? org.email ?? '—'}
+                      </TableCell>
+                      <TableCell className="py-3.5">
                         {org.websiteUrl ? (
                           <a
                             href={org.websiteUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline"
+                            className="text-sm text-primary hover:underline"
                           >
-                            Visit
+                            {org.websiteUrl.replace(/^https?:\/\//, '')}
                           </a>
                         ) : (
-                          '—'
+                          <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => setEditOrg(org)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => setOrgToDelete(org.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      <TableCell className="pr-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                            onClick={() => setEditOrg(org)}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setOrgToDelete(org.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -493,14 +564,65 @@ export default function MembersPage() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Dialogs ──────────────────────────────────────────────────────────────── */}
+      {/* ── Dialogs ─────────────────────────────────────────── */}
 
+      {/* Invite Board Member */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <InviteDialog
+            organizations={organizations.map(o => ({
+              id: o.id,
+              name: o.organisationName ?? o.name ?? o.id,
+            }))}
+            canChangeOrg={isSuperAdmin}
+            canAssignSuperAdmin={isSuperAdmin}
+            onSubmit={() => {
+              queryClient.invalidateQueries({ queryKey: ['users'] });
+              setShowInviteDialog(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <AddMemberDialog
+            onSubmit={(data) => {
+              createUser.mutate(data, {
+                onSuccess: () => {
+                  queryClient.invalidateQueries({ queryKey: ['users', 'organisation-users'] });
+                  toast.success('Member added successfully');
+                  setShowAddDialog(false);
+                },
+                onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to add member'),
+              });
+            }}
+            committees={[]}
+            allowSuperAdminRole={isSuperAdmin}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member */}
       {editMember && (
         <Dialog open={!!editMember} onOpenChange={() => setEditMember(null)}>
           <DialogContent className="sm:max-w-lg">
             <EditMemberDialog
               member={editMember}
-              onSubmit={(data) => updateMemberMutation.mutate({ userId: editMember.id, data })}
+              onSubmit={(updates) => {
+                updateUser.mutate(
+                  { userId: editMember.id, data: updates },
+                  {
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['users', 'organisation-users'] });
+                      toast.success('Member updated');
+                      setEditMember(null);
+                    },
+                    onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to update member'),
+                  }
+                );
+              }}
               committees={[]}
               allowSuperAdminRole={isSuperAdmin}
             />
@@ -508,11 +630,13 @@ export default function MembersPage() {
         </Dialog>
       )}
 
+      {/* Delete Member Confirm */}
       <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Member</AlertDialogTitle>
             <AlertDialogDescription>
+              This will permanently remove the member from your organization.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -520,248 +644,219 @@ export default function MembersPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={handleMemberDelete}
-              disabled={deleteMemberMutation.isPending}
+              onClick={handleDeleteMemberConfirm}
+              disabled={deleteUser.isPending}
             >
-              {deleteMemberMutation.isPending ? 'Removing…' : 'Remove'}
+              {deleteUser.isPending ? 'Removing…' : 'Remove Member'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {(editOrg || showCreateOrg) && (
+      {/* Create / Edit Organization */}
+      {(editOrg || showCreateOrgOverlay) && (
         <Dialog
-          open={!!editOrg || showCreateOrg}
+          open={!!editOrg || showCreateOrgOverlay}
           onOpenChange={() => {
             setEditOrg(null);
-            setShowCreateOrg(false);
+            setShowCreateOrgOverlay(false);
           }}
         >
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-semibold">
-                {editOrg?.id ? 'Edit Organization' : 'Create New Organization'}
-              </DialogTitle>
-              <DialogDescription className="text-base">
-                {editOrg?.id
-                  ? 'Update the details of your organization.'
-                  : 'Fill in the information below to set up your organization.'}
-              </DialogDescription>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <Building2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-semibold">
+                    {editOrg?.id ? 'Edit Organization' : 'Create Organization'}
+                  </DialogTitle>
+                  <DialogDescription className="mt-0.5 text-sm">
+                    {editOrg?.id
+                      ? 'Update the organization details below.'
+                      : 'Fill in the required information to set up your organization.'}
+                  </DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const formData = new FormData(form);
-                const data = Object.fromEntries(formData);
-
-                // ── DEBUG: see exactly what is being sent ──
-                console.log('[Organization Form] Raw FormData entries:', [...formData.entries()]);
-                console.log('[Organization Form] As object:', data);
-                console.log('[Organization Form] As JSON:', JSON.stringify(data, null, 2));
+                const formData = new FormData(e.currentTarget);
+                const payload = Object.fromEntries(formData) as any;
 
                 if (editOrg?.id) {
-                  updateOrgMutation.mutate({ orgId: editOrg.id, data });
+                  updateOrg.mutate(
+                    { orgId: editOrg.id, data: payload },
+                    {
+                      onSuccess: () => {
+                        queryClient.invalidateQueries({ queryKey: ['organisations'] });
+                        toast.success('Organization updated');
+                        setEditOrg(null);
+                      },
+                      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to update organization'),
+                    }
+                  );
                 } else {
-                  createOrgMutation.mutate(data as CreateOrganisationData);
+                  registerOrg.mutate(payload, {
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['organisations'] });
+                      toast.success('Organization created');
+                      setEditOrg(null);
+                      setShowCreateOrgOverlay(false);
+                    },
+                    onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to create organization'),
+                  });
                 }
               }}
-              className="space-y-6 py-4"
+              className="space-y-5 py-4"
             >
-              {/* Required fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="organisationName" className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Organization Name <span className="text-red-500">*</span>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="organisationName" className="text-sm font-medium">
+                    Organization Name <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="organisationName"
                     name="organisationName"
-                    defaultValue={editOrg?.organisationName || editOrg?.name || ''}
+                    defaultValue={editOrg?.organisationName ?? editOrg?.name ?? ''}
                     placeholder="Acme Corporation"
                     required
-                    className="h-11"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="OrgEmail" className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    Contact Email <span className="text-red-500">*</span>
+                <div className="space-y-1.5">
+                  <Label htmlFor="OrgEmail" className="text-sm font-medium">
+                    Contact Email <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="OrgEmail"
                     name="OrgEmail"
                     type="email"
-                    defaultValue={editOrg?.OrgEmail || editOrg?.email || ''}
-                    placeholder="contact@company.com"
+                    defaultValue={editOrg?.OrgEmail ?? editOrg?.email ?? ''}
+                    placeholder="hello@company.com"
                     required
-                    className="h-11"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Description
-                </Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="description" className="text-sm font-medium">Description</Label>
                 <Textarea
                   id="description"
                   name="description"
-                  defaultValue={editOrg?.description || ''}
-                  placeholder="Tell us about your organization..."
+                  defaultValue={editOrg?.description ?? ''}
+                  placeholder="Brief description of your organization…"
                   rows={3}
                   className="resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumber" className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    Phone Number <span className="text-red-500">*</span>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="phoneNumber" className="text-sm font-medium">
+                    Phone Number <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="phoneNumber"
                     name="phoneNumber"
-                    defaultValue={editOrg?.phoneNumber || ''}
-                    placeholder="+1-800-555-1234"
+                    defaultValue={editOrg?.phoneNumber ?? ''}
+                    placeholder="+1 (555) 123-4567"
                     required
-                    className="h-11"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="address" className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Address <span className="text-red-500">*</span>
+                <div className="space-y-1.5">
+                  <Label htmlFor="address" className="text-sm font-medium">
+                    Address <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="address"
                     name="address"
-                    defaultValue={editOrg?.address || ''}
-                    placeholder="123 Business Ave, City, Country"
+                    defaultValue={editOrg?.address ?? ''}
+                    placeholder="123 Business Rd, City, Country"
                     required
-                    className="h-11"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="websiteUrl" className="flex items-center gap-2">
-                    <Globe className="h-4 w-4" />
-                    Website URL
-                  </Label>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="websiteUrl" className="text-sm font-medium">Website</Label>
                   <Input
                     id="websiteUrl"
                     name="websiteUrl"
                     type="url"
-                    defaultValue={editOrg?.websiteUrl || ''}
+                    defaultValue={editOrg?.websiteUrl ?? ''}
                     placeholder="https://www.company.com"
-                    className="h-11"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="logoUrl" className="flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    Logo URL
-                  </Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="logoUrl" className="text-sm font-medium">Logo URL</Label>
                   <Input
                     id="logoUrl"
                     name="logoUrl"
                     type="url"
-                    defaultValue={editOrg?.logoUrl || ''}
+                    defaultValue={editOrg?.logoUrl ?? ''}
                     placeholder="https://company.com/logo.png"
-                    className="h-11"
                   />
                 </div>
               </div>
 
-              <DialogFooter className="gap-3 pt-4 border-t">
+              <DialogFooter className="gap-3 pt-4 border-t border-border/60">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
                     setEditOrg(null);
-                    setShowCreateOrg(false);
+                    setShowCreateOrgOverlay(false);
                   }}
-                  className="gap-2"
                 >
-                  <X className="h-4 w-4" />
                   Cancel
                 </Button>
-                <Button type="submit" className="gap-2 min-w-35">
-                  <Save className="h-4 w-4" />
-                  {editOrg?.id ? 'Save Changes' : 'Create Organization'}
+                <Button type="submit" disabled={registerOrg.isPending || updateOrg.isPending} className="gap-2 min-w-32">
+                  {registerOrg.isPending || updateOrg.isPending ? (
+                    <>
+                      <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Saving…
+                    </>
+                  ) : editOrg?.id ? (
+                    'Save Changes'
+                  ) : (
+                    'Create Organization'
+                  )}
                 </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
-      
-      {/* Bulk Action Bar */}
-      {selectedMembers.size > 0 && (
-        <BulkActionBar
-          selectedCount={selectedMembers.size}
-          onClearSelection={() => setSelectedMembers(new Set())}
-          onBulkAction={handleBulkAction}
-        />
-      )}
-      
-      {/* Modals */}
-      <EditMemberModal
-        user={editingUser}
-        open={showEditModal}
-        onOpenChange={(open) => { setShowEditModal(open); if (!open) setEditingUser(null) }}
-        onSave={handleSaveUser}
-      />
-      
-      <ActivityModal
-        user={activityUser}
-        open={!!activityUser}
-        onOpenChange={(open) => { if (!open) setActivityUser(null) }}
-      />
-      
-      <ConfirmationModal
-        open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
-        title="Remove Member"
-        description={`Are you sure you want to remove ${deletingUser?.name}? This action cannot be undone.`}
-        confirmLabel="Remove"
-        variant="destructive"
-        onConfirm={handleDeleteUser}
-      />
-      
-      <ConfirmationModal
-        open={showBulkDeleteConfirm}
-        onOpenChange={setShowBulkDeleteConfirm}
-        title="Remove Members"
-        description={`Are you sure you want to remove ${selectedMembers.size} members? This action cannot be undone.`}
-        confirmLabel="Remove All"
-        variant="destructive"
-        onConfirm={handleBulkDelete}
-      />
-      
-      <AuditLogModal
-        open={showAuditLog}
-        onOpenChange={setShowAuditLog}
-      />
-      
-      <ImportExportModal
-        open={showImportExport}
-        onOpenChange={setShowImportExport}
-      />
-      
-      <RoleManagementModal
-        open={showRoleManagement}
-        onOpenChange={setShowRoleManagement}
-      />
+
+      {/* Delete Organization Confirm */}
+      <AlertDialog open={!!orgToDelete} onOpenChange={() => setOrgToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Organization</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the organization and all associated data.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleDeleteOrgConfirm}
+              disabled={deleteOrg.isPending}
+            >
+              {deleteOrg.isPending ? 'Deleting…' : 'Delete Organization'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-  )
+  );
 }

@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { X } from 'lucide-react';
+import { X, UserPlus, Mail, Phone, Link, Shield, Briefcase } from 'lucide-react';
 
 const addMemberSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -50,7 +50,7 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
       firstName: '',
       lastName: '',
       email: '',
-      role: 'board_member',
+      role: 'BoardMember',
       title: '',
       phoneNumber: '',
       profilePictureUrl: '',
@@ -74,7 +74,7 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
   const handleAddCommittee = (committee: string) => {
     if (!selectedCommittees.includes(committee)) {
       setValue('committees', [...selectedCommittees, committee], { shouldValidate: true });
-      trigger('committees'); // force validation
+      trigger('committees');
     }
   };
 
@@ -88,74 +88,85 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
   };
 
   const onFormSubmit = (data: AddMemberForm) => {
-    console.log('Form submitted with data:', data); // ← Debug: check this in console!
     onSubmit(data);
   };
+
+  const hasErrors = Object.keys(errors).length > 0;
 
   return (
     <>
       <DialogHeader className="mb-6">
-        <DialogTitle className="text-2xl font-semibold">Add New Member</DialogTitle>
-        <DialogDescription>
-          Fill in the details below to add a new member to your organization.
-        </DialogDescription>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <UserPlus className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <DialogTitle className="text-xl font-semibold">Add New Member</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground mt-0.5">
+              Fill in the details below to add a new member to your organization.
+            </DialogDescription>
+          </div>
+        </div>
       </DialogHeader>
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
         {/* Names */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-2">
-            <Label htmlFor="firstName">
-              First Name <span className="text-red-500 text-sm">*</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="firstName" className="text-sm font-medium">
+              First Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="firstName"
-              placeholder="e.g. Bleah"
+              placeholder="e.g. Jane"
               {...register('firstName')}
-              className={`border ${errors.firstName ? 'border-red-500' : 'border-input'}`}
+              className={errors.firstName ? 'border-destructive' : ''}
             />
             {errors.firstName && (
-              <p className="text-sm text-red-600 mt-1">{errors.firstName.message}</p>
+              <p className="text-xs text-destructive">{errors.firstName.message}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="lastName">
-              Last Name <span className="text-red-500 text-sm">*</span>
+          <div className="space-y-1.5">
+            <Label htmlFor="lastName" className="text-sm font-medium">
+              Last Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="lastName"
-              placeholder="e.g. Malika"
+              placeholder="e.g. Smith"
               {...register('lastName')}
-              className={`border ${errors.lastName ? 'border-red-500' : 'border-input'}`}
+              className={errors.lastName ? 'border-destructive' : ''}
             />
             {errors.lastName && (
-              <p className="text-sm text-red-600 mt-1">{errors.lastName.message}</p>
+              <p className="text-xs text-destructive">{errors.lastName.message}</p>
             )}
           </div>
         </div>
 
         {/* Email */}
-        <div className="space-y-2">
-          <Label htmlFor="email">
-            Email Address <span className="text-red-500 text-sm">*</span>
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-sm font-medium">
+            Email Address <span className="text-destructive">*</span>
           </Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="bleamalika@gmail.com"
-            {...register('email')}
-            className={`border ${errors.email ? 'border-red-500' : 'border-input'}`}
-          />
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Input
+              id="email"
+              type="email"
+              placeholder="jane.smith@company.com"
+              {...register('email')}
+              className={`pl-9 ${errors.email ? 'border-destructive' : ''}`}
+            />
+          </div>
           {errors.email && (
-            <p className="text-sm text-red-600 mt-1">{errors.email.message}</p>
+            <p className="text-xs text-destructive">{errors.email.message}</p>
           )}
         </div>
 
         {/* Role */}
-        <div className="space-y-2">
-          <Label>
-            Role <span className="text-red-500 text-sm">*</span>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">
+            Role <span className="text-destructive">*</span>
           </Label>
           <Select
             defaultValue="BoardMember"
@@ -164,58 +175,85 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
               trigger('role');
             }}
           >
-            <SelectTrigger className={`border ${errors.role ? 'border-red-500' : 'border-input'}`}>
-              <SelectValue placeholder="Select role" />
+            <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-muted-foreground/60" />
+                <SelectValue placeholder="Select role" />
+              </div>
             </SelectTrigger>
             <SelectContent>
               {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
-              <SelectItem value="OrgAdmin">OrgAdmin</SelectItem>
+              <SelectItem value="OrgAdmin">Org Admin</SelectItem>
               <SelectItem value="Admin">Admin</SelectItem>
               <SelectItem value="BoardMember">Board Member</SelectItem>
               <SelectItem value="User">User</SelectItem>
             </SelectContent>
           </Select>
           {errors.role && (
-            <p className="text-sm text-red-600 mt-1">{errors.role.message}</p>
+            <p className="text-xs text-destructive">{errors.role.message}</p>
           )}
         </div>
 
         {/* Optional fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-2">
-            <Label htmlFor="title">Job Title</Label>
-            <Input id="title" placeholder="e.g. Software Engineer" {...register('title')} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="title" className="text-sm font-medium">
+              Job Title <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+            </Label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+              <Input
+                id="title"
+                placeholder="e.g. Software Engineer"
+                className="pl-9"
+                {...register('title')}
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Phone Number</Label>
-            <Input
-              id="phoneNumber"
-              placeholder="e.g. +254-712-345-678"
-              {...register('phoneNumber')}
-            />
+          <div className="space-y-1.5">
+            <Label htmlFor="phoneNumber" className="text-sm font-medium">
+              Phone <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+            </Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+              <Input
+                id="phoneNumber"
+                placeholder="+1 (555) 123-4567"
+                className="pl-9"
+                {...register('phoneNumber')}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="profilePictureUrl">Profile Picture URL (optional)</Label>
-          <Input
-            id="profilePictureUrl"
-            placeholder="https://example.com/avatar.jpg"
-            {...register('profilePictureUrl')}
-          />
+        <div className="space-y-1.5">
+          <Label htmlFor="profilePictureUrl" className="text-sm font-medium">
+            Profile Picture URL <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+          </Label>
+          <div className="relative">
+            <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Input
+              id="profilePictureUrl"
+              placeholder="https://example.com/avatar.jpg"
+              className={`pl-9 ${errors.profilePictureUrl ? 'border-destructive' : ''}`}
+              {...register('profilePictureUrl')}
+            />
+          </div>
           {errors.profilePictureUrl && (
-            <p className="text-sm text-red-600 mt-1">{errors.profilePictureUrl.message}</p>
+            <p className="text-xs text-destructive">{errors.profilePictureUrl.message}</p>
           )}
         </div>
 
         {/* Committees */}
         {committees.length > 0 && (
-          <div className="space-y-3">
-            <Label>Committees (optional)</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              Committees <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+            </Label>
             <Select onValueChange={handleAddCommittee}>
               <SelectTrigger>
-                <SelectValue placeholder="Add committee" />
+                <SelectValue placeholder="Add to committee…" />
               </SelectTrigger>
               <SelectContent>
                 {committees.map((c) => (
@@ -227,20 +265,20 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
             </Select>
 
             {selectedCommittees.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {selectedCommittees.map((c) => (
                   <Badge
                     key={c}
                     variant="secondary"
-                    className="flex items-center gap-1.5 px-3 py-1"
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs"
                   >
                     {c}
                     <button
                       type="button"
                       onClick={() => handleRemoveCommittee(c)}
-                      className="rounded-full hover:bg-red-100 p-0.5 transition-colors"
+                      className="rounded-full hover:bg-destructive/20 p-0.5 transition-colors ml-0.5"
                     >
-                      <X className="h-3.5 w-3.5 text-red-600" />
+                      <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                     </button>
                   </Badge>
                 ))}
@@ -250,12 +288,17 @@ export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminR
         )}
 
         {/* Submit */}
-        <div className="flex justify-end gap-4 pt-6 border-t mt-6">
-          <Button type="button" variant="outline">
+        <div className="flex justify-end gap-3 pt-4 border-t border-border/60 mt-2">
+          <Button type="button" variant="outline" className="min-w-24">
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting || Object.keys(errors).length > 0}>
-            {isSubmitting ? 'Adding member...' : 'Add Member'}
+          <Button
+            type="submit"
+            className="min-w-32 gap-2"
+            disabled={isSubmitting || hasErrors}
+          >
+            <UserPlus className="h-4 w-4" />
+            {isSubmitting ? 'Adding…' : 'Add Member'}
           </Button>
         </div>
       </form>
