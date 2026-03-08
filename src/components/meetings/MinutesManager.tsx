@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+// src/pages/MinutesManager.tsx
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,415 +8,436 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Plus, 
-  Trash2, 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  Users, 
-  FileText, 
-  CheckCircle,
-  ChevronRight,
-  ChevronLeft,
-  Save,
-  Download,
-  FileCheck,
-  ListChecks,
-  Gavel,
-  AlertCircle,
-  Eye,
-  Edit3,
-  ArrowLeft,
-  ArrowRight,
-  Printer
+import {
+  Plus, Trash2, Calendar, Clock, MapPin, Users,
+  CheckCircle, ChevronRight, Save, Download, ListChecks,
+  Gavel, AlertCircle, Eye, ArrowLeft, ArrowRight, Printer,
+  UserCheck, CalendarPlus, FileText,
 } from 'lucide-react';
-import { users, meetings } from '@/lib/store';
-import { Minutes, AgendaSummary, Decision, ActionItem, AttendanceRecord, NextMeetingDetails } from '@/types';
 
-interface MinutesFormData {
-  meetingId: string;
+// ── API types (api.types.ts) ─────────────────────────────────────────────────
+import type {
+  Meeting,
+  Minutes,
+  MinuteItem,
+  MinuteItemType,
+  MinutesStatus,
+  User,
+  VotingDetails,
+  ActionItemDetails,
+  ActionItemAssignee,
+  CreateMinutesData,
+  CreateMinuteItemData,
+} from '@/types/api.types';
+
+// ─── Local form-only types ─────────────────────────────────────────────────────
+//
+// When saving the parent should call:
+//   1. MinutesService.create(output.minutesData)            → returns Minutes
+//   2. MinutesService.addItem(minutesId, item) per item     → returns MinuteItem
+//
+
+/**
+ * One editable row in the items list.
+ * Mirrors CreateMinuteItemData with an extra clientId for React keys.
+ */
+interface LocalItem {
+  clientId: string;
+  orderIndex: number;
+  type: MinuteItemType;
   title: string;
+  content: string;               // CreateMinuteItemData.content
+  agendaItemId?: string;
+  timestamp?: string;
+  // voting (only when type === 'vote') — matches VotingDetails
+  voteQuestion?: string;
+  voteInFavor?: number;
+  voteAgainst?: number;
+  voteAbstain?: number;
+  // action (only when type === 'action_item') — matches ActionItemDetails
+  actionDescription?: string;
+  actionAssigneeId?: string;
+  actionAssigneeName?: string;
+  actionDueDate?: string;
+  actionPriority?: ActionItemDetails['priority'];
+}
+
+/** Attendance record — one per board member */
+interface AttendanceRow {
+  userId: string;
+  present: boolean;
+}
+
+interface NextMeeting {
   date: string;
   time: string;
-  endTime: string;
   location: string;
-  attendance: AttendanceRecord[];
-  approvalOfPreviousMinutes: string;
-  agendaSummaries: AgendaSummary[];
-  decisions: Decision[];
-  actionItems: ActionItem[];
-  nextMeetingDetails: NextMeetingDetails;
-  attachments: string[];
-  preparedBy: string;
-  approvedBy: string;
+  agendaHighlights: string;
 }
 
-interface MinutesManagerProps {
-  meetingId?: string;
-  onSave?: (data: MinutesFormData) => void;
+/** Shape emitted via onSave — parent calls MinutesService */
+export interface MinutesFormOutput {
+  /** Payload for MinutesService.create() */
+  minutesData: CreateMinutesData;
+  /** One payload per MinutesService.addItem() call */
+  items: CreateMinuteItemData[];
+  /** UI-only extras (attendance lives here, not in the Minutes API type) */
+  meta: {
+    attendance: AttendanceRow[];
+    nextMeeting: NextMeeting;
+    preparedById: string;
+    approvedById: string;
+    approvalOfPrevious: string;
+  };
 }
+
+export interface MinutesManagerProps {
+  /** Pre-populate from meetingsService.getMeetingById() */
+  meeting?: Meeting;
+  /** Existing draft fetched via MinutesService.getByMeetingId() */
+  existingMinutes?: Minutes;
+  /** Board members for attendance + action-item assignees */
+  members?: User[];
+  onSave?: (output: MinutesFormOutput) => void;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'details', label: 'Details', icon: Calendar },
-  { id: 'attendance', label: 'Attendance', icon: Users },
-  { id: 'agenda', label: 'Agenda Summaries', icon: FileText },
-  { id: 'decisions', label: 'Decisions', icon: Gavel },
-  { id: 'actions', label: 'Action Items', icon: ListChecks },
-  { id: 'preview', label: 'Preview', icon: Eye },
+  { id: 'details',    label: 'Details',          Icon: Calendar    },
+  { id: 'attendance', label: 'Attendance',        Icon: Users       },
+  { id: 'items',      label: 'Minute Items',      Icon: FileText    },
+  { id: 'decisions',  label: 'Decisions & Votes', Icon: Gavel       },
+  { id: 'actions',    label: 'Action Items',      Icon: ListChecks  },
+  { id: 'preview',    label: 'Preview',           Icon: Eye         },
 ];
 
-export function MinutesManager({ meetingId, onSave }: MinutesManagerProps) {
-  const meeting = meetingId ? meetings.find(m => m.id === meetingId) : null;
-  
+// MinuteItemType = 'general' | 'decision' | 'action_item' | 'discussion' | 'vote'
+const ALL_ITEM_TYPES: { value: MinuteItemType; label: string }[] = [
+  { value: 'general',     label: 'General'     },
+  { value: 'discussion',  label: 'Discussion'  },
+  { value: 'decision',    label: 'Decision'    },
+  { value: 'action_item', label: 'Action Item' },
+  { value: 'vote',        label: 'Vote'        },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fullName(members: User[], id: string): string {
+  const u = members.find(m => m.id === id);
+  return u ? `${u.firstName} ${u.lastName}` : '—';
+}
+
+function priorityCls(p?: string): string {
+  if (p === 'high')   return 'bg-red-100 text-red-700';
+  if (p === 'medium') return 'bg-yellow-100 text-yellow-700';
+  return 'bg-green-100 text-green-700';
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function MinutesManager({
+  meeting,
+  existingMinutes,
+  members = [],
+  onSave,
+}: MinutesManagerProps) {
+
+  // ── Tab navigation ─────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('details');
-  const [formData, setFormData] = useState<MinutesFormData>({
-    meetingId: meeting?.id || '',
-    title: meeting?.title || '',
-    date: meeting?.startAt ? new Date(meeting.startAt).toISOString().split('T')[0] : '',
-    time: meeting?.startAt ? new Date(meeting.startAt).toTimeString().slice(0, 5) : '',
-    endTime: meeting?.endAt ? new Date(meeting.endAt).toTimeString().slice(0, 5) : '',
-    location: meeting?.location || '',
-    attendance: meeting?.attendees.map(id => ({
-      userId: id,
-      present: true,
-      role: ''
-    })) || [],
-    approvalOfPreviousMinutes: '',
-    agendaSummaries: meeting?.agenda.map(a => ({
-      id: a.id,
-      topic: a.title,
-      discussion: '',
-      decision: '',
-      presenter: a.owner
-    })) || [],
-    decisions: [],
-    actionItems: [],
-    nextMeetingDetails: {
-      date: '',
-      time: '',
-      location: '',
-      agenda: ''
-    },
-    attachments: [],
-    preparedBy: '',
-    approvedBy: ''
+  const tabIdx  = TABS.findIndex(t => t.id === activeTab);
+  const isFirst = tabIdx === 0;
+  const isLast  = tabIdx === TABS.length - 1;
+  const goNext  = () => !isLast  && setActiveTab(TABS[tabIdx + 1].id);
+  const goPrev  = () => !isFirst && setActiveTab(TABS[tabIdx - 1].id);
+
+  // ── Minutes header fields — match CreateMinutesData ────────────────────────
+  // CreateMinutesData = { title, summary, meetingId, collaborators? }
+  const [title,       setTitle]       = useState(existingMinutes?.title   ?? meeting?.title ?? '');
+  const [summary,     setSummary]     = useState(existingMinutes?.summary ?? '');
+  const [collaborators, setCollaborators] = useState<string[]>(existingMinutes?.collaborators ?? []);
+
+  // UI-only header fields (not in the Minutes API type)
+  const [date,          setDate]          = useState(meeting?.date      ?? '');
+  const [startTime,     setStartTime]     = useState(meeting?.startTime ?? '');
+  const [endTime,       setEndTime]       = useState(meeting?.endTime   ?? '');
+  const [location,      setLocation]      = useState(meeting?.location  ?? '');
+  const [preparedById,  setPreparedById]  = useState('');
+  const [approvedById,  setApprovedById]  = useState('');
+  const [approvalOfPrevious, setApprovalOfPrevious] = useState('');
+
+  // ── Attendance (UI-only — not part of the Minutes API type) ───────────────
+  // Build initial attendance from the meeting attendees list if available
+  const [attendance, setAttendance] = useState<AttendanceRow[]>(() =>
+    members.map(u => ({
+      userId:  u.id,
+      present: (meeting?.attendees ?? []).some(a => a.userId === u.id),
+    })),
+  );
+
+  // Re-derive every render so it always reflects current members
+  const fullAttendance: AttendanceRow[] = members.map(u => {
+    const row = attendance.find(a => a.userId === u.id);
+    return row ?? { userId: u.id, present: false };
   });
 
-  const currentTabIndex = TABS.findIndex(t => t.id === activeTab);
-  const isFirstTab = currentTabIndex === 0;
-  const isLastTab = currentTabIndex === TABS.length - 1;
-
-  const goToNextTab = () => {
-    if (!isLastTab) {
-      setActiveTab(TABS[currentTabIndex + 1].id);
-    }
+  const togglePresent = (userId: string) => {
+    setAttendance(prev => {
+      const exists = prev.find(a => a.userId === userId);
+      if (exists) {
+        return prev.map(a => a.userId === userId ? { ...a, present: !a.present } : a);
+      }
+      return [...prev, { userId, present: true }];
+    });
   };
 
-  const goToPreviousTab = () => {
-    if (!isFirstTab) {
-      setActiveTab(TABS[currentTabIndex - 1].id);
-    }
+  const presentCount = fullAttendance.filter(a =>  a.present).length;
+  const absentCount  = fullAttendance.filter(a => !a.present).length;
+
+  // ── Minute items — aligned to CreateMinuteItemData ─────────────────────────
+  const [items, setItems] = useState<LocalItem[]>(() =>
+    (existingMinutes?.items ?? []).map(i => ({
+      clientId:          i.id,
+      orderIndex:        i.orderIndex,
+      type:              i.type,
+      title:             i.title,
+      content:           i.content,
+      agendaItemId:      i.agendaItemId,
+      timestamp:         i.timestamp,
+      voteQuestion:      i.votingDetails?.question,
+      voteInFavor:       i.votingDetails?.inFavor,
+      voteAgainst:       i.votingDetails?.against,
+      voteAbstain:       i.votingDetails?.abstain,
+      actionDescription: i.actionItemDetails?.description,
+      actionAssigneeId:  i.actionItemDetails?.assignedTo?.[0]?.userId,
+      actionAssigneeName:i.actionItemDetails?.assignedTo?.[0]?.name,
+      actionDueDate:     i.actionItemDetails?.dueDate,
+      actionPriority:    i.actionItemDetails?.priority,
+    })),
+  );
+
+  const addItem = (type: MinuteItemType = 'general') =>
+    setItems(p => [...p, {
+      clientId: `mi-${Date.now()}`, orderIndex: p.length,
+      type, title: '', content: '',
+    }]);
+
+  const removeItem = (id: string) => setItems(p => p.filter(i => i.clientId !== id));
+
+  const updateItem = <K extends keyof LocalItem>(id: string, k: K, v: LocalItem[K]) =>
+    setItems(p => p.map(i => i.clientId === id ? { ...i, [k]: v } : i));
+
+  const changeActionAssignee = (clientId: string, userId: string) => {
+    const u = members.find(m => m.id === userId);
+    setItems(p =>
+      p.map(i =>
+        i.clientId === clientId
+          ? { ...i, actionAssigneeId: userId, actionAssigneeName: u ? `${u.firstName} ${u.lastName}` : '' }
+          : i,
+      ),
+    );
   };
 
-  const updateAttendance = (userId: string, field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      attendance: prev.attendance.map(a => 
-        a.userId === userId ? { ...a, [field]: value } : a
-      )
-    }));
-  };
+  // Typed subsets — recomputed each render
+  const generalItems   = items.filter(i => i.type === 'general'    || i.type === 'discussion');
+  const decisionItems  = items.filter(i => i.type === 'decision'   || i.type === 'vote');
+  const actionItems    = items.filter(i => i.type === 'action_item');
 
-  const addAgendaSummary = () => {
-    setFormData(prev => ({
-      ...prev,
-      agendaSummaries: [
-        ...prev.agendaSummaries,
-        {
-          id: `agenda-sum-${Date.now()}`,
-          topic: '',
-          discussion: '',
-          decision: '',
-          presenter: ''
-        }
-      ]
-    }));
-  };
+  // ── Next meeting (UI-only) ─────────────────────────────────────────────────
+  const [nextMeeting, setNextMeeting] = useState<NextMeeting>({
+    date: '', time: '', location: '', agendaHighlights: '',
+  });
+  const setNextField = (k: keyof NextMeeting, v: string) =>
+    setNextMeeting(p => ({ ...p, [k]: v }));
 
-  const removeAgendaSummary = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      agendaSummaries: prev.agendaSummaries.filter(a => a.id !== id)
-    }));
-  };
-
-  const updateAgendaSummary = (id: string, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      agendaSummaries: prev.agendaSummaries.map(a => 
-        a.id === id ? { ...a, [field]: value } : a
-      )
-    }));
-  };
-
-  const addDecision = () => {
-    setFormData(prev => ({
-      ...prev,
-      decisions: [
-        ...prev.decisions,
-        {
-          id: `decision-${Date.now()}`,
-          title: '',
-          description: '',
-          approvedBy: '',
-          date: ''
-        }
-      ]
-    }));
-  };
-
-  const removeDecision = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      decisions: prev.decisions.filter(d => d.id !== id)
-    }));
-  };
-
-  const updateDecision = (id: string, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      decisions: prev.decisions.map(d => 
-        d.id === id ? { ...d, [field]: value } : d
-      )
-    }));
-  };
-
-  const addActionItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      actionItems: [
-        ...prev.actionItems,
-        {
-          id: `action-${Date.now()}`,
-          action: '',
-          owner: '',
-          dueDate: '',
-          status: 'pending'
-        }
-      ]
-    }));
-  };
-
-  const removeActionItem = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      actionItems: prev.actionItems.filter(a => a.id !== id)
-    }));
-  };
-
-  const updateActionItem = (id: string, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      actionItems: prev.actionItems.map(a => 
-        a.id === id ? { ...a, [field]: value } : a
-      )
-    }));
-  };
-
+  // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = () => {
-    if (onSave) {
-      onSave(formData);
-    }
+    if (!title.trim()) { toast.error('Please enter a minutes title'); return; }
+    const meetingId = meeting?.id ?? existingMinutes?.meetingId;
+    if (!meetingId) { toast.error('No meeting linked to these minutes'); return; }
+
+    const output: MinutesFormOutput = {
+      minutesData: {
+        title:        title.trim(),
+        summary:      summary.trim(),
+        meetingId,
+        collaborators: collaborators.length ? collaborators : undefined,
+      },
+      items: items.map(i => {
+        const base: CreateMinuteItemData = {
+          orderIndex:  i.orderIndex,
+          type:        i.type,
+          title:       i.title,
+          content:     i.content,
+          agendaItemId:i.agendaItemId,
+          timestamp:   i.timestamp,
+        };
+        if (i.type === 'vote' && i.voteQuestion) {
+          base.votingDetails = {
+            question: i.voteQuestion,
+            inFavor:  i.voteInFavor  ?? 0,
+            against:  i.voteAgainst  ?? 0,
+            abstain:  i.voteAbstain  ?? 0,
+            isPassed: (i.voteInFavor ?? 0) > (i.voteAgainst ?? 0),
+          };
+        }
+        if (i.type === 'action_item' && i.actionDescription) {
+          const assignees: ActionItemAssignee[] = i.actionAssigneeId
+            ? [{ userId: i.actionAssigneeId, name: i.actionAssigneeName ?? '' }]
+            : [];
+          base.actionItemDetails = {
+            description: i.actionDescription,
+            assignedTo:  assignees,
+            dueDate:     i.actionDueDate ?? '',
+            priority:    i.actionPriority ?? 'medium',
+          };
+        }
+        return base;
+      }),
+      meta: {
+        attendance: fullAttendance,
+        nextMeeting,
+        preparedById,
+        approvedById,
+        approvalOfPrevious,
+      },
+    };
+
+    onSave?.(output);
   };
 
-  const presentCount = formData.attendance.filter(a => a.present).length;
-  const absentCount = formData.attendance.filter(a => !a.present).length;
-
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
+
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Meeting Minutes</h1>
-          <p className="text-muted-foreground mt-1">Create and manage meeting minutes</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">Meeting Minutes</h1>
+          <p className="text-muted-foreground">Create and manage meeting minutes</p>
         </div>
-        
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
-            <Printer className="h-4 w-4" />
-            Print
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
-          <Button className="gap-2" onClick={handleSave}>
-            <Save className="h-4 w-4" />
-            Save Minutes
+          <Button variant="outline" className="gap-2"><Printer className="h-4 w-4" />Print</Button>
+          <Button variant="outline" className="gap-2"><Download className="h-4 w-4" />Export</Button>
+          <Button className="gap-2 shadow-lg shadow-primary/20" onClick={handleSave}>
+            <Save className="h-4 w-4" />Save Minutes
           </Button>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <Card className="glass">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 overflow-x-auto">
-              {TABS.map((tab, index) => {
-                const Icon = tab.icon;
+      {/* Step strip */}
+      <Card className="border bg-card/50">
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {TABS.map(({ id, label, Icon }, idx) => {
+                const isActive    = activeTab === id;
+                const isCompleted = idx < tabIdx;
                 return (
-                  <div key={tab.id} className="flex items-center">
+                  <div key={id} className="flex items-center">
                     <button
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        activeTab === tab.id 
-                          ? 'bg-primary text-primary-foreground' 
-                          : 'text-muted-foreground hover:bg-muted'
+                      onClick={() => setActiveTab(id)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                        isActive      ? 'bg-primary text-primary-foreground shadow-sm'
+                        : isCompleted ? 'text-foreground hover:bg-muted'
+                        :               'text-muted-foreground hover:bg-muted'
                       }`}
                     >
-                      <Icon className="h-4 w-4" />
-                      <span className="hidden sm:inline">{tab.label}</span>
-                      <span className="sm:hidden">{index + 1}</span>
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        isActive      ? 'bg-primary-foreground text-primary'
+                        : isCompleted ? 'bg-emerald-500 text-white'
+                        :               'bg-muted-foreground/20 text-muted-foreground'
+                      }`}>
+                        {isCompleted ? '✓' : idx + 1}
+                      </span>
+                      <Icon className="h-3.5 w-3.5 hidden sm:block" />
+                      <span className="hidden sm:inline">{label}</span>
                     </button>
-                    {index < TABS.length - 1 && (
-                      <ChevronRight className="w-4 h-4 mx-1 text-muted-foreground" />
+                    {idx < TABS.length - 1 && (
+                      <ChevronRight className="w-3.5 h-3.5 mx-0.5 text-muted-foreground/40 shrink-0" />
                     )}
                   </div>
                 );
               })}
             </div>
-            
-            {/* Next/Previous Navigation */}
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={goToPreviousTab}
-                disabled={isFirstTab}
-                className="h-8 w-8"
-              >
-                <ArrowLeft className="h-4 w-4" />
+            <div className="flex items-center gap-1.5 shrink-0 border-l pl-3">
+              <Button variant="outline" size="icon" onClick={goPrev} disabled={isFirst} className="h-8 w-8">
+                <ArrowLeft className="h-3.5 w-3.5" />
               </Button>
-              <span className="text-sm text-muted-foreground">
-                {currentTabIndex + 1} / {TABS.length}
-              </span>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={goToNextTab}
-                disabled={isLastTab}
-                className="h-8 w-8"
-              >
-                <ArrowRight className="h-4 w-4" />
+              <span className="text-xs text-muted-foreground w-10 text-center">{tabIdx + 1}/{TABS.length}</span>
+              <Button variant="outline" size="icon" onClick={goNext} disabled={isLast} className="h-8 w-8">
+                <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Tab Contents */}
+      {/* ── Tab: Details ──────────────────────────────────────────────────── */}
       {activeTab === 'details' && (
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
+        <Card className="border bg-card/60">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <div className="p-1.5 rounded-lg bg-primary/10"><Calendar className="h-4 w-4 text-primary" /></div>
               Meeting Details
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-5">
+            {/* Title — maps to CreateMinutesData.title */}
             <div className="space-y-2">
-              <Label>Meeting Title</Label>
-              <Input 
-                placeholder="e.g., Q1 Strategic Planning Session"
-                value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              <Label>Minutes Title *</Label>
+              <Input
+                placeholder="e.g., Q1 Board Meeting Minutes"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+              />
+            </div>
+
+            {/* Summary — maps to CreateMinutesData.summary */}
+            <div className="space-y-2">
+              <Label>Summary *</Label>
+              <Textarea
+                placeholder="Brief summary of the meeting…"
+                rows={3}
+                className="resize-none"
+                value={summary}
+                onChange={e => setSummary(e.target.value)}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Date</Label>
-                <Input 
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                />
+                <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Start Time</Label>
-                <Input 
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                />
+                <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>End Time</Label>
-                <Input 
-                  type="time"
-                  value={formData.endTime}
-                  onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
-                />
+                <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Location</Label>
-                <Input 
-                  placeholder="Conference Room A or Virtual (Zoom)"
-                  value={formData.location}
-                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                <Input
+                  placeholder="Conference Room A or Virtual"
+                  value={location}
+                  onChange={e => setLocation(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Prepared By</Label>
-                <Select 
-                  value={formData.preparedBy} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, preparedBy: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map(user => (
-                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Approved By</Label>
-                <Select 
-                  value={formData.approvedBy} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, approvedBy: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select approver" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map(user => (
-                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
                 <Label>Approval of Previous Minutes</Label>
-                <Select 
-                  value={formData.approvalOfPreviousMinutes} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, approvalOfPreviousMinutes: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
+                <Select value={approvalOfPrevious} onValueChange={setApprovalOfPrevious}>
+                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="approved">Approved</SelectItem>
                     <SelectItem value="pending">Pending Approval</SelectItem>
@@ -423,596 +446,641 @@ export function MinutesManager({ meetingId, onSave }: MinutesManagerProps) {
                 </Select>
               </div>
             </div>
+
+            {/* Prepared by / Approved by (UI roles) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { label: 'Prepared By', value: preparedById, onChange: setPreparedById },
+                { label: 'Approved By', value: approvedById, onChange: setApprovedById },
+              ].map(({ label, value, onChange }) => (
+                <div key={label} className="space-y-2">
+                  <Label>{label}</Label>
+                  <Select value={value} onValueChange={onChange}>
+                    <SelectTrigger><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger>
+                    <SelectContent>
+                      {members.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
 
+      {/* ── Tab: Attendance ───────────────────────────────────────────────── */}
       {activeTab === 'attendance' && (
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+        <Card className="border bg-card/60">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between text-base">
               <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                Attendance
+                <div className="p-1.5 rounded-lg bg-primary/10"><UserCheck className="h-4 w-4 text-primary" /></div>
+                Attendance Register
               </div>
               <div className="flex gap-2">
-                <Badge variant="secondary" className="gap-1">
-                  <CheckCircle className="h-3 w-3" />
-                  Present: {presentCount}
+                <Badge className="gap-1.5 bg-emerald-100 text-emerald-700 border-emerald-200 border">
+                  <CheckCircle className="h-3 w-3" />Present: {presentCount}
                 </Badge>
-                <Badge variant="outline" className="gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  Absent: {absentCount}
+                <Badge variant="outline" className="gap-1.5">
+                  <AlertCircle className="h-3 w-3" />Absent: {absentCount}
                 </Badge>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {users.map(user => {
-                const attendance = formData.attendance.find(a => a.userId === user.id);
-                const isPresent = attendance?.present ?? true;
-                
-                return (
-                  <div 
-                    key={user.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      isPresent
-                        ? 'border-green-500/50 bg-green-500/5'
-                        : 'border-red-500/50 bg-red-500/5'
-                    }`}
-                    onClick={() => updateAttendance(user.id, 'present', !isPresent)}
-                  >
-                    <Checkbox 
-                      checked={isPresent}
-                      onCheckedChange={() => updateAttendance(user.id, 'present', !isPresent)}
+            {members.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No members available.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {members.map(u => {
+                  const row       = fullAttendance.find(a => a.userId === u.id);
+                  const isPresent = row?.present ?? false;
+                  return (
+                    <div
+                      key={u.id}
+                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                        isPresent
+                          ? 'border-emerald-500/40 bg-emerald-500/5 shadow-sm'
+                          : 'border-red-500/30 bg-red-500/5'
+                      }`}
+                      onClick={() => togglePresent(u.id)}
+                    >
+                      <Checkbox checked={isPresent} onCheckedChange={() => togglePresent(u.id)} />
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarImage src={u.profilePictureUrl} alt={u.firstName} />
+                        <AvatarFallback className="text-xs">{u.firstName[0]}{u.lastName[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{u.firstName} {u.lastName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{u.title ?? u.role}</p>
+                      </div>
+                      <Badge className={`text-xs shrink-0 border-0 ${
+                        isPresent ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {isPresent ? 'Present' : 'Absent'}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Tab: Minute Items (general / discussion) ─────────────────────── */}
+      {activeTab === 'items' && (
+        <Card className="border bg-card/60">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between text-base">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-primary/10"><FileText className="h-4 w-4 text-primary" /></div>
+                Minute Items
+              </div>
+              <Button variant="outline" size="sm" onClick={() => addItem('general')} className="gap-1.5 h-8">
+                <Plus className="h-3.5 w-3.5" />Add Item
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {generalItems.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed rounded-xl">
+                <FileText className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">No minute items recorded.</p>
+                <Button onClick={() => addItem('general')} variant="outline" className="gap-2">
+                  <Plus className="h-4 w-4" />Add First Item
+                </Button>
+              </div>
+            ) : (
+              generalItems.map((item, idx) => (
+                <div key={item.clientId} className="p-4 rounded-xl border bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <Select
+                        value={item.type}
+                        onValueChange={v => updateItem(item.clientId, 'type', v as MinuteItemType)}
+                      >
+                        <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="general">General</SelectItem>
+                          <SelectItem value="discussion">Discussion</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => removeItem(item.clientId)}
+                      className="h-7 w-7 hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Title</Label>
+                    <Input
+                      placeholder="Item title"
+                      value={item.title}
+                      className="h-8 text-sm"
+                      onChange={e => updateItem(item.clientId, 'title', e.target.value)}
                     />
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatar} alt={user.name} />
-                      <AvatarFallback>
-                        {user.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium">{user.name}</p>
-                      <p className="text-sm text-muted-foreground">{user.position || user.role}</p>
-                    </div>
-                    {isPresent ? (
-                      <Badge variant="secondary" className="bg-green-500/10 text-green-600">Present</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-muted-foreground">Absent</Badge>
-                    )}
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === 'agenda' && (
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Agenda Item Summaries
-              </div>
-              <Button variant="outline" size="sm" onClick={addAgendaSummary} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Add Item
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {formData.agendaSummaries.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">No agenda summaries added.</p>
-                <Button onClick={addAgendaSummary} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add First Item
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {formData.agendaSummaries.map((item, index) => (
-                  <div key={item.id} className="p-4 rounded-lg border bg-card">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-medium">Item {index + 1}</span>
-                      <Button variant="ghost" size="icon" onClick={() => removeAgendaSummary(item.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Topic</Label>
-                        <Input 
-                          placeholder="Topic"
-                          value={item.topic}
-                          onChange={(e) => updateAgendaSummary(item.id, 'topic', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Presenter</Label>
-                        <Select 
-                          value={item.presenter} 
-                          onValueChange={(value) => updateAgendaSummary(item.id, 'presenter', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select presenter" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map(user => (
-                              <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1 md:col-span-2">
-                        <Label className="text-xs text-muted-foreground">Discussion</Label>
-                        <Textarea 
-                          placeholder="Discussion points..."
-                          value={item.discussion}
-                          onChange={(e) => updateAgendaSummary(item.id, 'discussion', e.target.value)}
-                          rows={2}
-                        />
-                      </div>
-                      <div className="space-y-1 md:col-span-2">
-                        <Label className="text-xs text-muted-foreground">Decision/Outcome</Label>
-                        <Input 
-                          placeholder="Decision or outcome"
-                          value={item.decision || ''}
-                          onChange={(e) => updateAgendaSummary(item.id, 'decision', e.target.value)}
-                        />
-                      </div>
-                    </div>
+                  <div className="space-y-1.5">
+                    {/* content — maps to CreateMinuteItemData.content */}
+                    <Label className="text-xs text-muted-foreground">Notes / Content</Label>
+                    <Textarea
+                      placeholder="Discussion notes…"
+                      rows={3}
+                      className="resize-none text-sm"
+                      value={item.content}
+                      onChange={e => updateItem(item.clientId, 'content', e.target.value)}
+                    />
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
             )}
           </CardContent>
         </Card>
       )}
 
+      {/* ── Tab: Decisions & Votes ────────────────────────────────────────── */}
       {activeTab === 'decisions' && (
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+        <Card className="border bg-card/60">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between text-base">
               <div className="flex items-center gap-2">
-                <Gavel className="h-5 w-5 text-primary" />
-                Decisions & Resolutions
+                <div className="p-1.5 rounded-lg bg-primary/10"><Gavel className="h-4 w-4 text-primary" /></div>
+                Decisions & Votes
               </div>
-              <Button variant="outline" size="sm" onClick={addDecision} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Add Decision
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {formData.decisions.length === 0 ? (
-              <div className="text-center py-8">
-                <Gavel className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">No decisions recorded.</p>
-                <Button onClick={addDecision} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add First Decision
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => addItem('decision')} className="gap-1.5 h-8">
+                  <Plus className="h-3.5 w-3.5" />Decision
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => addItem('vote')} className="gap-1.5 h-8">
+                  <Plus className="h-3.5 w-3.5" />Vote
                 </Button>
               </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {decisionItems.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed rounded-xl">
+                <Gavel className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">No decisions or votes recorded.</p>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={() => addItem('decision')} variant="outline" className="gap-2">
+                    <Plus className="h-4 w-4" />Decision
+                  </Button>
+                  <Button onClick={() => addItem('vote')} variant="outline" className="gap-2">
+                    <Plus className="h-4 w-4" />Vote
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <div className="space-y-4">
-                {formData.decisions.map((decision, index) => (
-                  <div key={decision.id} className="p-4 rounded-lg border bg-card">
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge variant="secondary">Decision {index + 1}</Badge>
-                      <Button variant="ghost" size="icon" onClick={() => removeDecision(decision.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1 md:col-span-2">
-                        <Label className="text-xs text-muted-foreground">Title</Label>
-                        <Input 
-                          placeholder="Decision title"
-                          value={decision.title}
-                          onChange={(e) => updateDecision(decision.id, 'title', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1 md:col-span-2">
-                        <Label className="text-xs text-muted-foreground">Description</Label>
-                        <Textarea 
-                          placeholder="Decision description..."
-                          value={decision.description}
-                          onChange={(e) => updateDecision(decision.id, 'description', e.target.value)}
-                          rows={2}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Approved By</Label>
-                        <Select 
-                          value={decision.approvedBy || ''} 
-                          onValueChange={(value) => updateDecision(decision.id, 'approvedBy', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select approver" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map(user => (
-                              <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Date</Label>
-                        <Input 
-                          type="date"
-                          value={decision.date || ''}
-                          onChange={(e) => updateDecision(decision.id, 'date', e.target.value)}
-                        />
-                      </div>
-                    </div>
+              decisionItems.map((item, idx) => (
+                <div key={item.clientId} className="p-4 rounded-xl border bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="gap-1.5">
+                      {item.type === 'vote' ? <Gavel className="h-3 w-3" /> : null}
+                      {item.type === 'decision' ? 'Decision' : 'Vote'} {idx + 1}
+                    </Badge>
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => removeItem(item.clientId)}
+                      className="h-7 w-7 hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
                   </div>
-                ))}
-              </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Title</Label>
+                    <Input
+                      placeholder="Decision / vote title"
+                      value={item.title}
+                      className="h-8 text-sm"
+                      onChange={e => updateItem(item.clientId, 'title', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Content / Resolution</Label>
+                    <Textarea
+                      placeholder="Full text of the decision or resolution…"
+                      rows={2}
+                      className="resize-none text-sm"
+                      value={item.content}
+                      onChange={e => updateItem(item.clientId, 'content', e.target.value)}
+                    />
+                  </div>
+                  {/* VotingDetails — only rendered for type='vote' */}
+                  {item.type === 'vote' && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Vote Question</Label>
+                        <Input
+                          placeholder="What was voted on?"
+                          value={item.voteQuestion ?? ''}
+                          className="h-8 text-sm"
+                          onChange={e => updateItem(item.clientId, 'voteQuestion', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {([
+                          { label: 'In Favour', key: 'voteInFavor' },
+                          { label: 'Against',   key: 'voteAgainst' },
+                          { label: 'Abstain',   key: 'voteAbstain' },
+                        ] as const).map(({ label, key }) => (
+                          <div key={key} className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">{label}</Label>
+                            <Input
+                              type="number" min={0}
+                              className="h-8 text-sm"
+                              value={item[key] ?? ''}
+                              onChange={e =>
+                                updateItem(item.clientId, key, parseInt(e.target.value) || 0)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))
             )}
           </CardContent>
         </Card>
       )}
 
+      {/* ── Tab: Action Items ─────────────────────────────────────────────── */}
       {activeTab === 'actions' && (
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ListChecks className="h-5 w-5 text-primary" />
-                Action Items
-              </div>
-              <Button variant="outline" size="sm" onClick={addActionItem} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Add Action
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {formData.actionItems.length === 0 ? (
-              <div className="text-center py-8">
-                <ListChecks className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">No action items recorded.</p>
-                <Button onClick={addActionItem} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add First Action Item
+        <div className="space-y-4">
+          <Card className="border bg-card/60">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center justify-between text-base">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10"><ListChecks className="h-4 w-4 text-primary" /></div>
+                  Action Items
+                </div>
+                <Button variant="outline" size="sm" onClick={() => addItem('action_item')} className="gap-1.5 h-8">
+                  <Plus className="h-3.5 w-3.5" />Add Action
                 </Button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-2 font-medium text-muted-foreground">Action</th>
-                      <th className="text-left py-3 px-2 font-medium text-muted-foreground">Owner</th>
-                      <th className="text-left py-3 px-2 font-medium text-muted-foreground">Due Date</th>
-                      <th className="text-left py-3 px-2 font-medium text-muted-foreground">Status</th>
-                      <th className="text-left py-3 px-2 font-medium text-muted-foreground w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {formData.actionItems.map((item) => (
-                      <tr key={item.id} className="border-b hover:bg-muted/50">
-                        <td className="py-3 px-2">
-                          <Input 
-                            placeholder="Action description"
-                            value={item.action}
-                            onChange={(e) => updateActionItem(item.id, 'action', e.target.value)}
-                          />
-                        </td>
-                        <td className="py-3 px-2">
-                          <Select 
-                            value={item.owner} 
-                            onValueChange={(value) => updateActionItem(item.id, 'owner', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select owner" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {users.map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-3 px-2">
-                          <Input 
-                            type="date"
-                            value={item.dueDate}
-                            onChange={(e) => updateActionItem(item.id, 'dueDate', e.target.value)}
-                          />
-                        </td>
-                        <td className="py-3 px-2">
-                          <Select 
-                            value={item.status} 
-                            onValueChange={(value) => updateActionItem(item.id, 'status', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="in_progress">In Progress</SelectItem>
-                              <SelectItem value="completed">Completed</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-3 px-2">
-                          <Button variant="ghost" size="icon" onClick={() => removeActionItem(item.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Next Meeting Details */}
-            <Separator className="my-6" />
-            
-            <div className="space-y-4">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Next Meeting Details
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Next Meeting Date</Label>
-                  <Input 
-                    type="date"
-                    value={formData.nextMeetingDetails.date || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      nextMeetingDetails: { ...prev.nextMeetingDetails, date: e.target.value }
-                    }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Next Meeting Time</Label>
-                  <Input 
-                    type="time"
-                    value={formData.nextMeetingDetails.time || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      nextMeetingDetails: { ...prev.nextMeetingDetails, time: e.target.value }
-                    }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Next Meeting Location</Label>
-                  <Input 
-                    placeholder="Location"
-                    value={formData.nextMeetingDetails.location || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      nextMeetingDetails: { ...prev.nextMeetingDetails, location: e.target.value }
-                    }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Agenda Highlights</Label>
-                  <Input 
-                    placeholder="Brief agenda highlights"
-                    value={formData.nextMeetingDetails.agenda || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      nextMeetingDetails: { ...prev.nextMeetingDetails, agenda: e.target.value }
-                    }))}
-                  />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === 'preview' && (
-        <div className="space-y-6">
-          {/* Full Preview */}
-          <Card className="glass border-primary/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5 text-primary" />
-                Minutes Preview
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-white text-black p-8 rounded-lg shadow-lg max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="text-center border-b-2 border-gray-300 pb-4 mb-6">
-                  <h1 className="text-2xl font-bold mb-2">{formData.title || 'Meeting Minutes'}</h1>
-                  <div className="flex items-center justify-center gap-4 text-sm text-gray-600">
-                    {formData.date && (
+              {actionItems.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed rounded-xl">
+                  <ListChecks className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">No action items recorded.</p>
+                  <Button onClick={() => addItem('action_item')} variant="outline" className="gap-2">
+                    <Plus className="h-4 w-4" />Add Action Item
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2.5 px-2 font-medium text-muted-foreground">Action</th>
+                        <th className="text-left py-2.5 px-2 font-medium text-muted-foreground">Owner</th>
+                        <th className="text-left py-2.5 px-2 font-medium text-muted-foreground">Due Date</th>
+                        <th className="text-left py-2.5 px-2 font-medium text-muted-foreground">Priority</th>
+                        <th className="py-2.5 px-2 w-8" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {actionItems.map(item => (
+                        <tr key={item.clientId} className="hover:bg-muted/30 transition-colors group">
+                          <td className="py-2.5 px-2">
+                            <Input
+                              placeholder="Describe the action…"
+                              value={item.actionDescription ?? ''}
+                              onChange={e => updateItem(item.clientId, 'actionDescription', e.target.value)}
+                              className="h-8 text-sm min-w-[180px]"
+                            />
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <Select
+                              value={item.actionAssigneeId ?? ''}
+                              onValueChange={v => changeActionAssignee(item.clientId, v)}
+                            >
+                              <SelectTrigger className="min-w-[130px] h-8 text-sm">
+                                <SelectValue placeholder="Assignee" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {members.map(u => (
+                                  <SelectItem key={u.id} value={u.id}>
+                                    {u.firstName} {u.lastName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <Input
+                              type="date"
+                              value={item.actionDueDate ?? ''}
+                              onChange={e => updateItem(item.clientId, 'actionDueDate', e.target.value)}
+                              className="min-w-[130px] h-8 text-sm"
+                            />
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <Select
+                              value={item.actionPriority ?? 'medium'}
+                              onValueChange={v =>
+                                updateItem(item.clientId, 'actionPriority', v as ActionItemDetails['priority'])
+                              }
+                            >
+                              <SelectTrigger className="min-w-[100px] h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <Button
+                              variant="ghost" size="icon"
+                              onClick={() => removeItem(item.clientId)}
+                              className="h-7 w-7 hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Next meeting */}
+          <Card className="border bg-card/60">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="p-1.5 rounded-lg bg-primary/10"><CalendarPlus className="h-4 w-4 text-primary" /></div>
+                Next Meeting Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {([
+                  { label: 'Date',               type: 'date', key: 'date',              ph: '' },
+                  { label: 'Time',               type: 'time', key: 'time',              ph: '' },
+                  { label: 'Location',           type: 'text', key: 'location',          ph: 'Conference Room or Zoom' },
+                  { label: 'Agenda Highlights',  type: 'text', key: 'agendaHighlights',  ph: 'Brief overview' },
+                ] as const).map(({ label, type, key, ph }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    <Input
+                      type={type}
+                      placeholder={ph}
+                      value={nextMeeting[key]}
+                      onChange={e => setNextField(key, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Tab: Preview ──────────────────────────────────────────────────── */}
+      {activeTab === 'preview' && (
+        <div className="space-y-4">
+          <Card className="border bg-card/60 border-primary/20">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center justify-between text-base">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10"><Eye className="h-4 w-4 text-primary" /></div>
+                  Minutes Preview
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                    <Printer className="h-3.5 w-3.5" />Print
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                    <Download className="h-3.5 w-3.5" />Export PDF
+                  </Button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Print-style document */}
+              <div className="bg-white text-black rounded-xl shadow-lg p-8 max-w-3xl mx-auto border">
+                {/* Doc header */}
+                <div className="text-center border-b-2 border-gray-200 pb-5 mb-6">
+                  <h1 className="text-2xl font-bold mb-2">{title || 'Meeting Minutes'}</h1>
+                  <div className="flex items-center justify-center flex-wrap gap-4 text-sm text-gray-500">
+                    {date && (
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {new Date(formData.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        <Calendar className="h-3.5 w-3.5" />
+                        {new Date(date).toLocaleDateString('en-US', {
+                          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                        })}
                       </span>
                     )}
-                    {formData.time && (
+                    {startTime && (
                       <span className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        {formData.time} - {formData.endTime || ''}
+                        <Clock className="h-3.5 w-3.5" />
+                        {startTime}{endTime ? ` – ${endTime}` : ''}
                       </span>
                     )}
-                    {formData.location && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4" />
-                        {formData.location}
-                      </span>
+                    {location && (
+                      <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{location}</span>
                     )}
                   </div>
                 </div>
+
+                {/* Summary */}
+                {summary && (
+                  <section className="mb-5">
+                    <h2 className="text-xs uppercase font-semibold text-gray-400 mb-2 tracking-wider">Summary</h2>
+                    <p className="text-sm bg-blue-50 border border-blue-100 p-3 rounded-lg">{summary}</p>
+                  </section>
+                )}
 
                 {/* Attendance */}
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Attendance
-                  </h2>
-                  <div className="grid grid-cols-2 gap-4">
+                <section className="mb-6">
+                  <h2 className="text-xs uppercase font-semibold text-gray-400 mb-3 tracking-wider">Attendance</h2>
+                  <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-3">
                     <div>
-                      <h3 className="font-medium text-sm text-gray-600 mb-1">Present ({presentCount})</h3>
-                      <ul className="list-disc list-inside text-sm">
-                        {formData.attendance.filter(a => a.present).map(a => {
-                          const user = users.find(u => u.id === a.userId);
-                          return <li key={a.userId}>{user?.name || 'Unknown'}</li>;
+                      <p className="text-xs font-semibold text-gray-500 mb-1.5">Present ({presentCount})</p>
+                      <ul className="space-y-0.5 text-sm">
+                        {fullAttendance.filter(a => a.present).map(a => {
+                          const u = members.find(m => m.id === a.userId);
+                          return (
+                            <li key={a.userId} className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              {u ? `${u.firstName} ${u.lastName}` : a.userId}
+                            </li>
+                          );
                         })}
                       </ul>
                     </div>
                     <div>
-                      <h3 className="font-medium text-sm text-gray-600 mb-1">Absent ({absentCount})</h3>
-                      <ul className="list-disc list-inside text-sm">
-                        {formData.attendance.filter(a => !a.present).map(a => {
-                          const user = users.find(u => u.id === a.userId);
-                          return <li key={a.userId}>{user?.name || 'Unknown'}</li>;
+                      <p className="text-xs font-semibold text-gray-500 mb-1.5">Absent ({absentCount})</p>
+                      <ul className="space-y-0.5 text-sm">
+                        {fullAttendance.filter(a => !a.present).map(a => {
+                          const u = members.find(m => m.id === a.userId);
+                          return (
+                            <li key={a.userId} className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                              {u ? `${u.firstName} ${u.lastName}` : a.userId}
+                            </li>
+                          );
                         })}
                       </ul>
                     </div>
                   </div>
-                </div>
+                </section>
 
-                {/* Approval of Previous Minutes */}
-                {formData.approvalOfPreviousMinutes && (
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold mb-2">Approval of Previous Minutes</h2>
-                    <p className="text-sm capitalize">{formData.approvalOfPreviousMinutes.replace('_', ' ')}</p>
-                  </div>
+                {approvalOfPrevious && (
+                  <section className="mb-5">
+                    <h2 className="text-xs uppercase font-semibold text-gray-400 mb-2 tracking-wider">Previous Minutes</h2>
+                    <p className="text-sm capitalize">{approvalOfPrevious.replace(/_/g, ' ')}</p>
+                  </section>
                 )}
 
-                {/* Agenda Summaries */}
-                {formData.agendaSummaries.length > 0 && (
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Agenda Item Summaries
-                    </h2>
-                    {formData.agendaSummaries.map((item, index) => (
-                      <div key={item.id} className="mb-4 pl-4 border-l-2 border-gray-200">
-                        <h3 className="font-medium">{item.topic || `Agenda Item ${index + 1}`}</h3>
-                        {item.presenter && (
-                          <p className="text-sm text-gray-600">Presenter: {users.find(u => u.id === item.presenter)?.name}</p>
-                        )}
-                        {item.discussion && (
-                          <p className="text-sm mt-1"><span className="font-medium">Discussion:</span> {item.discussion}</p>
-                        )}
-                        {item.decision && (
-                          <p className="text-sm mt-1"><span className="font-medium">Decision:</span> {item.decision}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                {/* Minute items */}
+                {generalItems.length > 0 && (
+                  <section className="mb-6">
+                    <h2 className="text-xs uppercase font-semibold text-gray-400 mb-3 tracking-wider">Discussion Items</h2>
+                    <div className="space-y-3">
+                      {generalItems.map((item, i) => (
+                        <div key={item.clientId} className="pl-4 border-l-2 border-gray-200">
+                          <p className="font-medium">{item.title || `Item ${i + 1}`}</p>
+                          {item.content && <p className="text-sm mt-0.5 text-gray-700">{item.content}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 )}
 
-                {/* Decisions */}
-                {formData.decisions.length > 0 && (
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                      <Gavel className="h-4 w-4" />
-                      Decisions & Resolutions
-                    </h2>
-                    {formData.decisions.map((decision, index) => (
-                      <div key={decision.id} className="mb-3 p-3 bg-gray-50 rounded">
-                        <h3 className="font-medium">{decision.title || `Decision ${index + 1}`}</h3>
-                        <p className="text-sm">{decision.description}</p>
-                        {decision.approvedBy && (
-                          <p className="text-xs text-gray-600 mt-1">Approved by: {users.find(u => u.id === decision.approvedBy)?.name}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                {/* Decisions & votes */}
+                {decisionItems.length > 0 && (
+                  <section className="mb-6">
+                    <h2 className="text-xs uppercase font-semibold text-gray-400 mb-3 tracking-wider">Decisions & Votes</h2>
+                    <div className="space-y-2">
+                      {decisionItems.map((item, i) => (
+                        <div key={item.clientId} className="p-3 bg-gray-50 rounded-lg">
+                          <p className="font-medium">
+                            {item.title || `${item.type === 'vote' ? 'Vote' : 'Decision'} ${i + 1}`}
+                          </p>
+                          {item.content && <p className="text-sm mt-0.5">{item.content}</p>}
+                          {item.type === 'vote' && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              In Favour: {item.voteInFavor ?? 0} · Against: {item.voteAgainst ?? 0} · Abstain: {item.voteAbstain ?? 0}
+                              {' · '}
+                              <span className={
+                                (item.voteInFavor ?? 0) > (item.voteAgainst ?? 0)
+                                  ? 'text-green-600 font-medium' : 'text-red-600 font-medium'
+                              }>
+                                {(item.voteInFavor ?? 0) > (item.voteAgainst ?? 0) ? 'Passed' : 'Failed'}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 )}
 
-                {/* Action Items */}
-                {formData.actionItems.length > 0 && (
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                      <ListChecks className="h-4 w-4" />
-                      Action Items
-                    </h2>
-                    <table className="w-full text-sm">
+                {/* Action items */}
+                {actionItems.length > 0 && (
+                  <section className="mb-6">
+                    <h2 className="text-xs uppercase font-semibold text-gray-400 mb-3 tracking-wider">Action Items</h2>
+                    <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-left py-2">Action</th>
-                          <th className="text-left py-2">Owner</th>
-                          <th className="text-left py-2">Due Date</th>
-                          <th className="text-left py-2">Status</th>
+                          <th className="text-left py-2 font-semibold text-gray-600">Action</th>
+                          <th className="text-left py-2 font-semibold text-gray-600">Owner</th>
+                          <th className="text-left py-2 font-semibold text-gray-600">Due</th>
+                          <th className="text-left py-2 font-semibold text-gray-600">Priority</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {formData.actionItems.map(item => (
-                          <tr key={item.id} className="border-b">
-                            <td className="py-2">{item.action}</td>
-                            <td className="py-2">{users.find(u => u.id === item.owner)?.name || '-'}</td>
-                            <td className="py-2">{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}</td>
-                            <td className="py-2 capitalize">{item.status.replace('_', ' ')}</td>
+                        {actionItems.map(item => (
+                          <tr key={item.clientId} className="border-b last:border-0">
+                            <td className="py-2">{item.actionDescription || '—'}</td>
+                            <td className="py-2">{fullName(members, item.actionAssigneeId ?? '')}</td>
+                            <td className="py-2">
+                              {item.actionDueDate
+                                ? new Date(item.actionDueDate).toLocaleDateString()
+                                : '—'}
+                            </td>
+                            <td className="py-2">
+                              <span className={`text-xs px-1.5 py-0.5 rounded capitalize ${priorityCls(item.actionPriority)}`}>
+                                {item.actionPriority ?? 'medium'}
+                              </span>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </section>
                 )}
 
-                {/* Next Meeting */}
-                {(formData.nextMeetingDetails.date || formData.nextMeetingDetails.time) && (
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold mb-2">Next Meeting</h2>
+                {/* Next meeting */}
+                {(nextMeeting.date || nextMeeting.time) && (
+                  <section className="mb-6">
+                    <h2 className="text-xs uppercase font-semibold text-gray-400 mb-2 tracking-wider">Next Meeting</h2>
                     <p className="text-sm">
-                      {formData.nextMeetingDetails.date && (
-                        <span>{new Date(formData.nextMeetingDetails.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                      )}
-                      {formData.nextMeetingDetails.time && (
-                        <span> at {formData.nextMeetingDetails.time}</span>
-                      )}
-                      {formData.nextMeetingDetails.location && (
-                        <span> - {formData.nextMeetingDetails.location}</span>
-                      )}
+                      {nextMeeting.date && new Date(nextMeeting.date).toLocaleDateString('en-US', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                      })}
+                      {nextMeeting.time && ` at ${nextMeeting.time}`}
+                      {nextMeeting.location && ` — ${nextMeeting.location}`}
                     </p>
-                    {formData.nextMeetingDetails.agenda && (
-                      <p className="text-sm text-gray-600 mt-1">Agenda: {formData.nextMeetingDetails.agenda}</p>
+                    {nextMeeting.agendaHighlights && (
+                      <p className="text-sm text-gray-500 mt-0.5">Agenda: {nextMeeting.agendaHighlights}</p>
                     )}
-                  </div>
+                  </section>
                 )}
 
                 {/* Footer */}
-                <div className="border-t-2 border-gray-300 pt-4 mt-6 flex justify-between text-sm text-gray-600">
+                <div className="border-t-2 border-gray-200 pt-4 mt-6 flex justify-between text-sm">
                   <div>
-                    <p className="font-medium">Prepared By:</p>
-                    <p>{users.find(u => u.id === formData.preparedBy)?.name || '-'}</p>
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Prepared By</p>
+                    <p className="font-medium mt-0.5">{fullName(members, preparedById)}</p>
                   </div>
-                  <div>
-                    <p className="font-medium">Approved By:</p>
-                    <p>{users.find(u => u.id === formData.approvedBy)?.name || '---'}</p>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Approved By</p>
+                    <p className="font-medium mt-0.5">{fullName(members, approvedById)}</p>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" className="gap-2">
-              <Printer className="h-4 w-4" />
-              Print Preview
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              Export PDF
-            </Button>
-            <Button className="gap-2" onClick={handleSave}>
-              <Save className="h-4 w-4" />
-              Save Minutes
+            <Button variant="outline" className="gap-2"><Printer className="h-4 w-4" />Print</Button>
+            <Button variant="outline" className="gap-2"><Download className="h-4 w-4" />Export PDF</Button>
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={handleSave}>
+              <Save className="h-4 w-4" />Save Minutes
             </Button>
           </div>
         </div>
       )}
+
+      {/* Bottom nav */}
+      <div className="flex justify-between pt-2">
+        <Button variant="outline" onClick={goPrev} disabled={isFirst} className="gap-2">
+          <ArrowLeft className="h-4 w-4" />Previous
+        </Button>
+        <Button onClick={isLast ? handleSave : goNext} className="gap-2 shadow-lg shadow-primary/20">
+          {isLast ? <><Save className="h-4 w-4" />Save Minutes</> : <>Next <ArrowRight className="h-4 w-4" /></>}
+        </Button>
+      </div>
     </div>
   );
 }
