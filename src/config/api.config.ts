@@ -152,6 +152,14 @@ export const ENDPOINTS = {
     PENDING: '/organisations/pending',
   },
 
+  // Custom Roles endpoints
+  CUSTOM_ROLES: {
+    BASE: '/custom-roles',
+    CREATE: '/custom-roles/custom-role',
+    BY_ID: (roleId: string) => `/custom-roles/${roleId}`,
+    TOGGLE_STATUS: (roleId: string) => `/custom-roles/${roleId}/toggle-status`,
+  },
+
   // Settings endpoints
   SETTINGS: {
     BY_ORG: (id: string) => `/settings/organizations/${id}`,
