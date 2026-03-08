@@ -234,17 +234,11 @@ export function Sidebar({ className }: { className?: string }) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   useClickOutside(userMenuRef as React.RefObject<HTMLElement>, () => setUserMenuOpen(false));
 
-  // ── Mount fade-in ────────────────────────────────────────
-  const [mounted, setMounted] = useState(false);
-
-  // ── User — read ONLY in useEffect, never during render ───
-  // This is the fix for "authService is not defined" on first render.
-  const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
-
-  useEffect(() => {
-    setMounted(true);
-    try { setUser(authService.getUser()); } catch { /* unauthenticated */ }
-  }, []);
+  // ── User — read during initialization, not in useEffect ───
+  const [mounted] = useState(true);
+  const [user] = useState<ReturnType<typeof authService.getUser>>(() => {
+    try { return authService.getUser(); } catch { return null; }
+  });
 
   // Persist collapsed state
   useEffect(() => {
