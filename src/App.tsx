@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/sonner";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { SuperAdminLayout } from "@/components/layout/SuperAdminLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
@@ -19,12 +20,22 @@ import { Finance } from "@/pages/Finance";
 import { Announcements } from "@/pages/Announcements";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
-import { CreateAdmin } from "@/pages/admin/CreateAdmin";
+import { SuperAdminDashboard } from "@/pages/super-admin/SuperAdminDashboard";
+import { UsersManagement } from "@/pages/super-admin/UsersManagement";
+import { OrganisationsManagement } from "@/pages/super-admin/OrganisationsManagement";
+import { CreateSuperAdminPage } from "@/pages/super-admin/CreateSuperAdminPage";
+import { MeetingsOverview } from "@/pages/super-admin/MeetingsOverview";
+import { DocumentsOverview } from "@/pages/super-admin/DocumentsOverview";
+import { TasksOverview } from "@/pages/super-admin/TasksOverview";
+import { PollsOverview } from "@/pages/super-admin/PollsOverview";
+import { AnnouncementsOverview } from "@/pages/super-admin/AnnouncementsOverview";
+import { FinanceOverviewPage } from "@/pages/super-admin/FinanceOverviewPage";
+import { SettingsManagement } from "@/pages/super-admin/SettingsManagement";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Home } from "lucide-react";
-import React from "react";
-import { useLocation } from "wouter";
+import { useLocation, Redirect } from "wouter";
+import { authService } from "@/lib/auth";
 
 function UnauthorizedPage() {
   const [, setLocation] = useLocation();
@@ -67,6 +78,15 @@ function NotFoundPage() {
   );
 }
 
+/**
+ * Smart root redirect — super admins go to /super-admin, others go to /dashboard
+ */
+function RootRedirect() {
+  const user = authService.getUser();
+  const isSuperAdmin = user?.role?.toLowerCase() === 'superadmin';
+  return <Redirect to={isSuperAdmin ? '/super-admin' : '/dashboard'} />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -80,26 +100,105 @@ function App() {
           <Route path="/auth/forgot-password" component={ForgotPassword} />
           <Route path="/unauthorized" component={UnauthorizedPage} />
 
-          {/* Root */}
+          {/* Root - redirect based on role */}
           <Route path="/">
             <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
+              <RootRedirect />
             </ProtectedRoute>
           </Route>
 
-          {/* Dashboard */}
+          {/* ═══ SUPER ADMIN ROUTES ═══════════════════════════ */}
+          <Route path="/super-admin">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <SuperAdminDashboard />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/users">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <UsersManagement />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/organisations">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <OrganisationsManagement />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/create-admin">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <CreateSuperAdminPage />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/meetings">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <MeetingsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/documents">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <DocumentsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/tasks">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <TasksOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/polls">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <PollsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/announcements">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <AnnouncementsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/finance">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <FinanceOverviewPage />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/super-admin/settings">
+            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+              <SuperAdminLayout>
+                <SettingsManagement />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* ═══ REGULAR DASHBOARD ROUTES ═════════════════════ */}
           <Route path="/dashboard">
             <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          <Route path="/dashboard/board-member">
-            <ProtectedRoute requiredRole={["board_member", "admin", "super_admin"]}>
               <AppLayout>
                 <Dashboard />
               </AppLayout>
@@ -159,13 +258,13 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-        <Route path="/finance">
-          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
-            <AppLayout>
-              <Finance />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          <Route path="/finance">
+            <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
+              <AppLayout>
+                <Finance />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
           {/* Announcements */}
           <Route path="/announcements">
@@ -176,13 +275,13 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-        <Route path="/reports">
-          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
-            <AppLayout>
-              <Reports />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          <Route path="/reports">
+            <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
+              <AppLayout>
+                <Reports />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
           {/* Settings */}
           <Route path="/settings">
@@ -192,23 +291,6 @@ function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
-          {/* Super Admin */}
-          <Route path="/super-admin">
-            <ProtectedRoute requiredRole="super_admin">
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-        <Route path="/admin/create">
-          <ProtectedRoute allowedRoles={['SuperAdmin']}>
-            <AppLayout>
-              <CreateAdmin />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
 
           {/* 404 Fallback */}
           <Route component={NotFoundPage} />
