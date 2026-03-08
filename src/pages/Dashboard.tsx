@@ -1,5 +1,5 @@
 // src/pages/Dashboard.tsx
-import { useState } from 'react'; 
+import { useState } from 'react';
 import { UpcomingMeetingsWidget } from '@/components/dashboard/UpcomingMeetingsWidget';
 import { OpenActionsWidget } from '@/components/dashboard/OpenActionsWidget';
 import { BudgetSummaryWidget } from '@/components/dashboard/BudgetSummaryWidget';
@@ -157,7 +157,7 @@ function SuperAdminDashboard({ userName }: { userName: string }) {
             />
             <StatCard 
               title="Active Users" 
-              value={analytics?.totalMembers || 0}
+              value={analytics?.openTasks?.length || 0}
               icon={Users}
             />
             <StatCard 
@@ -185,11 +185,11 @@ function SuperAdminDashboard({ userName }: { userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {pendingOrgsList.slice(0, 5).map((org: { id: string; name: string; email?: string }) => (
+                  {pendingOrgsList.slice(0, 5).map((org: { id: string; organisationName?: string; OrgEmail?: string }) => (
                     <div key={org.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
-                        <p className="font-medium">{org.name}</p>
-                        <p className="text-sm text-muted-foreground">{org.email}</p>
+                        <p className="font-medium">{org.organisationName ?? org.id}</p>
+                        <p className="text-sm text-muted-foreground">{org.OrgEmail}</p>
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" variant="default">Approve</Button>
@@ -218,12 +218,12 @@ function SuperAdminDashboard({ userName }: { userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {orgsList.slice(0, 5).map((org: { id: string; name: string; status?: string; memberCount?: number }) => (
+                  {orgsList.slice(0, 5).map((org: { id: string; organisationName?: string; status?: string }) => (
                     <div key={org.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
-                        <p className="font-medium">{org.name}</p>
+                        <p className="font-medium">{org.organisationName ?? org.id}</p>
                         <p className="text-sm text-muted-foreground">
-                          {org.memberCount || 0} members
+                          {org.status || 'Active'}
                         </p>
                       </div>
                       <Badge variant={org.status === 'active' ? 'default' : 'secondary'}>
@@ -251,8 +251,8 @@ function SuperAdminDashboard({ userName }: { userName: string }) {
                 <div className="space-y-4">
                   <ActivityItem label="Organizations" value={orgsList.length} />
                   <ActivityItem label="Pending approvals" value={pendingOrgsList.length} />
-                  <ActivityItem label="Total members" value={analytics?.totalMembers || 0} />
-                  <ActivityItem label="Active meetings" value={analytics?.upcomingMeetings || 0} />
+                  <ActivityItem label="Total members" value={analytics?.openTasks?.length || 0} />
+                  <ActivityItem label="Active meetings" value={analytics?.upcomingMeetings?.length ?? 0} />
                 </div>
               </CardContent>
             </Card>
@@ -367,7 +367,7 @@ function OrgAdminDashboard({ userName }: { userName: string }) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard 
               title="Active Members" 
-              value={analytics?.activeMembers || analytics?.totalMembers || 0}
+              value={analytics?.openTasks?.length || 0}
               icon={Users}
             />
             <StatCard 
@@ -383,9 +383,9 @@ function OrgAdminDashboard({ userName }: { userName: string }) {
             />
             <StatCard 
               title="Budget Used" 
-              value={`${finance?.budgetUtilization || 0}%`}
+              value={`${finance?.budget?.total?.amount ? Math.round((finance.budget.spent?.amount ?? 0) / finance.budget.total.amount * 100) : 0}%`}
               icon={TrendingUp}
-              variant={(finance?.budgetUtilization || 0) > 80 ? 'warning' : 'default'}
+              variant={(finance?.budget?.total?.amount && (finance.budget.spent?.amount ?? 0) / finance.budget.total.amount > 0.8) ? 'warning' : 'default'}
             />
           </div>
 
@@ -395,14 +395,10 @@ function OrgAdminDashboard({ userName }: { userName: string }) {
             <div className="col-span-12 lg:col-span-4 space-y-6">
               <UpcomingMeetingsWidget meetings={upcomingMeetings} />
               <AttendanceWidget attendanceTrend={
-                analytics?.meetingTrend?.map((t, i) => ({
-                  month: new Date(t.date).toLocaleString('default', { month: 'short' }),
-                  attendance: Math.round(((analytics?.attendanceRate || 80) + (i * 2)) % 100)
-                })) || [
-                  { month: 'Jan', attendance: 78 },
-                  { month: 'Feb', attendance: 82 },
-                  { month: 'Mar', attendance: 80 }
-                ]
+                analytics?.attendanceTrend?.map((t: { month: string; value: number }) => ({
+                  month: t.month,
+                  attendance: t.value,
+                })) || []
               } />
             </div>
 
@@ -415,9 +411,9 @@ function OrgAdminDashboard({ userName }: { userName: string }) {
             {/* Right Column */}
             <div className="col-span-12 lg:col-span-3 space-y-6">
               <BudgetSummaryWidget budgetSummary={{
-                totalAllocated: finance?.totalBudget || 0,
-                totalSpent: finance?.spentBudget || 0,
-                percentage: finance?.budgetUtilization || 0,
+                totalAllocated: finance?.budget?.total?.amount || 0,
+                totalSpent: finance?.budget?.spent?.amount || 0,
+                percentage: finance?.budget?.total?.amount ? Math.round((finance.budget.spent?.amount ?? 0) / finance.budget.total.amount * 100) : 0,
               }} />
             </div>
           </div>
@@ -495,7 +491,7 @@ function UserDashboard({ userName }: { userName: string }) {
         <h1 className="text-3xl font-bold tracking-tight">
           Welcome back, {userName?.split(' ')[0] ?? 'User'}!
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="mt-1 text-muted-foreground">
           Here's what's happening with your board today.
         </p>
       </div>
@@ -518,15 +514,17 @@ function UserDashboard({ userName }: { userName: string }) {
             >
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <Megaphone className="h-6 w-6 text-primary" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-lg">{announcement.title}</h3>
-                      <Badge variant="secondary" className="text-xs">Pinned</Badge>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <h3 className="text-lg font-semibold">{announcement.title}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        Pinned
+                      </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
                       {announcement.content}
                     </p>
                   </div>
