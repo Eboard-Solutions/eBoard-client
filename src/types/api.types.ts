@@ -158,36 +158,6 @@ export interface UserPermissions {
 }
 
 // ────────────────────────────────────────────────
-// ORGANISATION TYPES
-// ────────────────────────────────────────────────
-export interface Organisation {
-  id: string;
-  name: string;
-  code: string;
-  status: OrganisationStatus;
-  description?: string;
-  website?: string;
-  email?: string;
-  phoneNumber?: string;
-  address?: string;
-  logoUrl?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateOrganisationData {
-  name: string;
-  description?: string;
-  website?: string;
-  email?: string;
-  phoneNumber?: string;
-  address?: string;
-  logoUrl?: string;
-}
-
-export type UpdateOrganisationData = Partial<CreateOrganisationData>;
-
-// ────────────────────────────────────────────────
 // MEETING TYPES
 // ────────────────────────────────────────────────
 export type MeetingFormat = 'online' | 'in-person' | 'hybrid';
@@ -723,18 +693,24 @@ export interface TaskFilters {
 // ────────────────────────────────────────────────
 // ORGANISATION TYPES
 // ────────────────────────────────────────────────
-export type OrganisationStatus = 'pending' | 'active' | 'suspended' | 'rejected';
+export type OrganisationStatus = 'pending' | 'active' | 'approved' | 'suspended' | 'rejected';
 
 export interface Organisation {
   id: string;
+  organisationId?: string;
   organisationName: string;
+  orgCode?: string;
   OrgEmail: string;
   description?: string;
   address?: string;
   phoneNumber?: string;
   websiteUrl?: string;
   logoUrl?: string;
+  isActive?: boolean;
   status: OrganisationStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -749,74 +725,91 @@ export interface CreateOrganisationData {
   logoUrl?: string;
 }
 
+export type UpdateOrganisationData = Partial<CreateOrganisationData>;
+
 // ────────────────────────────────────────────────
 // SETTINGS TYPES
 // ────────────────────────────────────────────────
-export interface OrganisationSettings {
+export interface PlatformSettings {
   id: string;
-  organisationId: string;
-  theme?: string;
-  language?: string;
-  timezone?: string;
-  dateFormat?: string;
-  emailNotifications?: boolean;
-  pushNotifications?: boolean;
-  meetingReminders?: number; // minutes before
-  quorumPercentage?: number;
-  allowAnonymousVoting?: boolean;
-  requireMeetingApproval?: boolean;
-  documentRetentionDays?: number;
-  createdAt?: string;
-  updatedAt?: string;
+  appName: string;
+  organizationSettings: {
+    name: string;
+    taxId: string;
+    address: string;
+    logoUrl: string;
+    contactEmail: string;
+  };
+  memberSettings: {
+    maxMembers: number;
+    allowProfilePhotos: boolean;
+    requireVerification: boolean;
+    allowSelfRegistration: boolean;
+  };
+  notificationSettings: {
+    weeklyDigest: boolean;
+    taskAssignments: boolean;
+    meetingReminders: boolean;
+    emailNotifications: boolean;
+  };
+  securitySettings: {
+    autoLogout: boolean;
+    pinRequired: boolean;
+    dataEncryption: boolean;
+    sessionTimeout: number;
+    auditLogEnabled: boolean;
+  };
+  integrationSettings: {
+    slackEnabled: boolean;
+    outlookEnabled: boolean;
+    googleCalendarEnabled: boolean;
+  };
+  createdAt?: number;
+  version?: number;
 }
 
+// Keep backward-compat alias
+export type OrganisationSettings = PlatformSettings;
+
 export interface UpdateSettingsData {
-  theme?: string;
-  language?: string;
-  timezone?: string;
-  dateFormat?: string;
-  emailNotifications?: boolean;
-  pushNotifications?: boolean;
-  meetingReminders?: number;
-  quorumPercentage?: number;
-  allowAnonymousVoting?: boolean;
-  requireMeetingApproval?: boolean;
-  documentRetentionDays?: number;
+  appName?: string;
+  organizationSettings?: Partial<PlatformSettings['organizationSettings']>;
+  memberSettings?: Partial<PlatformSettings['memberSettings']>;
+  notificationSettings?: Partial<PlatformSettings['notificationSettings']>;
+  securitySettings?: Partial<PlatformSettings['securitySettings']>;
+  integrationSettings?: Partial<PlatformSettings['integrationSettings']>;
 }
 
 // ────────────────────────────────────────────────
 // OVERVIEW/ANALYTICS TYPES
 // ────────────────────────────────────────────────
 export interface AnalyticsData {
-  totalMeetings: number;
-  completedMeetings: number;
-  upcomingMeetings: number;
-  cancelledMeetings: number;
-  totalTasks: number;
-  completedTasks: number;
-  pendingTasks: number;
-  overdueTasks: number;
-  totalPolls: number;
-  activePolls: number;
-  totalMembers: number;
-  activeMembers: number;
-  attendanceRate: number;
-  meetingTrend: Array<{ date: string; count: number }>;
-  taskTrend: Array<{ date: string; completed: number; created: number }>;
+  upcomingMeetings: Meeting[];
+  openTasks: Task[];
+  activePolls: Poll[];
+  budgetSummary: {
+    totalAllocated: number;
+    totalSpent: number;
+    percentage: number;
+  };
+  recentDocuments: Document[];
+  attendanceTrend: Array<{ month: string; value: number }>;
 }
 
 export interface FinanceOverview {
-  totalBudget: number;
-  allocatedBudget: number;
-  spentBudget: number;
-  remainingBudget: number;
-  budgetUtilization: number;
-  categories: Array<{
-    name: string;
-    allocated: number;
-    spent: number;
-  }>;
-  recentTransactions: Array<{
+  budget: {
+    total: { label: string; amount: number; subtext: string };
+    spent: { label: string; amount: number; subtext: string };
+    categories: Array<{
+      id: string;
+      fiscalYear: string;
+      category: string;
+      allocated: number;
+      spent: number;
+      status: string;
+    }>;
+  };
+  recentExpenses: Array<{
     id: string;
     description: string;
     amount: number;
@@ -830,17 +823,46 @@ export interface FinanceOverview {
 // ────────────────────────────────────────────────
 export interface DashboardStats {
   upcomingMeetings: Meeting[];
-  openTasks: number;
-  activePolls: number;
+  openTasks: Task[];
+  activePolls: Poll[];
   budgetSummary: {
     totalAllocated: number;
     totalSpent: number;
     percentage: number;
   };
   recentDocuments: Document[];
-  attendanceTrend: Array<{ month: string; attendance: number }>;
-  announcementsCount: number;
-  membersCount: number;
+  attendanceTrend: Array<{ month: string; value: number }>;
+}
+
+// ────────────────────────────────────────────────
+// CUSTOM ROLE TYPES
+// ────────────────────────────────────────────────
+export interface CustomRole {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  isActive: boolean;
+  organisationId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateCustomRoleData {
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export type UpdateCustomRoleData = Partial<CreateCustomRoleData>;
+
+// ────────────────────────────────────────────────
+// APPROVE ORGANISATION DTO
+// ────────────────────────────────────────────────
+export interface ApproveOrganisationData {
+  organisationId: string;
+  status: 'approved' | 'rejected';
+  rejectionReason?: string;
 }
 
 // ────────────────────────────────────────────────
