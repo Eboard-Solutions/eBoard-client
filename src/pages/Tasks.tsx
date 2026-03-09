@@ -123,7 +123,7 @@ export function Tasks() {
   };
 
   const TaskCard = ({ task }: { task: TaskDisplay }) => {
-    const assignee = users.find((u: ApiUser) => u.id === task.assigneeId);
+    const assignee = users.find((u: ApiUser) => u.userId === task.assigneeId);
     const dueDate = formatDueDate(task.dueDate);
 
     return (
@@ -251,7 +251,7 @@ export function Tasks() {
                     </SelectTrigger>
                     <SelectContent>
                       {users.map((user: ApiUser) => (
-                        <SelectItem key={user.id} value={user.id}>
+                        <SelectItem key={user.userId} value={user.userId}>
                           {`${user.firstName} ${user.lastName}`}
                         </SelectItem>
                       ))}
@@ -266,10 +266,10 @@ export function Tasks() {
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="URGENT">Urgent</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="LOW">Low</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

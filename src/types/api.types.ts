@@ -177,8 +177,8 @@ export interface UserPermissions {
 // ORGANISATION TYPES
 // ────────────────────────────────────────────────
 export interface Organisation {
-  id: string;
-  name: string;
+  organisationId: string;
+  organisationName: string;
   code: string;
   status: OrganisationStatus;
   description?: string;
@@ -192,7 +192,7 @@ export interface Organisation {
 }
 
 export interface CreateOrganisationData {
-  name: string;
+  organisationName: string;
   description?: string;
   website?: string;
   email?: string;
@@ -702,7 +702,7 @@ export interface Task {
   dueDate?: number;
   meetingId?: string;
   meeting?: Meeting;
-  createdBy: string;
+  createdBy?: string;
   completedAt?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -716,7 +716,7 @@ export interface CreateTaskData {
   assigneeId?: string;
   dueDate?: number;
   meetingId?: string;
-  createdBy: string;
+  createdBy?: string;
 }
 
 export interface UpdateTaskData {
