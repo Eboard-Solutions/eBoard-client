@@ -232,8 +232,9 @@ export function Meetings() {
       // meetingsService.createMeeting() expects ISO strings for startTime / endTime
       await createMutation.mutateAsync({
         ...form,
-        startTime: new Date(`${form.date}T${form.startTime}`).toISOString(),
-        endTime:   new Date(`${form.date}T${form.endTime}`).toISOString(),
+        date: new Date(`${form.date}T00:00:00`).toISOString(),
+        startTime: form.startTime,
+        endTime:  form.endTime
       });
       toast.success('Meeting scheduled successfully!');
       setIsCreateOpen(false);

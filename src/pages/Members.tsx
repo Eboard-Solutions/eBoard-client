@@ -115,7 +115,7 @@ export default function MembersPage() {
       )
       .map(
         (user: ApiUser): DisplayUser => ({
-          id: user.id,
+          id: user.userId,
           name: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email,
           firstName: user.firstName,
           lastName: user.lastName,

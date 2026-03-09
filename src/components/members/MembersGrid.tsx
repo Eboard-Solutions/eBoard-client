@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Edit, Trash2, Mail, Phone, Shield } from 'lucide-react';
 
 interface User {
-  id: string;
+  userId: string;
   name?: string;
   firstName?: string;
   lastName?: string;
@@ -23,7 +23,7 @@ interface User {
 interface Props {
   members: User[];
   onEdit?: (member: User) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (userId: string) => void;
 }
 
 const roleConfig: Record<string, { label: string; className: string }> = {
@@ -48,8 +48,9 @@ const avatarColors = [
   'from-rose-500 to-pink-600',
 ];
 
-function getAvatarColor(id: string) {
-  const index = id.charCodeAt(0) % avatarColors.length;
+function getAvatarColor(userId: string) {
+  if(!userId) return avatarColors[0];
+  const index = userId.charCodeAt(0) % avatarColors.length;
   return avatarColors[index];
 }
 
@@ -60,11 +61,11 @@ export default function MembersGrid({ members, onEdit, onDelete }: Props) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
       {members.map((user) => {
         const { label, className } = role(user.role);
-        const gradientColor = getAvatarColor(user.id);
+        const gradientColor = getAvatarColor(user.userId);
 
         return (
           <Card
-            key={user.id}
+            key={user.userId}
             className="group relative overflow-hidden border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200"
           >
             {/* Top accent bar */}
@@ -146,7 +147,7 @@ export default function MembersGrid({ members, onEdit, onDelete }: Props) {
                       variant="outline"
                       size="sm"
                       className="flex-1 h-8 text-xs gap-1.5 hover:bg-destructive/5 hover:border-destructive/30 hover:text-destructive transition-colors"
-                      onClick={() => onDelete(user.id)}
+                      onClick={() => onDelete(user.userId)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Remove
