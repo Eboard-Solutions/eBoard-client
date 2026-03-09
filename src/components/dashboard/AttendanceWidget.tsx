@@ -10,8 +10,15 @@ interface AttendanceWidgetProps {
 }
 
 export function AttendanceWidget({ attendanceTrend }: AttendanceWidgetProps) {
-  const averageAttendance = attendanceTrend.reduce((sum, item) => sum + item.attendance, 0) / attendanceTrend.length;
-  const latestAttendance = attendanceTrend[attendanceTrend.length - 1].attendance;
+  const averageAttendance =
+    attendanceTrend.length > 0
+      ? attendanceTrend.reduce((sum, item) => sum + item.attendance, 0) / attendanceTrend.length
+      : 0;
+
+  const latestAttendance = attendanceTrend.length > 0
+    ? attendanceTrend[attendanceTrend.length - 1].attendance
+    : 0;
+
   const trend = latestAttendance > averageAttendance ? 'up' : 'down';
 
   return (
@@ -20,6 +27,7 @@ export function AttendanceWidget({ attendanceTrend }: AttendanceWidgetProps) {
         <CardTitle className="text-lg font-semibold">Meeting Attendance</CardTitle>
         <Button variant="ghost" size="sm">View Report</Button>
       </CardHeader>
+
       <CardContent className="space-y-4">
         {/* Current Stats */}
         <div className="flex items-center justify-between">
@@ -33,17 +41,17 @@ export function AttendanceWidget({ attendanceTrend }: AttendanceWidgetProps) {
           </div>
         </div>
 
-        {/* Chart */}
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
+        {/* Chart – fixed height variant (strongly recommended) */}
+        <div className="h-48"> {/* keep this – gives definite height */}
+          <ResponsiveContainer width="100%" height={192}> {/* ← use pixels here (h-48 = 12rem = 192px) */}
             <LineChart data={attendanceTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
               />
-              <YAxis 
+              <YAxis
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 domain={[0, 100]}
@@ -55,10 +63,10 @@ export function AttendanceWidget({ attendanceTrend }: AttendanceWidgetProps) {
                   borderRadius: '8px',
                 }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="attendance" 
-                stroke="hsl(var(--primary))" 
+              <Line
+                type="monotone"
+                dataKey="attendance"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 dot={{ fill: 'hsl(var(--primary))', r: 4 }}
                 activeDot={{ r: 6 }}
@@ -70,8 +78,13 @@ export function AttendanceWidget({ attendanceTrend }: AttendanceWidgetProps) {
         {/* Trend Indicator */}
         <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
           <span className="text-muted-foreground">Trend</span>
-          <span className={trend === 'up' ? 'text-success font-medium' : 'text-destructive font-medium'}>
-            {trend === 'up' ? '↑' : '↓'} {Math.abs(latestAttendance - averageAttendance).toFixed(1)}% vs average
+          <span
+            className={
+              trend === 'up' ? 'text-success font-medium' : 'text-destructive font-medium'
+            }
+          >
+            {trend === 'up' ? '↑' : '↓'}{' '}
+            {Math.abs(latestAttendance - averageAttendance).toFixed(1)}% vs average
           </span>
         </div>
       </CardContent>

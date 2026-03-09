@@ -185,8 +185,8 @@ function SuperAdminDashboard({ userName }: { userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {pendingOrgsList.slice(0, 5).map((org: { id: string; organisationName?: string; OrgEmail?: string }) => (
-                    <div key={org.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  {pendingOrgsList.slice(0, 5).map((org: { organisationId: string; name: string; email?: string }) => (
+                    <div key={org.organisationId} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
                         <p className="font-medium">{org.organisationName ?? org.id}</p>
                         <p className="text-sm text-muted-foreground">{org.OrgEmail}</p>
@@ -218,8 +218,8 @@ function SuperAdminDashboard({ userName }: { userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {orgsList.slice(0, 5).map((org: { id: string; organisationName?: string; status?: string }) => (
-                    <div key={org.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  {orgsList.slice(0, 5).map((org: { organisationId: string; name: string; status?: string; memberCount?: number }) => (
+                    <div key={org.organisationId} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
                         <p className="font-medium">{org.organisationName ?? org.id}</p>
                         <p className="text-sm text-muted-foreground">

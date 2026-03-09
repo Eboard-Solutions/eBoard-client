@@ -35,7 +35,7 @@ interface UsePermissionsResult {
   can: (perm: Permission) => boolean;
   isSuperAdmin: boolean;
   isOrgAdmin: boolean;
-  currentOrgId: string | null;
+  currentorganisationId: string | null;
   user: AuthenticatedUser | null;
   isLoading: boolean;
   authError: string | null;
@@ -119,8 +119,8 @@ export function usePermissions(): UsePermissionsResult {
     [normalizedRole]
   );
 
-  // Fallback to null (not a dummy string) to avoid sending invalid orgId to backend
-  const currentOrgId = user?.orgCode ?? null;
+  // Fallback to null (not a dummy string) to avoid sending invalid organisationId to backend
+  const currentorganisationId = user?.orgCode ?? null;
 
   const can = useCallback((permission: Permission): boolean => {
     if (isLoading || !user) return false;
@@ -155,7 +155,7 @@ export function usePermissions(): UsePermissionsResult {
     can,
     isSuperAdmin,
     isOrgAdmin,
-    currentOrgId,
+    currentorganisationId,
     user,
     isLoading,
     authError: error,

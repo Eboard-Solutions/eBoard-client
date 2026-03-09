@@ -92,7 +92,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router base="/">
         <Switch>
-          {/* Auth Routes - No Layout */}
+          {/* ── Auth Routes (no layout) ───────────────────── */}
           <Route path="/auth/signin" component={SignIn} />
           <Route path="/auth/sign-up" component={SignUp} />
           <Route path="/auth/signup" component={SignUp} />
@@ -205,7 +205,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Meetings */}
+          {/* ── Meetings ─────────────────────────────────── */}
           <Route path="/meetings">
             <ProtectedRoute>
               <AppLayout>
@@ -222,7 +222,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Members */}
+          {/* ── Members ──────────────────────────────────── */}
           <Route path="/members">
             <ProtectedRoute>
               <AppLayout>
@@ -231,7 +231,49 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Documents */}
+          {/* ── Organisation ─────────────────────────────── */}
+          <Route path="/organisation">
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin", "Admin"]}>
+              <AppLayout>
+                <OrganisationPage />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* Settings sub-routes used by sidebar user-menu */}
+          <Route path="/settings/profile">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/org">
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
+              <AppLayout>
+                <OrganisationPage />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/security">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/notifications">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* ── Documents ────────────────────────────────── */}
           <Route path="/documents">
             <ProtectedRoute>
               <AppLayout>
@@ -240,7 +282,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Voting */}
+          {/* ── Voting ───────────────────────────────────── */}
           <Route path="/voting">
             <ProtectedRoute>
               <AppLayout>
@@ -249,7 +291,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Tasks */}
+          {/* ── Tasks ────────────────────────────────────── */}
           <Route path="/tasks">
             <ProtectedRoute>
               <AppLayout>
@@ -266,7 +308,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Announcements */}
+          {/* ── Announcements ────────────────────────────── */}
           <Route path="/announcements">
             <ProtectedRoute>
               <AppLayout>
@@ -283,7 +325,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Settings */}
+          {/* ── Settings ─────────────────────────────────── */}
           <Route path="/settings">
             <ProtectedRoute>
               <AppLayout>
@@ -292,7 +334,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* 404 Fallback */}
+          {/* ── 404 Fallback ─────────────────────────────── */}
           <Route component={NotFoundPage} />
         </Switch>
         <Toaster />
