@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { authService } from '@/lib/auth';
 
 // ─────────────────────────────────────────────────────────
-// TYPES & NAV STRUCTURE (unchanged)
+// TYPES & NAV STRUCTURE
 // ─────────────────────────────────────────────────────────
 interface NavItem {
   icon: React.ElementType;
@@ -33,6 +33,7 @@ const mainNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { icon: DollarSign, label: 'Finance', href: '/finance' },
+  { icon: Building2, label: 'Organisation', href: '/organisation' },  // ← NEW
   { icon: Bell, label: 'Announcements', href: '/announcements', badge: 3 },
   { icon: BarChart3, label: 'Reports', href: '/reports' },
 ];
@@ -43,7 +44,7 @@ const bottomNav: NavItem[] = [
 ];
 
 // ─────────────────────────────────────────────────────────
-// THEME HOOK (unchanged)
+// THEME HOOK
 // ─────────────────────────────────────────────────────────
 function useTheme() {
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -61,7 +62,7 @@ function useTheme() {
 }
 
 // ─────────────────────────────────────────────────────────
-// CLICK OUTSIDE (unchanged)
+// CLICK OUTSIDE
 // ─────────────────────────────────────────────────────────
 function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
   useEffect(() => {
@@ -74,7 +75,7 @@ function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
 }
 
 // ─────────────────────────────────────────────────────────
-// TOOLTIP (refined shadow & positioning)
+// TOOLTIP
 // ─────────────────────────────────────────────────────────
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -98,7 +99,7 @@ function Tooltip({ label, children }: { label: string; children: React.ReactNode
 }
 
 // ─────────────────────────────────────────────────────────
-// SECTION LABEL (unchanged)
+// SECTION LABEL
 // ─────────────────────────────────────────────────────────
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
   if (collapsed) return <div className="my-3 h-px bg-gray-200/70 dark:bg-gray-800/50 mx-3" />;
@@ -110,7 +111,7 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
 }
 
 // ─────────────────────────────────────────────────────────
-// NAV LINK (enhanced hover, focus, active states)
+// NAV LINK
 // ─────────────────────────────────────────────────────────
 function NavLink({
   item,
@@ -178,16 +179,15 @@ function NavLink({
 }
 
 // ─────────────────────────────────────────────────────────
-// MAIN SIDEBAR (responsive defaults + polish)
+// MAIN SIDEBAR
 // ─────────────────────────────────────────────────────────
 export function Sidebar({ className }: { className?: string }) {
   const [location] = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true; // default collapsed on server & mobile-first
+    if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('sidebar-collapsed');
-    // On mobile-ish widths, prefer collapsed even if saved expanded
     return saved === 'true' || window.innerWidth < 768;
   });
 
@@ -207,7 +207,6 @@ export function Sidebar({ className }: { className?: string }) {
     localStorage.setItem('sidebar-collapsed', String(collapsed));
   }, [collapsed]);
 
-  // ⌘K handler (unchanged)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -352,7 +351,7 @@ export function Sidebar({ className }: { className?: string }) {
         ))}
       </div>
 
-      {/* User Section (refined dropdown) */}
+      {/* User Section */}
       <div ref={userMenuRef} className="border-t border-gray-200/70 dark:border-gray-800/70 py-3 px-3">
         {collapsed ? (
           <Tooltip label={`${fullName} · ${roleName}`}>
@@ -430,7 +429,7 @@ export function Sidebar({ className }: { className?: string }) {
                 <div className="p-2 space-y-1">
                   {[
                     { icon: UserCog, label: 'Profile Settings', href: '/settings/profile' },
-                    { icon: Building2, label: 'Organization', href: '/settings/org' },
+                    { icon: Building2, label: 'Organisation', href: '/organisation' },
                     { icon: Lock, label: 'Security & Privacy', href: '/settings/security' },
                     { icon: Bell, label: 'Notifications', href: '/settings/notifications' },
                   ].map(({ icon: Icon, label, href }) => (

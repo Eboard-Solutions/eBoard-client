@@ -113,19 +113,35 @@ export type UserRole =
 export type UserStatus = 'active' | 'pending' | 'suspended' | 'invited' | 'deactivated';
 
 export interface User {
-  id: string;
+  userId: string;
   firstName: string;
   lastName: string;
   email: string;
+
+  password: string;
+  mustChangePassword?: boolean;
+  passwordChangeAt?: Date;
+
   role: UserRole;
-  status?: UserStatus;
+  customRoleId?: string | null;
+  isOrganisationAdmin?: boolean;
+
   title?: string;
   phoneNumber?: string;
   profilePictureUrl?: string;
-  organisationId?: string;
-  isActive?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+
+  status?: UserStatus;
+  lastLogin?: Date;
+
+  refreshToken?: string;
+
+  organisationId?: string | null;
+
+  passwordResetToken?: string;
+  passwordResetTokenExpiry?: Date;
+
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export interface CreateUserData {
@@ -726,7 +742,7 @@ export interface TaskFilters {
 export type OrganisationStatus = 'pending' | 'active' | 'suspended' | 'rejected';
 
 export interface Organisation {
-  id: string;
+  organisationId: string;
   organisationName: string;
   OrgEmail: string;
   description?: string;
