@@ -195,13 +195,11 @@ export function Sidebar({ className }: { className?: string }) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   useClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
-  const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
-
-  useEffect(() => {
-    setMounted(true);
-    try { setUser(authService.getUser()); } catch {}
-  }, []);
+  // ── User — read during initialization, not in useEffect ───
+  const [mounted] = useState(true);
+  const [user] = useState<ReturnType<typeof authService.getUser>>(() => {
+    try { return authService.getUser(); } catch { return null; }
+  });
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', String(collapsed));

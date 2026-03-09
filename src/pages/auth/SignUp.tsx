@@ -3,8 +3,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Loader2, User, Mail, Lock, Eye, EyeOff, Phone,
@@ -48,7 +46,7 @@ function Field({
       </div>
       {error && (
         <p className="flex items-center gap-1 text-xs text-red-500 mt-1">
-          <XCircle className="h-3 w-3 flex-shrink-0" />{error}
+          <XCircle className="h-3 w-3 shrink-0" />{error}
         </p>
       )}
       {hint && !error && (
@@ -185,8 +183,8 @@ export function SignUp() {
         >
           <div className="flex items-start gap-3">
             {notification.type === 'success'
-              ? <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-              : <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />}
+              ? <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
+              : <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />}
             <div>
               <p className="font-semibold text-sm">{notification.message}</p>
               {notification.description && (
@@ -198,7 +196,7 @@ export function SignUp() {
       )}
 
       {/* ════════════════ LEFT PANEL ════════════════ */}
-      <div className="hidden lg:flex lg:w-[40%] flex-col justify-between relative overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-600 p-14">
+      <div className="hidden lg:flex lg:w-[40%] flex-col justify-between relative overflow-hidden bg-linear-to-br from-indigo-700 via-indigo-600 to-blue-600 p-14">
         {/* background texture */}
         <div className="absolute inset-0"
           style={{
@@ -218,7 +216,7 @@ export function SignUp() {
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 overflow-hidden shadow-lg flex-shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 overflow-hidden shadow-lg shrink-0">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board"
@@ -250,7 +248,7 @@ export function SignUp() {
                 className="flex items-start gap-3 group"
                 style={{ animationDelay: `${i * 80}ms` }}
               >
-                <div className="flex-shrink-0 mt-0.5 w-7 h-7 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center text-indigo-100 group-hover:bg-white/25 transition-colors duration-200">
+                <div className="shrink-0 mt-0.5 w-7 h-7 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center text-indigo-100 group-hover:bg-white/25 transition-colors duration-200">
                   {p.icon}
                 </div>
                 <p className="text-indigo-100 text-sm leading-relaxed">{p.text}</p>
@@ -275,7 +273,7 @@ export function SignUp() {
       </div>
 
       {/* ════════════════ RIGHT PANEL ════════════════ */}
-      <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 overflow-y-auto">
+      <div className="flex-1 bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 overflow-y-auto">
         <div
           className="min-h-full flex items-center justify-center px-6 py-14 lg:px-14"
           style={{
@@ -287,7 +285,7 @@ export function SignUp() {
 
             {/* Mobile logo */}
             <div className="flex items-center gap-3 lg:hidden">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-700 overflow-hidden shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-indigo-600 to-blue-700 overflow-hidden shadow-lg shrink-0">
                 <img
                   src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
                   alt="E-Board"
@@ -323,7 +321,7 @@ export function SignUp() {
               }}
             >
               {/* accent bar */}
-              <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-400" />
+              <div className="h-1 w-full bg-linear-to-r from-indigo-500 via-blue-500 to-indigo-400" />
 
               {/* section label */}
               <div className="px-8 pt-8 pb-2">
@@ -528,7 +526,7 @@ export function SignUp() {
                       disabled={isLoading}
                       className={cx(
                         'w-full h-12 rounded-xl text-white text-sm font-semibold relative overflow-hidden',
-                        'bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-lg',
+                        'bg-linear-to-r from-indigo-600 to-indigo-700 shadow-lg',
                         'hover:from-indigo-700 hover:to-blue-700 hover:shadow-xl hover:shadow-indigo-500/25',
                         'disabled:opacity-60 disabled:cursor-not-allowed',
                         'transition-all duration-200 group',

@@ -97,7 +97,7 @@ export function SuperAdminLogin() {
   // ────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/20 px-5 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 via-slate-100 to-blue-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/20 px-5 py-12 sm:px-6 lg:px-8">
       {notification && (
         <div
           className={`fixed top-5 right-5 z-50 w-full max-w-sm sm:max-w-md animate-in slide-in-from-top-6 fade-in-5 duration-300 ${
@@ -108,9 +108,9 @@ export function SuperAdminLogin() {
         >
           <div className="flex items-start gap-3">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
             ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
             )}
             <div className="flex-1">
               <p
@@ -136,7 +136,7 @@ export function SuperAdminLogin() {
 
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-xl mb-5 mx-auto">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-600 to-blue-700 shadow-xl mb-5 mx-auto">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="Logo"
@@ -224,7 +224,7 @@ export function SuperAdminLogin() {
               <Button
                 type="submit"
                 disabled={isLoading || !email.trim() || !password}
-                className="w-full h-12 mt-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60"
+                className="w-full h-12 mt-4 bg-linear-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60"
               >
                 {isLoading ? (
                   <>
