@@ -8,16 +8,16 @@ import type { UpdateSettingsData } from '@/types/api.types';
 // Query keys
 export const settingsKeys = {
   all: ['settings'] as const,
-  byOrg: (orgId: string) => [...settingsKeys.all, 'org', orgId] as const,
+  byOrg: (organisationId: string) => [...settingsKeys.all, 'org', organisationId] as const,
   default: () => [...settingsKeys.all, 'default'] as const,
 };
 
 // Get settings by organization ID
-export function useOrganisationSettings(orgId: string) {
+export function useOrganisationSettings(organisationId: string) {
   return useQuery({
-    queryKey: settingsKeys.byOrg(orgId),
-    queryFn: () => SettingsService.getByOrgId(orgId),
-    enabled: !!orgId,
+    queryKey: settingsKeys.byOrg(organisationId),
+    queryFn: () => SettingsService.getByorganisationId(organisationId),
+    enabled: !!organisationId,
   });
 }
 

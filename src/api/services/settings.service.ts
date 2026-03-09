@@ -7,8 +7,8 @@ import type { OrganisationSettings, UpdateSettingsData } from '@/types/api.types
 
 export const SettingsService = {
   // Get settings for organization
-  async getByOrgId(orgId: string): Promise<OrganisationSettings> {
-    const response = await apiClient.get(ENDPOINTS.SETTINGS.BY_ORG(orgId));
+  async getByorganisationId(organisationId: string): Promise<OrganisationSettings> {
+    const response = await apiClient.get(ENDPOINTS.SETTINGS.BY_ORG(organisationId));
     return response.data.data || response.data;
   },
 

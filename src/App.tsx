@@ -20,6 +20,7 @@ import { Announcements } from "@/pages/Announcements";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
 import { CreateAdmin } from "@/pages/admin/CreateAdmin";
+import OrganisationPage from "@/pages/Organisation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Home } from "lucide-react";
@@ -72,7 +73,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router base="/">
         <Switch>
-          {/* Auth Routes - No Layout */}
+          {/* ── Auth Routes (no layout) ───────────────────── */}
           <Route path="/auth/signin" component={SignIn} />
           <Route path="/auth/sign-up" component={SignUp} />
           <Route path="/auth/signup" component={SignUp} />
@@ -80,7 +81,7 @@ function App() {
           <Route path="/auth/forgot-password" component={ForgotPassword} />
           <Route path="/unauthorized" component={UnauthorizedPage} />
 
-          {/* Root */}
+          {/* ── Root / Dashboard ─────────────────────────── */}
           <Route path="/">
             <ProtectedRoute>
               <AppLayout>
@@ -89,7 +90,6 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Dashboard */}
           <Route path="/dashboard">
             <ProtectedRoute>
               <AppLayout>
@@ -99,14 +99,14 @@ function App() {
           </Route>
 
           <Route path="/dashboard/board-member">
-            <ProtectedRoute requiredRole={["board_member", "admin", "super_admin"]}>
+            <ProtectedRoute allowedRoles={["BoardMember", "Admin", "OrgAdmin", "SuperAdmin"]}>
               <AppLayout>
                 <Dashboard />
               </AppLayout>
             </ProtectedRoute>
           </Route>
 
-          {/* Meetings */}
+          {/* ── Meetings ─────────────────────────────────── */}
           <Route path="/meetings">
             <ProtectedRoute>
               <AppLayout>
@@ -123,7 +123,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Members */}
+          {/* ── Members ──────────────────────────────────── */}
           <Route path="/members">
             <ProtectedRoute>
               <AppLayout>
@@ -132,7 +132,49 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Documents */}
+          {/* ── Organisation ─────────────────────────────── */}
+          <Route path="/organisation">
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin", "Admin"]}>
+              <AppLayout>
+                <OrganisationPage />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* Settings sub-routes used by sidebar user-menu */}
+          <Route path="/settings/profile">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/org">
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
+              <AppLayout>
+                <OrganisationPage />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/security">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/notifications">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* ── Documents ────────────────────────────────── */}
           <Route path="/documents">
             <ProtectedRoute>
               <AppLayout>
@@ -141,7 +183,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Voting */}
+          {/* ── Voting ───────────────────────────────────── */}
           <Route path="/voting">
             <ProtectedRoute>
               <AppLayout>
@@ -150,7 +192,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Tasks */}
+          {/* ── Tasks ────────────────────────────────────── */}
           <Route path="/tasks">
             <ProtectedRoute>
               <AppLayout>
@@ -159,15 +201,16 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-        <Route path="/finance">
-          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
-            <AppLayout>
-              <Finance />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* ── Finance (admin only) ─────────────────────── */}
+          <Route path="/finance">
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
+              <AppLayout>
+                <Finance />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-          {/* Announcements */}
+          {/* ── Announcements ────────────────────────────── */}
           <Route path="/announcements">
             <ProtectedRoute>
               <AppLayout>
@@ -176,15 +219,16 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-        <Route path="/reports">
-          <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
-            <AppLayout>
-              <Reports />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          {/* ── Reports (admin only) ─────────────────────── */}
+          <Route path="/reports">
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
+              <AppLayout>
+                <Reports />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-          {/* Settings */}
+          {/* ── Settings ─────────────────────────────────── */}
           <Route path="/settings">
             <ProtectedRoute>
               <AppLayout>
@@ -193,24 +237,34 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Super Admin */}
+          {/* ── Help ─────────────────────────────────────── */}
+          <Route path="/help">
+            <ProtectedRoute>
+              <AppLayout>
+                {/* Swap for a dedicated <Help /> page when available */}
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          {/* ── Admin ────────────────────────────────────── */}
           <Route path="/super-admin">
-            <ProtectedRoute requiredRole="super_admin">
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <AppLayout>
                 <Dashboard />
               </AppLayout>
             </ProtectedRoute>
           </Route>
 
-        <Route path="/admin/create">
-          <ProtectedRoute allowedRoles={['SuperAdmin']}>
-            <AppLayout>
-              <CreateAdmin />
-            </AppLayout>
-          </ProtectedRoute>
-        </Route>
+          <Route path="/admin/create">
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
+              <AppLayout>
+                <CreateAdmin />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
 
-          {/* 404 Fallback */}
+          {/* ── 404 Fallback ─────────────────────────────── */}
           <Route component={NotFoundPage} />
         </Switch>
         <Toaster />

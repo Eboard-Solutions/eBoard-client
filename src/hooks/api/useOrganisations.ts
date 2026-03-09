@@ -27,11 +27,11 @@ export function useOrganisations() {
 }
 
 // Get organisation by ID
-export function useOrganisationById(orgId: string) {
+export function useOrganisationById(organisationId: string) {
   return useQuery({
-    queryKey: organisationKeys.detail(orgId),
-    queryFn: () => OrganisationsService.getById(orgId),
-    enabled: !!orgId,
+    queryKey: organisationKeys.detail(organisationId),
+    queryFn: () => OrganisationsService.getById(organisationId),
+    enabled: !!organisationId,
   });
 }
 
@@ -59,10 +59,10 @@ export function useRegisterOrganisation() {
 export function useUpdateOrganisation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ orgId, data }: { orgId: string; data: UpdateOrganisationData }) =>
-      OrganisationsService.update(orgId, data),
-    onSuccess: (_, { orgId }) => {
-      queryClient.invalidateQueries({ queryKey: organisationKeys.detail(orgId) });
+    mutationFn: ({ organisationId, data }: { organisationId: string; data: UpdateOrganisationData }) =>
+      OrganisationsService.update(organisationId, data),
+    onSuccess: (_, { organisationId }) => {
+      queryClient.invalidateQueries({ queryKey: organisationKeys.detail(organisationId) });
       queryClient.invalidateQueries({ queryKey: organisationKeys.lists() });
     },
   });
@@ -72,7 +72,7 @@ export function useUpdateOrganisation() {
 export function useDeleteOrganisation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (orgId: string) => OrganisationsService.delete(orgId),
+    mutationFn: (organisationId: string) => OrganisationsService.delete(organisationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organisationKeys.lists() });
     },
@@ -83,9 +83,9 @@ export function useDeleteOrganisation() {
 export function useApproveOrganisation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (orgId: string) => OrganisationsService.approve(orgId),
-    onSuccess: (_, orgId) => {
-      queryClient.invalidateQueries({ queryKey: organisationKeys.detail(orgId) });
+    mutationFn: (organisationId: string) => OrganisationsService.approve(organisationId),
+    onSuccess: (_, organisationId) => {
+      queryClient.invalidateQueries({ queryKey: organisationKeys.detail(organisationId) });
       queryClient.invalidateQueries({ queryKey: organisationKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organisationKeys.pending() });
     },

@@ -125,16 +125,16 @@ export async function fetchOrganizations(): Promise<Organization[]> {
 }
 
 // ── Fetch single organization by ID (for OrgAdmin "my organization") ──
-export async function fetchMyOrganization(orgId: string): Promise<Organization | null> {
-  if (!orgId) {
-    console.warn('fetchMyOrganization called without orgId');
+export async function fetchMyOrganization(organisationId: string): Promise<Organization | null> {
+  if (!organisationId) {
+    console.warn('fetchMyOrganization called without organisationId');
     return null;
   }
 
   try {
-    console.log('🔍 Fetching my organization:', orgId);
+    console.log('🔍 Fetching my organization:', organisationId);
 
-    const response = await apiClient.get(`/organisations/${orgId}`);
+    const response = await apiClient.get(`/organisations/${organisationId}`);
     const data = response.data.data || response.data;
     const org = data.organization || data.organisation || data;
 
