@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { authService } from '@/lib/auth';
 
 // ─────────────────────────────────────────────────────────
-// TYPES
+// TYPES & NAV STRUCTURE (unchanged)
 // ─────────────────────────────────────────────────────────
 interface NavItem {
   icon: React.ElementType;
@@ -22,59 +22,46 @@ interface NavItem {
   badge?: number;
 }
 
-// ─────────────────────────────────────────────────────────
-// NAV STRUCTURE  (flat — no submenus)
-// ─────────────────────────────────────────────────────────
 const mainNav: NavItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard',     href: '/' },
-  { icon: Calendar,        label: 'Meetings',      href: '/meetings',      badge: 2 },
-  { icon: Users,           label: 'Members',       href: '/members' },
-  { icon: FileText,        label: 'Documents',     href: '/documents' },
-  { icon: Vote,            label: 'Voting',        href: '/voting',        badge: 1 },
-  { icon: CheckSquare,     label: 'Tasks',         href: '/tasks',         badge: 5 },
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
+  { icon: Calendar, label: 'Meetings', href: '/meetings', badge: 2 },
+  { icon: Users, label: 'Members', href: '/members' },
+  { icon: FileText, label: 'Documents', href: '/documents' },
+  { icon: Vote, label: 'Voting', href: '/voting', badge: 1 },
+  { icon: CheckSquare, label: 'Tasks', href: '/tasks', badge: 5 },
 ];
 
 const adminNav: NavItem[] = [
-  { icon: DollarSign, label: 'Finance',       href: '/finance' },
-  { icon: Bell,       label: 'Announcements', href: '/announcements', badge: 3 },
-  { icon: BarChart3,  label: 'Reports',       href: '/reports' },
+  { icon: DollarSign, label: 'Finance', href: '/finance' },
+  { icon: Bell, label: 'Announcements', href: '/announcements', badge: 3 },
+  { icon: BarChart3, label: 'Reports', href: '/reports' },
 ];
 
 const bottomNav: NavItem[] = [
-  { icon: Settings,   label: 'Settings', href: '/settings' },
-  { icon: HelpCircle, label: 'Help',     href: '/help' },
+  { icon: Settings, label: 'Settings', href: '/settings' },
+  { icon: HelpCircle, label: 'Help', href: '/help' },
 ];
 
 // ─────────────────────────────────────────────────────────
-// THEME HOOK
-// Light is the strict default on first visit.
-// System prefers-color-scheme is intentionally ignored unless
-// the user has already saved a preference.
+// THEME HOOK (unchanged)
 // ─────────────────────────────────────────────────────────
 function useTheme() {
-  // Read saved pref synchronously so no flash — but default to light
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('eboard-theme');
-    // Only honour 'dark' if explicitly saved — never read system pref
     return saved === 'dark';
   });
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDark);
     localStorage.setItem('eboard-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
-  const toggle = useCallback(() => setIsDark(p => !p), []);
-  return { isDark, toggle };
+  return { isDark, toggle: useCallback(() => setIsDark(p => !p), []) };
 }
 
 // ─────────────────────────────────────────────────────────
-// CLICK OUTSIDE
+// CLICK OUTSIDE (unchanged)
 // ─────────────────────────────────────────────────────────
 function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
   useEffect(() => {
@@ -87,50 +74,43 @@ function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
 }
 
 // ─────────────────────────────────────────────────────────
-// TOOLTIP  (collapsed mode)
+// TOOLTIP (refined shadow & positioning)
 // ─────────────────────────────────────────────────────────
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="group/tip relative">
+    <div className="group relative">
       {children}
       <div
-        role="tooltip"
         className={cn(
-          'pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[300]',
-          'rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold whitespace-nowrap',
-          // Light: dark tooltip  |  Dark: lighter tooltip
-          'bg-gray-900 text-white dark:bg-gray-700 dark:text-gray-100',
-          'border border-white/10 shadow-xl',
-          // Animation
-          'opacity-0 translate-x-1.5 scale-95',
-          'group-hover/tip:opacity-100 group-hover/tip:translate-x-0 group-hover/tip:scale-100',
-          'transition-all duration-150',
+          'pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 z-50',
+          'rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap',
+          'bg-gray-900/95 text-white dark:bg-gray-800/95 dark:text-gray-100',
+          'border border-gray-700/50 shadow-xl backdrop-blur-sm',
+          'opacity-0 translate-x-2 scale-95 group-hover:opacity-100 group-hover:translate-x-0 group-hover:scale-100',
+          'transition-all duration-200 ease-out'
         )}
       >
         {label}
-        {/* Arrow */}
-        <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-gray-900 dark:border-r-gray-700" />
+        <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900/95 dark:border-r-gray-800/95" />
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// SECTION LABEL
+// SECTION LABEL (unchanged)
 // ─────────────────────────────────────────────────────────
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) {
-    return <div className="my-2 mx-1.5 h-px bg-gray-200 dark:bg-gray-800" />;
-  }
+  if (collapsed) return <div className="my-3 h-px bg-gray-200/70 dark:bg-gray-800/50 mx-3" />;
   return (
-    <p className="px-3 pt-4 pb-1 text-[9px] font-black uppercase tracking-[0.16em] text-gray-400 dark:text-gray-600 select-none">
+    <p className="px-3.5 pt-5 pb-2 text-[10px] font-black uppercase tracking-widest text-gray-500/90 dark:text-gray-500 select-none">
       {label}
     </p>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// NAV LINK
+// NAV LINK (enhanced hover, focus, active states)
 // ─────────────────────────────────────────────────────────
 function NavLink({
   item,
@@ -143,68 +123,51 @@ function NavLink({
 }) {
   const Icon = item.icon;
 
-  const inner = (
+  return (
     <Link href={item.href}>
       <div
         className={cn(
-          // Base
-          'group relative flex items-center gap-2.5 rounded-xl cursor-pointer select-none',
-          'transition-all duration-150',
-          // Sizing
-          collapsed ? 'justify-center p-2.5' : 'px-3 py-2',
-          // Active vs idle
+          'group relative flex items-center gap-3 rounded-xl cursor-pointer select-none transition-all duration-200',
+          collapsed ? 'justify-center p-3' : 'px-3.5 py-2.5',
           isActive
-            ? [
-                'bg-gradient-to-r from-indigo-600 to-blue-700',
-                'text-white shadow-md shadow-indigo-500/20',
-              ]
-            : [
-                'text-gray-600 dark:text-gray-400',
-                'hover:bg-gray-100 dark:hover:bg-gray-800/70',
-                'hover:text-gray-900 dark:hover:text-gray-100',
-              ],
+            ? 'bg-gradient-to-r from-indigo-600/90 to-blue-700/90 text-white shadow-lg shadow-indigo-500/25 scale-[1.02]'
+            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-[1.02] hover:shadow-sm',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-950'
         )}
       >
-        {/* ── Left accent bar (active, expanded only) ── */}
         {isActive && !collapsed && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-0.5 rounded-r-full bg-white/60" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r bg-white/70" />
         )}
 
-        {/* ── Icon ── */}
-        <span className="relative shrink-0 flex items-center justify-center">
+        <span className="relative flex items-center justify-center shrink-0">
           <Icon
             className={cn(
-              'h-[15px] w-[15px] transition-colors duration-150',
-              isActive
-                ? 'text-white'
-                : 'text-gray-400 dark:text-gray-500 group-hover:text-indigo-500',
+              'h-5 w-5 transition-colors',
+              isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-indigo-500'
             )}
           />
-          {/* Collapsed badge dot — shown as red pill on icon */}
-          {collapsed && item.badge && item.badge > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[8px] font-bold text-white ring-[1.5px] ring-white dark:ring-gray-950">
+          {collapsed && item.badge ? (
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-950 px-1">
               {item.badge > 9 ? '9+' : item.badge}
             </span>
-          )}
+          ) : null}
         </span>
 
-        {/* ── Label + badge (expanded) ── */}
         {!collapsed && (
           <>
-            <span className="flex-1 truncate text-[12.5px] font-medium">{item.label}</span>
-            {item.badge && item.badge > 0 && (
+            <span className="flex-1 truncate text-sm font-medium">{item.label}</span>
+            {item.badge ? (
               <span
                 className={cn(
-                  'flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5',
-                  'text-[9px] font-bold',
+                  'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold',
                   isActive
-                    ? 'bg-white/25 text-white'
-                    : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300',
+                    ? 'bg-white/30 text-white'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
                 )}
               >
                 {item.badge > 99 ? '99+' : item.badge}
               </span>
-            )}
+            ) : null}
           </>
         )}
 
@@ -212,52 +175,44 @@ function NavLink({
       </div>
     </Link>
   );
-
-  return collapsed ? <Tooltip label={item.label}>{inner}</Tooltip> : inner;
 }
 
 // ─────────────────────────────────────────────────────────
-// MAIN SIDEBAR
+// MAIN SIDEBAR (responsive defaults + polish)
 // ─────────────────────────────────────────────────────────
 export function Sidebar({ className }: { className?: string }) {
   const [location] = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
 
-  // ── Collapsed state — persisted in localStorage ─────────
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sidebar-collapsed') === 'true';
+    if (typeof window === 'undefined') return true; // default collapsed on server & mobile-first
+    const saved = localStorage.getItem('sidebar-collapsed');
+    // On mobile-ish widths, prefer collapsed even if saved expanded
+    return saved === 'true' || window.innerWidth < 768;
   });
 
-  // ── User menu ────────────────────────────────────────────
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  useClickOutside(userMenuRef as React.RefObject<HTMLElement>, () => setUserMenuOpen(false));
+  useClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
-  // ── Mount fade-in ────────────────────────────────────────
   const [mounted, setMounted] = useState(false);
-
-  // ── User — read ONLY in useEffect, never during render ───
-  // This is the fix for "authService is not defined" on first render.
   const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
 
   useEffect(() => {
     setMounted(true);
-    try { setUser(authService.getUser()); } catch { /* unauthenticated */ }
+    try { setUser(authService.getUser()); } catch {}
   }, []);
 
-  // Persist collapsed state
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', String(collapsed));
   }, [collapsed]);
 
-  // ── ⌘K / Ctrl+K — expand sidebar and focus search ───────
+  // ⌘K handler (unchanged)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCollapsed(false);
-        // Dispatch a custom event so Topbar search can also react
         window.dispatchEvent(new CustomEvent('eboard:focus-search'));
       }
     };
@@ -276,32 +231,25 @@ export function Sidebar({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col',
-        // Background
+        'fixed inset-y-0 left-0 z-40 flex flex-col',
         'bg-white dark:bg-gray-950',
-        // Border
-        'border-r border-gray-200 dark:border-gray-800',
-        // Shadow — subtle, doesn't bleed into page
-        'shadow-[1px_0_0_rgba(0,0,0,0.04)] dark:shadow-none',
-        // Width transition
+        'border-r border-gray-200/80 dark:border-gray-800/80',
+        'shadow-sm dark:shadow-none',
         'transition-all duration-300 ease-in-out',
-        collapsed ? 'w-[68px]' : 'w-[248px]',
-        // Mount fade
-        mounted ? 'opacity-100' : 'opacity-0',
-        className,
+        collapsed ? 'w-[72px]' : 'w-[260px]',
+        mounted ? 'translate-x-0 opacity-100' : '-translate-x-4 opacity-0',
+        className
       )}
     >
-
-      {/* ══ LOGO BAR ══════════════════════════════════════════ */}
+      {/* Logo Bar */}
       <div
         className={cn(
-          'flex h-[58px] shrink-0 items-center border-b border-gray-100 dark:border-gray-800',
-          collapsed ? 'justify-center px-3' : 'justify-between px-4',
+          'flex h-16 shrink-0 items-center border-b border-gray-200/70 dark:border-gray-800/70',
+          collapsed ? 'justify-center px-4' : 'justify-between px-5'
         )}
       >
-        {/* Logo mark */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-[34px] w-[34px] shrink-0 rounded-[10px] overflow-hidden shadow-[0_4px_14px_rgba(79,70,229,0.4)]">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-9 w-9 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/30">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board"
@@ -310,55 +258,43 @@ export function Sidebar({ className }: { className?: string }) {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-extrabold text-gray-900 dark:text-white tracking-tight leading-none">
+              <p className="text-base font-extrabold text-gray-900 dark:text-white tracking-tight">
                 E-Board
               </p>
-              <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 leading-none">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 MIS Portal
               </p>
             </div>
           )}
         </div>
 
-        {/* Collapse button */}
         {!collapsed && (
           <button
-            aria-label="Collapse sidebar"
             onClick={() => setCollapsed(true)}
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all shrink-0"
+            className="rounded-lg p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
         )}
       </div>
 
-      {/* ══ EXPAND PILL (collapsed only) ═════════════════════ */}
+      {/* Expand pill when collapsed */}
       {collapsed && (
         <button
-          aria-label="Expand sidebar"
           onClick={() => setCollapsed(false)}
           className={cn(
-            'absolute -right-3 top-[68px] z-50',
-            'flex h-6 w-6 items-center justify-center rounded-full',
-            'bg-white dark:bg-gray-900',
-            'border border-gray-200 dark:border-gray-700 shadow-md',
-            'text-gray-400 dark:text-gray-500',
-            'hover:text-indigo-600 dark:hover:text-indigo-400',
-            'hover:border-indigo-200 dark:hover:border-indigo-700',
-            'transition-all',
+            'absolute -right-3 top-16 z-50 flex h-7 w-7 items-center justify-center rounded-full',
+            'bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700',
+            'shadow-md hover:shadow-lg hover:border-indigo-400 text-indigo-500',
+            'transition-all duration-200'
           )}
         >
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       )}
 
-      {/* ══ MAIN NAV ══════════════════════════════════════════ */}
-      <div
-        className={cn(
-          'flex-1 overflow-y-auto overflow-x-hidden py-1 scrollbar-none',
-          collapsed ? 'px-2 space-y-0.5' : 'px-2.5 space-y-0.5',
-        )}
-      >
+      {/* Main Nav */}
+      <div className="flex-1 overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent">
         <SectionLabel label="Main" collapsed={collapsed} />
         {mainNav.map(item => (
           <NavLink
@@ -380,40 +316,32 @@ export function Sidebar({ className }: { className?: string }) {
         ))}
       </div>
 
-      {/* ══ BOTTOM UTILITIES ══════════════════════════════════ */}
-      <div
-        className={cn(
-          'border-t border-gray-100 dark:border-gray-800 pt-2 pb-1 shrink-0',
-          collapsed ? 'px-2 space-y-0.5' : 'px-2.5 space-y-0.5',
-        )}
-      >
-        {/* Theme toggle */}
+      {/* Bottom Section */}
+      <div className="border-t border-gray-200/70 dark:border-gray-800/70 pt-3 pb-2">
+        {/* Theme Toggle */}
         {collapsed ? (
           <Tooltip label={isDark ? 'Light Mode' : 'Dark Mode'}>
             <button
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               onClick={toggleTheme}
-              className="w-full flex items-center justify-center rounded-xl p-2.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-amber-500 dark:hover:text-amber-400 transition-all"
+              className="mx-auto block rounded-xl p-3 text-gray-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              {isDark
-                ? <Sun className="h-[15px] w-[15px]" />
-                : <Moon className="h-[15px] w-[15px]" />}
+              {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
           </Tooltip>
         ) : (
           <button
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             onClick={toggleTheme}
-            className="group w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-[12.5px] font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/70 hover:text-amber-600 dark:hover:text-amber-400 transition-all"
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-amber-600 dark:hover:text-amber-400 transition-all"
           >
-            {isDark
-              ? <Sun className="h-[15px] w-[15px] shrink-0 text-amber-400" />
-              : <Moon className="h-[15px] w-[15px] shrink-0 text-gray-400 group-hover:text-amber-500 transition-colors" />}
+            {isDark ? (
+              <Sun className="h-5 w-5 text-amber-400" />
+            ) : (
+              <Moon className="h-5 w-5 text-gray-500 group-hover:text-amber-500" />
+            )}
             <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
         )}
 
-        {/* Settings / Help */}
         {bottomNav.map(item => (
           <NavLink
             key={item.href}
@@ -424,149 +352,110 @@ export function Sidebar({ className }: { className?: string }) {
         ))}
       </div>
 
-      {/* ══ USER CARD ════════════════════════════════════════= */}
-      <div
-        ref={userMenuRef}
-        className={cn(
-          'border-t border-gray-100 dark:border-gray-800 shrink-0',
-          collapsed ? 'px-2 py-2.5' : 'px-2.5 py-2.5',
-        )}
-      >
+      {/* User Section (refined dropdown) */}
+      <div ref={userMenuRef} className="border-t border-gray-200/70 dark:border-gray-800/70 py-3 px-3">
         {collapsed ? (
-          /* Collapsed: just avatar with tooltip */
-          <Tooltip label={`${fullName}  ·  ${roleName}`}>
-            <button
-              aria-label="User menu"
-              className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="text-[11px] font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+          <Tooltip label={`${fullName} · ${roleName}`}>
+            <button className="mx-auto block">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="text-sm font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
                   {initials}
                 </AvatarFallback>
               </Avatar>
             </button>
           </Tooltip>
         ) : (
-          /* Expanded: full user card with dropdown */
           <div className="relative">
             <button
-              aria-haspopup="true"
-              aria-expanded={userMenuOpen}
               onClick={() => setUserMenuOpen(o => !o)}
               className={cn(
-                'w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 border transition-all duration-150',
+                'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 border',
                 userMenuOpen
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-800/50'
-                  : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/70 hover:border-gray-100 dark:hover:border-gray-800',
+                  ? 'bg-indigo-50/80 dark:bg-indigo-950/30 border-indigo-200/70 dark:border-indigo-800/50 shadow-sm'
+                  : 'border-transparent hover:bg-gray-50/70 dark:hover:bg-gray-800/50 hover:border-gray-200/70 dark:hover:border-gray-700/50'
               )}
             >
-              {/* Avatar + online dot */}
-              <div className="relative shrink-0">
-                <Avatar className="h-8 w-8 ring-2 ring-indigo-100 dark:ring-indigo-900/60">
-                  <AvatarFallback className="text-[11px] font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+              <div className="relative">
+                <Avatar className="h-10 w-10 ring-2 ring-indigo-100/60 dark:ring-indigo-900/40">
+                  <AvatarFallback className="text-sm font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-gray-950" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-950" />
               </div>
 
               <div className="flex-1 text-left min-w-0">
-                <p className="text-[12px] font-bold text-gray-900 dark:text-white truncate leading-none">
-                  {fullName}
-                </p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate mt-0.5 leading-none">
-                  {roleName}
-                </p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{fullName}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{roleName}</p>
               </div>
 
-              <ChevronDown
-                className={cn(
-                  'h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0 transition-transform duration-200',
-                  userMenuOpen && 'rotate-180',
-                )}
-              />
+              <ChevronDown className={cn('h-4 w-4 transition-transform', userMenuOpen && 'rotate-180')} />
             </button>
 
-            {/* ── User dropdown ─────────────────────────────── */}
             {userMenuOpen && (
               <div
-                role="menu"
                 className={cn(
-                  'absolute bottom-full left-0 right-0 mb-2 z-50 overflow-hidden',
-                  'bg-white dark:bg-gray-900',
-                  'rounded-2xl border border-gray-200 dark:border-gray-700/80',
-                  'shadow-[0_-16px_40px_rgba(0,0,0,0.08),0_4px_16px_rgba(0,0,0,0.04)]',
-                  'dark:shadow-[0_-16px_50px_rgba(0,0,0,0.5)]',
-                  'animate-in slide-in-from-bottom-2 fade-in duration-150',
+                  'absolute bottom-full left-0 right-0 mb-3 z-50',
+                  'bg-white dark:bg-gray-950 rounded-2xl border border-gray-200/80 dark:border-gray-800/70',
+                  'shadow-2xl dark:shadow-[0_-20px_60px_rgba(0,0,0,0.6)] backdrop-blur-sm',
+                  'animate-in fade-in-60 zoom-in-95 slide-in-from-bottom-3 duration-200'
                 )}
               >
-                {/* Gradient header — matches screenshot exactly */}
-                <div className="px-4 py-3.5 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-800 dark:to-gray-800 border-b border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 ring-2 ring-indigo-100 dark:ring-indigo-900">
-                      <AvatarFallback className="text-sm font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+                {/* Header */}
+                <div className="px-5 py-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-gray-900/80 dark:to-gray-900/80 border-b border-gray-200/70 dark:border-gray-800/70 rounded-t-2xl">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-12 w-12 ring-2 ring-indigo-200/40 dark:ring-indigo-800/40">
+                      <AvatarFallback className="text-base font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{fullName}</p>
-                      <p className="text-[10.5px] text-gray-500 dark:text-gray-400 truncate">{user?.email ?? '—'}</p>
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {/* Role chip */}
-                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-700 px-2 py-0.5">
-                          <Building2 className="h-2.5 w-2.5 text-indigo-500" />
-                          <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300">
-                            {roleName}
-                          </span>
+                      <p className="text-base font-bold text-gray-900 dark:text-white truncate">{fullName}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email ?? '—'}</p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100/80 dark:bg-indigo-900/50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-700/50">
+                          <Building2 className="h-3 w-3" />
+                          {roleName}
                         </span>
-                        {/* Online chip */}
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 px-2 py-0.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                          <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">Online</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/60 dark:bg-emerald-900/40 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/50">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          Online
                         </span>
-                        {/* Org code if present */}
-                        {user?.orgCode && (
-                          <span className="rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-[9px] font-mono px-2 py-0.5">
-                            #{user.orgCode}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Menu items */}
-                <div className="p-1.5 space-y-0.5">
-                  {([
-                    { icon: UserCog,   label: 'Profile Settings',   href: '/settings/profile' },
-                    { icon: Building2, label: 'Organization',       href: '/settings/org' },
-                    { icon: Lock,      label: 'Security & Privacy', href: '/settings/security' },
-                    { icon: Bell,      label: 'Notifications',      href: '/settings/notifications' },
-                  ] as const).map(({ icon: Icon, label, href }) => (
+                {/* Menu Items */}
+                <div className="p-2 space-y-1">
+                  {[
+                    { icon: UserCog, label: 'Profile Settings', href: '/settings/profile' },
+                    { icon: Building2, label: 'Organization', href: '/settings/org' },
+                    { icon: Lock, label: 'Security & Privacy', href: '/settings/security' },
+                    { icon: Bell, label: 'Notifications', href: '/settings/notifications' },
+                  ].map(({ icon: Icon, label, href }) => (
                     <Link key={href} href={href}>
                       <div
-                        role="menuitem"
                         onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-2.5 rounded-xl px-3 py-[9px] text-[12px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors cursor-pointer"
+                        className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/60 transition-colors cursor-pointer"
                       >
-                        <Icon className="h-[14px] w-[14px] text-gray-400 dark:text-gray-500 shrink-0" />
+                        <Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                         {label}
                       </div>
                     </Link>
                   ))}
 
-                  <div className="my-1 h-px bg-gray-100 dark:bg-gray-800" />
+                  <div className="my-2 h-px bg-gray-200/70 dark:bg-gray-800/50" />
 
                   <button
-                    role="menuitem"
                     onClick={() => {
                       authService.logout();
                       setUserMenuOpen(false);
                       window.location.href = '/auth/signin';
                     }}
-                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-[9px] text-[12px] font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors"
+                    className="w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-950/30 transition-colors"
                   >
-                    <LogOut className="h-[14px] w-[14px] shrink-0" />
+                    <LogOut className="h-4 w-4" />
                     Sign out
                   </button>
                 </div>
