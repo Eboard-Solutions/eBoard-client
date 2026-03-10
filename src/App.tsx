@@ -20,6 +20,7 @@ import { Finance } from "@/pages/Finance";
 import { Announcements } from "@/pages/Announcements";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
+import OrganisationPage from "@/pages/Organisation";
 import { SuperAdminDashboard } from "@/pages/super-admin/SuperAdminDashboard";
 import { UsersManagement } from "@/pages/super-admin/UsersManagement";
 import { OrganisationsManagement } from "@/pages/super-admin/OrganisationsManagement";
@@ -47,7 +48,7 @@ function UnauthorizedPage() {
             <ShieldAlert className="h-16 w-16 mx-auto mb-4 text-destructive" />
             <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
             <p className="text-muted-foreground mb-6">
-              You don't have permission to access this page.
+              You don&apos;t have permission to access this page.
             </p>
             <Button onClick={() => setLocation("/")}>
               <Home className="mr-2 h-4 w-4" />
@@ -67,7 +68,7 @@ function NotFoundPage() {
       <div className="text-center">
         <h1 className="text-6xl font-bold mb-4">404</h1>
         <p className="text-xl text-muted-foreground mb-6">
-          Sorry, this page doesn't exist.
+          Sorry, this page doesn&apos;t exist.
         </p>
         <Button onClick={() => setLocation("/")}>
           <Home className="mr-2 h-4 w-4" />
@@ -78,13 +79,10 @@ function NotFoundPage() {
   );
 }
 
-/**
- * Smart root redirect — super admins go to /super-admin, others go to /dashboard
- */
 function RootRedirect() {
   const user = authService.getUser();
-  const isSuperAdmin = user?.role?.toLowerCase() === 'superadmin';
-  return <Redirect to={isSuperAdmin ? '/super-admin' : '/dashboard'} />;
+  const isSuperAdmin = user?.role?.toLowerCase() === "superadmin";
+  return <Redirect to={isSuperAdmin ? "/super-admin" : "/dashboard"} />;
 }
 
 function App() {
@@ -92,7 +90,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router base="/">
         <Switch>
-          {/* ── Auth Routes (no layout) ───────────────────── */}
+          {/* ── Auth Routes ───────────────────────────────── */}
           <Route path="/auth/signin" component={SignIn} />
           <Route path="/auth/sign-up" component={SignUp} />
           <Route path="/auth/signup" component={SignUp} />
@@ -100,16 +98,16 @@ function App() {
           <Route path="/auth/forgot-password" component={ForgotPassword} />
           <Route path="/unauthorized" component={UnauthorizedPage} />
 
-          {/* Root - redirect based on role */}
+          {/* Root redirect */}
           <Route path="/">
             <ProtectedRoute>
               <RootRedirect />
             </ProtectedRoute>
           </Route>
 
-          {/* ═══ SUPER ADMIN ROUTES ═══════════════════════════ */}
+          {/* ═══ SUPER ADMIN ROUTES ══════════════════════════ */}
           <Route path="/super-admin">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <SuperAdminDashboard />
               </SuperAdminLayout>
@@ -117,7 +115,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/users">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <UsersManagement />
               </SuperAdminLayout>
@@ -125,7 +123,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/organisations">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <OrganisationsManagement />
               </SuperAdminLayout>
@@ -133,7 +131,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/create-admin">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <CreateSuperAdminPage />
               </SuperAdminLayout>
@@ -141,7 +139,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/meetings">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <MeetingsOverview />
               </SuperAdminLayout>
@@ -149,7 +147,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/documents">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <DocumentsOverview />
               </SuperAdminLayout>
@@ -157,7 +155,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/tasks">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <TasksOverview />
               </SuperAdminLayout>
@@ -165,7 +163,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/polls">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <PollsOverview />
               </SuperAdminLayout>
@@ -173,7 +171,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/announcements">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <AnnouncementsOverview />
               </SuperAdminLayout>
@@ -181,7 +179,7 @@ function App() {
           </Route>
 
           <Route path="/super-admin/finance">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <FinanceOverviewPage />
               </SuperAdminLayout>
@@ -189,14 +187,14 @@ function App() {
           </Route>
 
           <Route path="/super-admin/settings">
-            <ProtectedRoute allowedRoles={['SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
               <SuperAdminLayout>
                 <SettingsManagement />
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
 
-          {/* ═══ REGULAR DASHBOARD ROUTES ═════════════════════ */}
+          {/* ═══ REGULAR DASHBOARD ROUTES ════════════════════ */}
           <Route path="/dashboard">
             <ProtectedRoute>
               <AppLayout>
@@ -240,7 +238,7 @@ function App() {
             </ProtectedRoute>
           </Route>
 
-          {/* Settings sub-routes used by sidebar user-menu */}
+          {/* ── Settings sub-routes ───────────────────────── */}
           <Route path="/settings/profile">
             <ProtectedRoute>
               <AppLayout>
@@ -300,8 +298,9 @@ function App() {
             </ProtectedRoute>
           </Route>
 
+          {/* ── Finance ──────────────────────────────────── */}
           <Route path="/finance">
-            <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
               <AppLayout>
                 <Finance />
               </AppLayout>
@@ -317,8 +316,9 @@ function App() {
             </ProtectedRoute>
           </Route>
 
+          {/* ── Reports ──────────────────────────────────── */}
           <Route path="/reports">
-            <ProtectedRoute allowedRoles={['OrgAdmin', 'SuperAdmin']}>
+            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
               <AppLayout>
                 <Reports />
               </AppLayout>
