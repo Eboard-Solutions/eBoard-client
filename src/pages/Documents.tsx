@@ -49,6 +49,7 @@ import {
   useDeleteDocument,
 } from '@/hooks/api/useDocuments';
 import type { Document as DocType, DocumentAccessLevel } from '@/types/api.types';
+import { DocumentViewer } from './DocumentViewer';
 
 import {
   Search,
@@ -78,9 +79,13 @@ import {
   FolderOpen,
   Clock,
   HardDrive,
+  LayoutGrid,
+  LayoutList,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type ViewMode = 'list' | 'grid';
 
 interface UploadForm {
   title: string;
@@ -97,7 +102,6 @@ interface EditForm {
   tags: string;
 }
 
-// Default access level matches backend enum default: DocumentAccessLevel.VIEWER = 'VIEWER'
 const EMPTY_UPLOAD: UploadForm = {
   title: '',
   description: '',
@@ -131,17 +135,16 @@ function formatDate(dateStr: string): string {
 function getFileIcon(fileType: string) {
   const t = fileType?.toLowerCase() ?? '';
   if (t.includes('pdf'))
-    return { Icon: FileText, color: 'text-red-500 bg-red-50', label: 'PDF' };
+    return { Icon: FileText, color: 'text-red-500 bg-red-50 dark:bg-red-950/30', label: 'PDF' };
   if (t.includes('word') || t.includes('document'))
-    return { Icon: FileText, color: 'text-blue-500 bg-blue-50', label: 'DOC' };
+    return { Icon: FileText, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/30', label: 'DOC' };
   if (t.includes('sheet') || t.includes('excel'))
-    return { Icon: FileSpreadsheet, color: 'text-emerald-500 bg-emerald-50', label: 'XLS' };
+    return { Icon: FileSpreadsheet, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30', label: 'XLS' };
   if (t.includes('presentation') || t.includes('powerpoint'))
-    return { Icon: Presentation, color: 'text-orange-500 bg-orange-50', label: 'PPT' };
-  return { Icon: File, color: 'text-slate-500 bg-slate-50', label: 'FILE' };
+    return { Icon: Presentation, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30', label: 'PPT' };
+  return { Icon: File, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800', label: 'FILE' };
 }
 
-// Access config keyed by backend enum values: VIEWER | EDITOR | ADMIN | OWNER
 const ACCESS_CONFIG: Record<
   string,
   { label: string; Icon: React.ElementType; badgeClass: string; iconClass: string }
@@ -149,25 +152,25 @@ const ACCESS_CONFIG: Record<
   VIEWER: {
     label: 'Viewer',
     Icon: Globe,
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
     iconClass: 'text-emerald-600',
   },
   EDITOR: {
     label: 'Editor',
     Icon: Users,
-    badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+    badgeClass: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800',
     iconClass: 'text-blue-600',
   },
   ADMIN: {
     label: 'Admin Only',
     Icon: ShieldAlert,
-    badgeClass: 'bg-amber-100 text-amber-700 border-amber-200',
+    badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800',
     iconClass: 'text-amber-600',
   },
   OWNER: {
     label: 'Owner Only',
     Icon: Lock,
-    badgeClass: 'bg-slate-100 text-slate-600 border-slate-200',
+    badgeClass: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
     iconClass: 'text-slate-500',
   },
 };
@@ -198,20 +201,20 @@ function StatCard({
 }) {
   return (
     <Card className="border border-border/60 shadow-sm">
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colorClass}`}>
-          <Icon className="h-4.5 w-4.5" />
+      <CardContent className="p-3 sm:p-4 flex items-center gap-3">
+        <div className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${colorClass}`}>
+          <Icon className="h-4 w-4" />
         </div>
-        <div>
-          <p className="text-xl font-bold text-foreground leading-none">{value}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+        <div className="min-w-0">
+          <p className="text-lg sm:text-xl font-bold text-foreground leading-none truncate">{value}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{label}</p>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// ─── Access Level Select (shared by Upload + Edit dialogs) ────────────────────
+// ─── Access Level Select ──────────────────────────────────────────────────────
 
 function AccessLevelSelect({
   value,
@@ -226,7 +229,6 @@ function AccessLevelSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {/* Values MUST match backend DocumentAccessLevel enum exactly */}
         <SelectItem value="VIEWER">
           <div className="flex items-center gap-2">
             <Globe className="h-4 w-4 text-emerald-600" />
@@ -318,14 +320,14 @@ function UploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
               <Upload className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-semibold">Upload Document</DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl font-semibold">Upload Document</DialogTitle>
               <DialogDescription className="text-sm mt-0.5">Add a new document to the library</DialogDescription>
             </div>
           </div>
@@ -344,19 +346,19 @@ function UploadDialog({
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`relative border-2 border-dashed rounded-xl p-7 text-center cursor-pointer transition-all duration-150 select-none
+            className={`relative border-2 border-dashed rounded-xl p-6 sm:p-7 text-center cursor-pointer transition-all duration-150 select-none
               ${dragOver ? 'border-primary bg-primary/5 scale-[0.99]'
-                : form.file ? 'border-emerald-400 bg-emerald-50/50'
+                : form.file ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
                 : 'border-border hover:border-primary/50 hover:bg-muted/30'}`}
           >
             {form.file ? (
               <div className="space-y-2">
                 <div className="flex justify-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-100">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
                     <CheckCircle2 className="h-6 w-6 text-emerald-600" />
                   </div>
                 </div>
-                <p className="text-sm font-medium text-foreground">{form.file.name}</p>
+                <p className="text-sm font-medium text-foreground break-all">{form.file.name}</p>
                 <p className="text-xs text-muted-foreground">{formatFileSize(form.file.size)}</p>
                 <Button
                   type="button" variant="ghost" size="sm"
@@ -430,12 +432,12 @@ function UploadDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 border-t border-border/60 pt-4">
-          <Button variant="outline" onClick={handleClose} disabled={createMutation.isPending}>Cancel</Button>
+        <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
+          <Button variant="outline" onClick={handleClose} disabled={createMutation.isPending} className="w-full sm:w-auto">Cancel</Button>
           <Button
             onClick={handleSubmit}
             disabled={createMutation.isPending || !form.file || !form.title.trim()}
-            className="gap-2 min-w-28"
+            className="gap-2 w-full sm:w-auto sm:min-w-28"
           >
             {createMutation.isPending ? (
               <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
@@ -470,7 +472,6 @@ function EditDialog({
     tags: (doc?.tags ?? []).join(', '),
   });
 
-  // Sync form when doc prop changes (e.g. opening dialog for a different doc)
   const [prevDocId, setPrevDocId] = useState<string | undefined>(doc?.id);
   if (doc?.id !== prevDocId) {
     setPrevDocId(doc?.id);
@@ -510,15 +511,15 @@ function EditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
               <Pencil className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <DialogTitle className="text-xl font-semibold">Edit Document</DialogTitle>
-              <DialogDescription className="text-sm mt-0.5 truncate max-w-xs">{doc?.title}</DialogDescription>
+            <div className="min-w-0">
+              <DialogTitle className="text-lg sm:text-xl font-semibold">Edit Document</DialogTitle>
+              <DialogDescription className="text-sm mt-0.5 truncate max-w-[220px] sm:max-w-xs">{doc?.title}</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -566,12 +567,12 @@ function EditDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 border-t border-border/60 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={updateMutation.isPending}>Cancel</Button>
+        <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={updateMutation.isPending} className="w-full sm:w-auto">Cancel</Button>
           <Button
             onClick={handleSubmit}
             disabled={updateMutation.isPending || !form.title.trim()}
-            className="gap-2 min-w-28"
+            className="gap-2 w-full sm:w-auto sm:min-w-28"
           >
             {updateMutation.isPending ? (
               <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
@@ -585,23 +586,22 @@ function EditDialog({
   );
 }
 
-// ─── Document Row ─────────────────────────────────────────────────────────────
+// ─── Document Row (List View) ─────────────────────────────────────────────────
 
 function DocumentRow({
   doc,
   onEdit,
   onDelete,
+  onView,
 }: {
   doc: DocType;
   onEdit: (doc: DocType) => void;
   onDelete: (doc: DocType) => void;
+  onView: (doc: DocType) => void;
 }) {
   const { Icon, color, label } = getFileIcon(doc.fileType ?? '');
 
-  const handleView = () => {
-    if (doc.fileUrl) window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
-    else toast.error('Preview unavailable', { description: 'No file URL found for this document.' });
-  };
+  const handleView = () => onView(doc);
 
   const handleDownload = () => {
     if (!doc.fileUrl) {
@@ -617,16 +617,18 @@ function DocumentRow({
 
   return (
     <Card className="border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200 group">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-4">
-          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 ${color}`}>
-            <Icon className="h-5 w-5" />
-            <span className="text-[9px] font-bold mt-0.5 tracking-wide opacity-70">{label}</span>
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+          {/* File type icon */}
+          <div className={`flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl shrink-0 ${color}`}>
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="text-[8px] sm:text-[9px] font-bold mt-0.5 tracking-wide opacity-70">{label}</span>
           </div>
 
+          {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h3 className="font-semibold text-sm text-foreground truncate max-w-[240px] sm:max-w-sm">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+              <h3 className="font-semibold text-sm text-foreground truncate max-w-[180px] xs:max-w-[220px] sm:max-w-sm md:max-w-md">
                 {doc.title}
               </h3>
               {doc.accessLevel && <AccessBadge level={doc.accessLevel} />}
@@ -637,44 +639,59 @@ function DocumentRow({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <HardDrive className="h-3 w-3" />{formatFileSize(doc.fileSize)}
+                <HardDrive className="h-3 w-3 shrink-0" />{formatFileSize(doc.fileSize)}
               </span>
               <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />{formatDate(doc.uploadedAt)}
+                <Clock className="h-3 w-3 shrink-0" />{formatDate(doc.uploadedAt)}
               </span>
-              {doc.uploadedByName && <span className="truncate">by {doc.uploadedByName}</span>}
+              {doc.uploadedByName && (
+                <span className="hidden sm:inline truncate">by {doc.uploadedByName}</span>
+              )}
             </div>
 
             {doc.description && (
-              <p className="text-xs text-muted-foreground mt-1 truncate max-w-sm">{doc.description}</p>
+              <p className="text-xs text-muted-foreground mt-1 truncate max-w-[240px] sm:max-w-sm hidden sm:block">{doc.description}</p>
             )}
 
             {(doc.tags?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
-                {doc.tags!.slice(0, 4).map((tag) => (
+                {doc.tags!.slice(0, 3).map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0 h-4.5">{tag}</Badge>
                 ))}
-                {doc.tags!.length > 4 && (
+                {doc.tags!.length > 3 && (
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground">
-                    +{doc.tags!.length - 4}
+                    +{doc.tags!.length - 3}
                   </Badge>
                 )}
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-primary/10 hover:text-primary" onClick={handleView} title="Preview">
+          {/* Actions */}
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex hover:bg-primary/10 hover:text-primary opacity-60 group-hover:opacity-100 transition-opacity"
+              onClick={handleView}
+              title="Preview"
+            >
               <Eye className="h-3.5 w-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-primary/10 hover:text-primary" onClick={handleDownload} title="Download">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex hover:bg-primary/10 hover:text-primary opacity-60 group-hover:opacity-100 transition-opacity"
+              onClick={handleDownload}
+              title="Download"
+            >
               <Download className="h-3.5 w-3.5" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="icon" variant="ghost" className="h-8 w-8">
+                <Button size="icon" variant="ghost" className="h-7 w-7 sm:h-8 sm:w-8">
                   <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -700,14 +717,189 @@ function DocumentRow({
   );
 }
 
+// ─── Document Card (Grid View) ────────────────────────────────────────────────
+
+function DocumentCard({
+  doc,
+  onEdit,
+  onDelete,
+  onView,
+}: {
+  doc: DocType;
+  onEdit: (doc: DocType) => void;
+  onDelete: (doc: DocType) => void;
+  onView: (doc: DocType) => void;
+}) {
+  const { Icon, color, label } = getFileIcon(doc.fileType ?? '');
+
+  const handleView = () => onView(doc);
+
+  const handleDownload = () => {
+    if (!doc.fileUrl) {
+      toast.error('Download unavailable', { description: 'No file URL found for this document.' });
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = doc.fileUrl;
+    link.download = doc.fileName ?? doc.title;
+    link.click();
+    toast.success('Download started', { description: doc.title });
+  };
+
+  return (
+    <Card className="border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200 group flex flex-col">
+      <CardContent className="p-4 flex flex-col gap-3 h-full">
+        {/* Card Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 ${color}`}>
+            <Icon className="h-5 w-5" />
+            <span className="text-[9px] font-bold mt-0.5 tracking-wide opacity-70">{label}</span>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => onEdit(doc)}><Pencil className="mr-2 h-4 w-4" />Edit details</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleView}><Eye className="mr-2 h-4 w-4" />Preview</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDownload}><Download className="mr-2 h-4 w-4" />Download</DropdownMenuItem>
+              <DropdownMenuItem><Star className="mr-2 h-4 w-4" />Favourite</DropdownMenuItem>
+              <DropdownMenuItem><Share2 className="mr-2 h-4 w-4" />Share</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                onClick={() => onDelete(doc)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Title + badges */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">
+            {doc.title}
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {doc.accessLevel && <AccessBadge level={doc.accessLevel} />}
+            {doc.version != null && doc.version > 1 && (
+              <Badge variant="outline" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground border-dashed">
+                v{doc.version}
+              </Badge>
+            )}
+          </div>
+          {doc.description && (
+            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{doc.description}</p>
+          )}
+        </div>
+
+        {/* Tags */}
+        {(doc.tags?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {doc.tags!.slice(0, 3).map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0 h-4.5">{tag}</Badge>
+            ))}
+            {doc.tags!.length > 3 && (
+              <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground">
+                +{doc.tags!.length - 3}
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Footer meta */}
+        <div className="border-t border-border/50 pt-3 space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground gap-2">
+            <span className="flex items-center gap-1 shrink-0">
+              <HardDrive className="h-3 w-3" />{formatFileSize(doc.fileSize)}
+            </span>
+            <span className="flex items-center gap-1 truncate">
+              <Clock className="h-3 w-3 shrink-0" />{formatDate(doc.uploadedAt)}
+            </span>
+          </div>
+          {doc.uploadedByName && (
+            <p className="text-xs text-muted-foreground truncate">by {doc.uploadedByName}</p>
+          )}
+
+          {/* Quick action buttons */}
+          <div className="flex gap-1.5 pt-0.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8 text-xs gap-1.5 hover:bg-primary/5 hover:text-primary hover:border-primary/30"
+              onClick={handleView}
+            >
+              <Eye className="h-3 w-3" />Preview
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8 text-xs gap-1.5 hover:bg-primary/5 hover:text-primary hover:border-primary/30"
+              onClick={handleDownload}
+            >
+              <Download className="h-3 w-3" />Download
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── View Toggle ──────────────────────────────────────────────────────────────
+
+function ViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}) {
+  return (
+    <div className="flex items-center rounded-lg border border-border/60 p-0.5 bg-muted/30 shrink-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        className={`h-7 w-7 rounded-md transition-all ${
+          viewMode === 'list'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        onClick={() => onChange('list')}
+        title="List view"
+      >
+        <LayoutList className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={`h-7 w-7 rounded-md transition-all ${
+          viewMode === 'grid'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        onClick={() => onChange('grid')}
+        title="Grid view"
+      >
+        <LayoutGrid className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Documents() {
   const [searchQuery, setSearchQuery] = useState('');
   const [accessFilter, setAccessFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editDoc, setEditDoc] = useState<DocType | null>(null);
   const [deleteDoc, setDeleteDoc] = useState<DocType | null>(null);
+  const [viewDoc, setViewDoc] = useState<DocType | null>(null);
 
   const { data: documentsData, isLoading, error, refetch } = useDocuments({
     query: searchQuery || undefined,
@@ -743,9 +935,9 @@ export function Documents() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4 md:px-6 max-w-5xl space-y-6">
+      <div className="container mx-auto py-6 sm:py-8 px-4 md:px-6 max-w-5xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Documents</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage files, folders, and board records</p>
         </div>
         <Alert variant="destructive">
@@ -760,35 +952,87 @@ export function Documents() {
     );
   }
 
+  // ── Inline viewer: replaces list area, sidebar stays put ──
+  if (viewDoc) {
+    return (
+      <div className="container mx-auto py-4 sm:py-6 px-3 sm:px-4 md:px-6 max-w-5xl">
+        <DocumentViewer
+          doc={viewDoc}
+          allDocs={filteredDocs}
+          onClose={() => setViewDoc(null)}
+        />
+
+        {/* Keep edit/delete dialogs available while viewing */}
+        <EditDialog
+          doc={editDoc}
+          open={!!editDoc}
+          onOpenChange={(v) => { if (!v) setEditDoc(null); }}
+          onSuccess={() => refetch()}
+        />
+        <AlertDialog open={!!deleteDoc} onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}>
+          <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 shrink-0">
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </div>
+                Delete Document
+              </AlertDialogTitle>
+              <AlertDialogDescription className="pt-1">
+                Are you sure you want to permanently delete{' '}
+                <span className="font-medium text-foreground">"{deleteDoc?.title}"</span>?
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+              <AlertDialogCancel disabled={deleteMutation.isPending} className="mt-0">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+                onClick={handleDeleteConfirm}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
+                  : <><Trash2 className="h-4 w-4" />Delete</>
+                }
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
+
+  // ── Normal documents list / grid view ──
   return (
-    <div className="container mx-auto space-y-6 py-8 px-4 md:px-6 max-w-5xl">
+    <div className="container mx-auto space-y-4 sm:space-y-6 py-4 sm:py-8 px-3 sm:px-4 md:px-6 max-w-5xl">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col xs:flex-row xs:items-start xs:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Documents</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Documents</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage files, folders, and board records</p>
         </div>
-        <Button size="sm" className="gap-2 h-9 shrink-0" onClick={() => setUploadOpen(true)}>
+        <Button size="sm" className="gap-2 h-9 shrink-0 w-full xs:w-auto" onClick={() => setUploadOpen(true)}>
           <FilePlus className="h-4 w-4" />Upload Document
         </Button>
       </div>
 
       {/* Stats */}
       {!isLoading && documents.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          <StatCard label="Total Documents" value={documents.length} icon={FileText} colorClass="text-blue-600 bg-blue-50" />
-          <StatCard label="Storage Used" value={formatFileSize(totalSize)} icon={HardDrive} colorClass="text-violet-600 bg-violet-50" />
-          <StatCard label="Showing" value={filteredDocs.length} icon={FolderOpen} colorClass="text-emerald-600 bg-emerald-50" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <StatCard label="Total Documents" value={documents.length} icon={FileText} colorClass="text-blue-600 bg-blue-50 dark:bg-blue-950/30" />
+          <StatCard label="Storage Used" value={formatFileSize(totalSize)} icon={HardDrive} colorClass="text-violet-600 bg-violet-50 dark:bg-violet-950/30" />
+          <StatCard label="Showing" value={filteredDocs.length} icon={FolderOpen} colorClass="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" />
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* Filters Row */}
+      <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 min-w-0">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by title, tag, or description…"
-            className="h-9 pl-9 text-sm"
+            className="h-9 pl-9 pr-8 text-sm"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -798,56 +1042,67 @@ export function Documents() {
             </button>
           )}
         </div>
-
-        {/* Filter by access level — values match backend enum */}
-        <Select value={accessFilter} onValueChange={setAccessFilter}>
-          <SelectTrigger className="h-9 w-44 text-sm shrink-0">
-            <SelectValue placeholder="Access level" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Documents</SelectItem>
-            <SelectItem value="VIEWER">
-              <div className="flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-emerald-600" />Viewer</div>
-            </SelectItem>
-            <SelectItem value="EDITOR">
-              <div className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-blue-600" />Editor</div>
-            </SelectItem>
-            <SelectItem value="ADMIN">
-              <div className="flex items-center gap-2"><ShieldAlert className="h-3.5 w-3.5 text-amber-600" />Admin Only</div>
-            </SelectItem>
-            <SelectItem value="OWNER">
-              <div className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-slate-500" />Owner Only</div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2 shrink-0">
+          <Select value={accessFilter} onValueChange={setAccessFilter}>
+            <SelectTrigger className="h-9 w-full sm:w-40 text-sm">
+              <SelectValue placeholder="Access level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Documents</SelectItem>
+              <SelectItem value="VIEWER"><div className="flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-emerald-600" />Viewer</div></SelectItem>
+              <SelectItem value="EDITOR"><div className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-blue-600" />Editor</div></SelectItem>
+              <SelectItem value="ADMIN"><div className="flex items-center gap-2"><ShieldAlert className="h-3.5 w-3.5 text-amber-600" />Admin Only</div></SelectItem>
+              <SelectItem value="OWNER"><div className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-slate-500" />Owner Only</div></SelectItem>
+            </SelectContent>
+          </Select>
+          <ViewToggle viewMode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
-      {/* Loading */}
+      {/* Loading skeleton */}
       {isLoading && (
-        <div className="space-y-3">
-          {Array(5).fill(0).map((_, i) => (
-            <div key={i} className="h-[76px] animate-pulse rounded-xl bg-muted/50" />
-          ))}
-        </div>
+        viewMode === 'list' ? (
+          <div className="space-y-2.5">
+            {Array(5).fill(0).map((_, i) => (
+              <div key={i} className="h-[72px] sm:h-[76px] animate-pulse rounded-xl bg-muted/50" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+            {Array(6).fill(0).map((_, i) => (
+              <div key={i} className="h-56 animate-pulse rounded-xl bg-muted/50" />
+            ))}
+          </div>
+        )
       )}
 
-      {/* Document List */}
+      {/* Document List / Grid */}
       {!isLoading && (
-        <div className="space-y-2.5">
+        <>
           {filteredDocs.length > 0 ? (
-            filteredDocs.map((doc) => (
-              <DocumentRow key={doc.id} doc={doc} onEdit={setEditDoc} onDelete={setDeleteDoc} />
-            ))
+            viewMode === 'list' ? (
+              <div className="space-y-2 sm:space-y-2.5">
+                {filteredDocs.map((doc) => (
+                  <DocumentRow key={doc.id} doc={doc} onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+                {filteredDocs.map((doc) => (
+                  <DocumentCard key={doc.id} doc={doc} onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
+                ))}
+              </div>
+            )
           ) : (
-            <Card className="border-dashed py-20 text-center">
-              <CardContent className="space-y-4">
+            <Card className="border-dashed py-14 sm:py-20 text-center">
+              <CardContent className="space-y-4 px-4">
                 <div className="flex justify-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                    <FileText className="h-7 w-7 text-muted-foreground/50" />
+                  <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-muted">
+                    <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
                   </div>
                 </div>
-                <h3 className="text-lg font-medium">No documents found</h3>
-                <p className="text-sm text-muted-foreground">
+                <h3 className="text-base sm:text-lg font-medium">No documents found</h3>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
                   {searchQuery || accessFilter !== 'all'
                     ? 'Try adjusting your search or filter.'
                     : 'Upload your first document to get started.'}
@@ -860,7 +1115,14 @@ export function Documents() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </>
+      )}
+
+      {/* Result count when filtered */}
+      {!isLoading && filteredDocs.length > 0 && (searchQuery || accessFilter !== 'all') && (
+        <p className="text-xs text-muted-foreground text-center pb-2">
+          Showing {filteredDocs.length} of {documents.length} document{documents.length !== 1 ? 's' : ''}
+        </p>
       )}
 
       {/* Dialogs */}
@@ -874,10 +1136,10 @@ export function Documents() {
       />
 
       <AlertDialog open={!!deleteDoc} onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 shrink-0">
                 <Trash2 className="h-4 w-4 text-destructive" />
               </div>
               Delete Document
@@ -888,18 +1150,17 @@ export function Documents() {
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel disabled={deleteMutation.isPending} className="mt-0">Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
               onClick={handleDeleteConfirm}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
-              ) : (
-                <><Trash2 className="h-4 w-4" />Delete</>
-              )}
+              {deleteMutation.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
+                : <><Trash2 className="h-4 w-4" />Delete</>
+              }
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
