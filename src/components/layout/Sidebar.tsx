@@ -25,6 +25,7 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
   { icon: Calendar, label: 'Meetings', href: '/meetings', badge: 2 },
+  { icon: FileText, label: 'Agendas', href: '/agendas', badge: 3 },
   { icon: Users, label: 'Members', href: '/members' },
   { icon: FileText, label: 'Documents', href: '/documents' },
   { icon: Vote, label: 'Voting', href: '/voting', badge: 1 },

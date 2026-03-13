@@ -11,8 +11,8 @@ import { UserLogin } from "@/pages/auth/UserLogin";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { Dashboard } from "@/pages/Dashboard";
 import { Meetings } from "@/pages/Meetings";
-import LiveMeeting from "@/pages/LiveMeeting";
-import Members from "@/pages/Members";
+import { LiveMeeting } from "@/pages/LiveMeeting";
+import { Members } from "@/pages/Members";
 import { Documents } from "@/pages/Documents";
 import { Voting } from "@/pages/Voting";
 import { Tasks } from "@/pages/Tasks";
@@ -87,259 +87,125 @@ function RootRedirect() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <Router base="/">
-        <Switch>
-          {/* ── Auth Routes ───────────────────────────────── */}
-          <Route path="/auth/signin" component={SignIn} />
-          <Route path="/auth/sign-up" component={SignUp} />
-          <Route path="/auth/signup" component={SignUp} />
-          <Route path="/auth/userLogin" component={UserLogin} />
-          <Route path="/auth/forgot-password" component={ForgotPassword} />
-          <Route path="/unauthorized" component={UnauthorizedPage} />
+    <Router base="/">
+      <Switch>
+        {/* Auth Routes - No Layout */}
+        <Route path="/auth/signin" component={SignIn} />
+        <Route path="/auth/signup" component={SignUp} />
+        <Route path="/auth/forgot-password" component={ForgotPassword} />
+        <Route path="/unauthorized" component={UnauthorizedPage} />
 
-          {/* Root redirect */}
-          <Route path="/">
-            <ProtectedRoute>
-              <RootRedirect />
-            </ProtectedRoute>
-          </Route>
+        {/* Protected Routes - With Layout */}
+        <Route path="/">
+          <ProtectedRoute>
+            <AppLayout>
+              <Dashboard />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          {/* ═══ SUPER ADMIN ROUTES ══════════════════════════ */}
-          <Route path="/super-admin">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <SuperAdminDashboard />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/meetings">
+          <ProtectedRoute>
+            <AppLayout>
+              <Meetings />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/users">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <UsersManagement />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/meetings/live/:id">
+          <ProtectedRoute>
+            <AppLayout>
+              <LiveMeeting />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/organisations">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <OrganisationsManagement />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/agendas">
+          <ProtectedRoute>
+            <AppLayout>
+              <Agendas />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/create-admin">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <CreateSuperAdminPage />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
 
-          <Route path="/super-admin/meetings">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <MeetingsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/members">
+          <ProtectedRoute>
+            <AppLayout>
+              <Members />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/documents">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <DocumentsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/documents">
+          <ProtectedRoute>
+            <AppLayout>
+              <Documents />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/tasks">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <TasksOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/voting">
+          <ProtectedRoute>
+            <AppLayout>
+              <Voting />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/polls">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <PollsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/tasks">
+          <ProtectedRoute>
+            <AppLayout>
+              <Tasks />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/announcements">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <AnnouncementsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/finance">
+          <ProtectedRoute requiredRole={['admin', 'super_admin']}>
+            <AppLayout>
+              <Finance />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/finance">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <FinanceOverviewPage />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/announcements">
+          <ProtectedRoute>
+            <AppLayout>
+              <Announcements />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/super-admin/settings">
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <SuperAdminLayout>
-                <SettingsManagement />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/reports">
+          <ProtectedRoute requiredRole={['admin', 'super_admin']}>
+            <AppLayout>
+              <Reports />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          {/* ═══ REGULAR DASHBOARD ROUTES ════════════════════ */}
-          <Route path="/dashboard">
-            <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/settings">
+          <ProtectedRoute>
+            <AppLayout>
+              <Settings />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          {/* ── Meetings ─────────────────────────────────── */}
-          <Route path="/meetings">
-            <ProtectedRoute>
-              <AppLayout>
-                <Meetings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
+        <Route path="/admin/create">
+          <ProtectedRoute requiredRole="super_admin">
+            <AppLayout>
+              <CreateAdmin />
+            </AppLayout>
+          </ProtectedRoute>
+        </Route>
 
-          <Route path="/meetings/live/:id">
-            <ProtectedRoute>
-              <AppLayout>
-                <LiveMeeting />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Members ──────────────────────────────────── */}
-          <Route path="/members">
-            <ProtectedRoute>
-              <AppLayout>
-                <Members />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Organisation ─────────────────────────────── */}
-          <Route path="/organisation">
-            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin", "Admin"]}>
-              <AppLayout>
-                <OrganisationPage />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Settings sub-routes ───────────────────────── */}
-          <Route path="/settings/profile">
-            <ProtectedRoute>
-              <AppLayout>
-                <Settings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          <Route path="/settings/org">
-            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
-              <AppLayout>
-                <OrganisationPage />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          <Route path="/settings/security">
-            <ProtectedRoute>
-              <AppLayout>
-                <Settings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          <Route path="/settings/notifications">
-            <ProtectedRoute>
-              <AppLayout>
-                <Settings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Documents ────────────────────────────────── */}
-          <Route path="/documents">
-            <ProtectedRoute>
-              <AppLayout>
-                <Documents />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Voting ───────────────────────────────────── */}
-          <Route path="/voting">
-            <ProtectedRoute>
-              <AppLayout>
-                <Voting />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Tasks ────────────────────────────────────── */}
-          <Route path="/tasks">
-            <ProtectedRoute>
-              <AppLayout>
-                <Tasks />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Finance ──────────────────────────────────── */}
-          <Route path="/finance">
-            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
-              <AppLayout>
-                <Finance />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Announcements ────────────────────────────── */}
-          <Route path="/announcements">
-            <ProtectedRoute>
-              <AppLayout>
-                <Announcements />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Reports ──────────────────────────────────── */}
-          <Route path="/reports">
-            <ProtectedRoute allowedRoles={["OrgAdmin", "SuperAdmin"]}>
-              <AppLayout>
-                <Reports />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── Settings ─────────────────────────────────── */}
-          <Route path="/settings">
-            <ProtectedRoute>
-              <AppLayout>
-                <Settings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-
-          {/* ── 404 Fallback ─────────────────────────────── */}
-          <Route component={NotFoundPage} />
-        </Switch>
-        <Toaster />
-      </Router>
-    </QueryClientProvider>
+        {/* 404 */}
+        <Route component={NotFoundPage} />
+      </Switch>
+      <Toaster />
+    </Router>
   );
 }
 

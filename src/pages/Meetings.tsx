@@ -229,12 +229,13 @@ export function Meetings() {
       return;
     }
     try {
-      // meetingsService.createMeeting() expects ISO strings for startTime / endTime
+      const fullStart = new Date(`${form.date}T${form.startTime}:00`).toISOString();
+      const fullEnd = new Date(`${form.date}T${form.endTime}:00`).toISOString();
       await createMutation.mutateAsync({
         ...form,
-        date: new Date(`${form.date}T00:00:00`).toISOString(),
-        startTime: form.startTime,
-        endTime:  form.endTime
+        date: fullStart,
+        startTime: fullStart,
+        endTime: fullEnd
       });
       toast.success('Meeting scheduled successfully!');
       setIsCreateOpen(false);
@@ -257,25 +258,16 @@ export function Meetings() {
     return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
   }).length;
 
-  const statsCards = [
-    { label: 'Total Meetings', value: allMeetings.length,  icon: Calendar,    grad: 'from-blue-500/20 to-blue-600/5',      ic: 'text-blue-500',    trend: 'All time'  },
-    { label: 'Upcoming',       value: upcomingList.length, icon: Zap,         grad: 'from-emerald-500/20 to-emerald-600/5',ic: 'text-emerald-500', trend: 'Scheduled' },
-    { label: 'Completed',      value: completedCount,      icon: CheckCircle, grad: 'from-violet-500/20 to-violet-600/5',  ic: 'text-violet-500',  trend: 'Done'      },
-    { label: 'This Month',     value: thisMonthCount,      icon: BarChart3,   grad: 'from-amber-500/20 to-amber-600/5',    ic: 'text-amber-500',   trend: 'Current'   },
-  ];
+  const getRSVPStatusCount = (meeting: EnhancedMeeting, status: RSVPStatus) => meeting.attendeeDetails?.filter((a: MeetingAttendee) => a.rsvpStatus === status).length || 0;
+  const getFormatIcon = (format: MeetingFormat) => { switch (format) { case 'physical': return <Building className="h-4 w-4" />; case 'online': return <Monitor className="h-4 w-4" />; case 'hybrid': return <Building2 className="h-4 w-4" />; }};
+  const getPriorityBadge = (priority: Priority) => { const p = PRIORITIES.find(pr => pr.value === priority); return p ? <Badge className={`${p.color} text-white text-xs`}><Flag className="h-3 w-3 mr-1" />{p.label}</Badge> : null; };
+  const getMeetingTypeBadge = (type: MeetingType) => { const t = MEETING_TYPES.find(mt => mt.value === type); return t ? <Badge className={`${t.color} text-white text-xs`}>{t.label}</Badge> : null; };
+  const getRSVPBadge = (status: RSVPStatus) => { const r = RSVP_STATUS_LABELS.find(rs => rs.value === status); return r ? <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.color}`}>{r.label}</span> : null; };
 
-  // ─── Error state ──────────────────────────────────────────────────────────────
-  if (error) {
-    return (
-      <div className="p-8 text-center space-y-3">
-        <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto">
-          <AlertCircle className="h-8 w-8 text-destructive" />
-        </div>
-        <h2 className="text-xl font-semibold text-destructive">Failed to load meetings</h2>
-        <p className="text-muted-foreground text-sm">{(error as Error).message}</p>
-      </div>
-    );
-  }
+<!-- ======= -->
+  const handleStartLive = (meetingId: string) => {
+    setLocation(`/meetings/live/${meetingId}`);
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (

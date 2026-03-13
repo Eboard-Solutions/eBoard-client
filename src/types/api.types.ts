@@ -201,7 +201,7 @@ export interface CreateOrganisationData {
   logoUrl?: string;
 }
 
-export type UpdateOrganisationData = Partial<CreateOrganisationData>;
+// export type UpdateOrganisationData = Partial<CreateOrganisationData>;
 
 // ────────────────────────────────────────────────
 // MEETING TYPES
@@ -421,7 +421,7 @@ export interface BulkDeleteData {
 // ────────────────────────────────────────────────
 // DOCUMENT TYPES
 // ────────────────────────────────────────────────
-export type DocumentAccessLevel = 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER';
+export type DocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
 
 export interface Document {
   id: string;
