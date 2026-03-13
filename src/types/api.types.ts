@@ -421,7 +421,7 @@ export interface BulkDeleteData {
 // ────────────────────────────────────────────────
 // DOCUMENT TYPES
 // ────────────────────────────────────────────────
-export type DocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
+export type DocumentAccessLevel = 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER';
 
 export interface Document {
   id: string;
