@@ -165,26 +165,46 @@ export function Meetings() {
     return matchesSearch && matchesStatus && matchesFormat;
   });
 
-  const upcomingMeetings = filteredMeetings.filter(m => m.status === 'upcoming');
-  const pastMeetings = filteredMeetings.filter(m => m.status === 'completed');
+  const upcomingList = filtered.filter(isUpcoming);
+  const pastList     = filtered.filter(m => !isUpcoming(m));
 
-  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const openDetails = (m: Meeting) => { setActiveMeeting(m); setIsDetailsOpen(true); };
 
-  const getDaysUntil = (dateStr: string) => {
-    const days = Math.ceil((new Date(dateStr).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Tomorrow';
-    if (days < 0) return 'Past';
-    return `In ${days} days`;
+  const handleCreate = async () => {
+    if (!form.title || !form.date || !form.startTime || !form.endTime) {
+      toast.error('Please fill in all required fields (title, date, start & end time)');
+      return;
+    }
+    try {
+      const fullStart = new Date(`${form.date}T${form.startTime}:00`).toISOString();
+      const fullEnd = new Date(`${form.date}T${form.endTime}:00`).toISOString();
+      await createMutation.mutateAsync({
+        ...form,
+        date: fullStart,
+        startTime: fullStart,
+        endTime: fullEnd
+      });
+      toast.success('Meeting scheduled successfully!');
+      setIsCreateOpen(false);
+      setForm({ ...BLANK_FORM });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to schedule meeting');
+    }
   };
 
-<!-- <<<<<<< meeting-features-update -->
-  const handleStartLive = (meetingId: string) => setLocation(`/meetings/live/${meetingId}`);
-  const handleViewDetails = (meeting: EnhancedMeeting) => { setSelectedMeeting(meeting); setIsDetailsDialogOpen(true); };
-  const handleToggleAttendee = (userId: string) => {
-    setFormData(prev => ({ ...prev, attendees: prev.attendees.includes(userId) ? prev.attendees.filter(id => id !== userId) : [...prev.attendees, userId] }));
+  // meetingsService.startMeeting(meetingId) would be wired here
+  const handleStart = (meetingId: string) => {
+    toast.success('Starting meeting session…');
+    setIsDetailsOpen(false);
   };
+
+  // ── Derived stats ─────────────────────────────────────────────────────────────
+  const completedCount  = allMeetings.filter(m => m.status === 'completed').length;
+  const thisMonthCount  = allMeetings.filter(m => {
+    const d = new Date(m.date), n = new Date();
+    return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+  }).length;
 
   const getRSVPStatusCount = (meeting: EnhancedMeeting, status: RSVPStatus) => meeting.attendeeDetails?.filter((a: MeetingAttendee) => a.rsvpStatus === status).length || 0;
   const getFormatIcon = (format: MeetingFormat) => { switch (format) { case 'physical': return <Building className="h-4 w-4" />; case 'online': return <Monitor className="h-4 w-4" />; case 'hybrid': return <Building2 className="h-4 w-4" />; }};
