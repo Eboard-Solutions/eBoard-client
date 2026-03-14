@@ -6,8 +6,11 @@
 import { authService as apiAuthService } from '@/api/services/auth.service';
 import { TokenService } from '@/api/client';
 
+export { TokenService };
+
 export const authService = {
-  // ─── Login variants ──────────────────────────────────
+  // ─── Login variants ───────────────────────────────────────────────────────
+
   /** Login with orgCode (regular users / board members) */
   login: apiAuthService.login.bind(apiAuthService),
 
@@ -17,26 +20,31 @@ export const authService = {
   /** Login for super admins */
   superAdminLogin: apiAuthService.superAdminLogin.bind(apiAuthService),
 
-  // ─── Registration ────────────────────────────────────
+  // ─── Registration ─────────────────────────────────────────────────────────
+
   /** Register a new organization admin */
   signUp: apiAuthService.registerOrgAdmin.bind(apiAuthService),
 
-  // ─── Password ────────────────────────────────────────
+  // ─── Password ─────────────────────────────────────────────────────────────
+
   forgotPassword: apiAuthService.forgotPassword.bind(apiAuthService),
 
-  // ─── Token / user helpers (synchronous localStorage) ─
-  getToken: () => TokenService.getAccessToken(),
+  // ─── Token / user helpers (synchronous localStorage reads) ───────────────
+
+  getToken:        () => TokenService.getAccessToken(),
   getRefreshToken: () => TokenService.getRefreshToken(),
 
+  /** Returns the stored user object set during login */
   getUser: () => TokenService.getUser<{
-    userId: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    hasOrganisation: boolean;
+    userId:             string;
+    email:              string;
+    firstName:          string;
+    lastName:           string;
+    role:               string;
+    hasOrganisation:    boolean;
     organisationStatus: string | null;
-    orgCode: string | null;
+    orgCode:            string | null;
+    organisationId?:    string | null;
   }>(),
 
   getCurrentUser(): { name: string; email: string; role: string } | null {
@@ -47,12 +55,12 @@ export const authService = {
     return !!TokenService.getAccessToken();
   },
 
-  /** Clear tokens + user data (client-side only) */
+  /** Clear tokens + user data from localStorage (client-side only) */
   logout(): void {
     TokenService.clearTokens();
   },
 
-  /** Alias used by Topbar */
+  /** Alias used by components that call clearAuth() */
   clearAuth(): void {
     TokenService.clearTokens();
   },

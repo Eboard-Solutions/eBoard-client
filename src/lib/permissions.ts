@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import authService from './auth';
+import { apiClient } from '@/api/client';
+import { TokenService } from '@/lib/auth';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AuthenticatedUser {
   userId: string;
@@ -10,7 +13,6 @@ export interface AuthenticatedUser {
   hasOrganisation: boolean;
   organisationStatus: string | null;
   orgCode: string | null;
-  // Some backends also return these field names — accept both
   organisationId?: string | null;
   orgId?: string | null;
 }
@@ -26,180 +28,144 @@ export type Permission =
   | 'orgs:view:list'
   | 'org:manage';
 
-// ---------------------------------------------------------------------------
-// Role normalization
-// ---------------------------------------------------------------------------
+export type ErrorKind =
+  | 'unreachable'
+  | 'invalid_token'
+  | 'insufficient_role'
+  | 'server_error'
+  | 'unknown'
+  | null;
+
+// ─── Role normalisation ────────────────────────────────────────────────────────
 
 const ROLE_ALIAS_MAP: Record<string, string> = {
-  'super-admin':        'super-admin',
-  'superadmin':         'super-admin',
-  'super_admin':        'super-admin',
-  'superAdmin':         'super-admin',
-  'SuperAdmin':         'super-admin',
+  // Super Admin
+  'super-admin': 'super-admin', superadmin:   'super-admin',
+  super_admin:   'super-admin', superAdmin:   'super-admin',
+  SuperAdmin:    'super-admin', SUPER_ADMIN:  'super-admin',
+  'super admin': 'super-admin',
 
-  'org-admin':          'org-admin',
-  'orgadmin':           'org-admin',
-  'org_admin':          'org-admin',
-  'orgAdmin':           'org-admin',
-  'OrgAdmin':           'org-admin',
-  'organization-admin': 'org-admin',
-  // NOTE: bare 'admin' intentionally NOT mapped to org-admin here
-  // to avoid false positives — use explicit OrgAdmin from backend
+  // Org Admin
+  'org-admin':          'org-admin', orgadmin:   'org-admin',
+  org_admin:            'org-admin', orgAdmin:   'org-admin',
+  OrgAdmin:             'org-admin', ORG_ADMIN:  'org-admin',
+  'organization-admin': 'org-admin', 'org admin':'org-admin',
 
-  'boardmember':        'board-member',
-  'board-member':       'board-member',
-  'BoardMember':        'board-member',
+  // Board Member
+  boardmember:    'board-member', 'board-member': 'board-member',
+  BoardMember:    'board-member', BOARD_MEMBER:   'board-member',
+  board_member:   'board-member', 'board member': 'board-member',
 
-  'user':               'user',
-  'User':               'user',
+  // User
+  user: 'user', User: 'user', USER: 'user',
+
+  // Admin
+  admin: 'admin', Admin: 'admin', ADMIN: 'admin',
 };
 
 function normalizeRole(raw: string): string {
   const trimmed = (raw ?? '').trim();
   if (ROLE_ALIAS_MAP[trimmed]) return ROLE_ALIAS_MAP[trimmed];
   const lower = trimmed.toLowerCase();
-  return ROLE_ALIAS_MAP[lower] ?? lower;
+  if (ROLE_ALIAS_MAP[lower]) return ROLE_ALIAS_MAP[lower];
+  const stripped = lower.replace(/[_-\s]/g, '');
+  if (ROLE_ALIAS_MAP[stripped]) return ROLE_ALIAS_MAP[stripped];
+  return lower;
 }
 
-// ---------------------------------------------------------------------------
-// Permission matrix
-// ---------------------------------------------------------------------------
+// ─── Permission matrix ────────────────────────────────────────────────────────
 
 const SUPER_ADMIN_ROLE = 'super-admin';
 const ORG_ADMIN_ROLE   = 'org-admin';
 
-type PermissionMap = Record<string, Permission[]>;
-
-const ROLE_PERMISSIONS: PermissionMap = {
+const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   [SUPER_ADMIN_ROLE]: [
-    'members:view:any',
-    'members:view:own',
-    'members:invite',
-    'members:update',
-    'members:delete',
-    'members:change_org',
-    'members:assign:super-admin',
-    'orgs:view:list',
-    'org:manage',
+    'members:view:any', 'members:view:own', 'members:invite',
+    'members:update',   'members:delete',   'members:change_org',
+    'members:assign:super-admin', 'orgs:view:list', 'org:manage',
   ],
   [ORG_ADMIN_ROLE]: [
-    'members:view:own',
-    'members:invite',
-    'members:update',
-    'members:delete',
-    'org:manage',
+    'members:view:own', 'members:invite', 'members:update',
+    'members:delete',   'org:manage',
   ],
   'board-member': ['members:view:own'],
   'user':         ['members:view:own'],
+  'admin':        ['members:view:own', 'members:update'],
 };
 
-// ---------------------------------------------------------------------------
-// Hook result
-// ---------------------------------------------------------------------------
-
-interface UsePermissionsResult {
-  can: (perm: Permission) => boolean;
-  isSuperAdmin: boolean;
-  isOrgAdmin: boolean;
-  currentorganisationId: string | null;
-  user: AuthenticatedUser | null;
-  isLoading: boolean;
-  authError: string | null;
-  authErrorKind: 'unreachable' | 'invalid_token' | 'insufficient_role' | 'server_error' | 'unknown' | null;
-  refresh: () => Promise<void>;
-}
-
-type ErrorKind = UsePermissionsResult['authErrorKind'];
-
-// ---------------------------------------------------------------------------
-// Error classifier
-// ---------------------------------------------------------------------------
+// ─── Error classifier ─────────────────────────────────────────────────────────
 
 function classifyError(err: unknown, status?: number): { message: string; kind: ErrorKind } {
-  if (status === 401) {
-    return {
-      message: 'Your session token is invalid or has expired. Please sign in again.',
-      kind: 'invalid_token',
-    };
-  }
-  if (status === 403) {
-    return {
-      message: 'Your account does not have permission to access this resource.',
-      kind: 'insufficient_role',
-    };
-  }
-  // ── FIX: 500 is a server crash — do NOT log the user out.
-  // Show a soft warning and fall back to cached token data so the
-  // app stays functional even when /auth/me is temporarily broken.
-  if (status !== undefined && status >= 500) {
-    return {
-      message: 'The server encountered an error. Some features may be limited.',
-      kind: 'server_error',
-    };
-  }
-  if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
-    return {
-      message: 'Cannot reach the backend server. Check that it is running and accessible.',
-      kind: 'unreachable',
-    };
-  }
-  const msg = err instanceof Error ? err.message : String(err);
-  if (
-    msg.includes('Connection terminated') ||
-    msg.includes('ECONNREFUSED') ||
-    msg.includes('NetworkError') ||
-    msg.includes('Failed to fetch')
-  ) {
-    return {
-      message: 'Backend is unreachable or crashed. Check server logs for database/connection errors.',
-      kind: 'unreachable',
-    };
-  }
-  return {
-    message: msg || 'Failed to verify authentication.',
-    kind: 'unknown',
-  };
+  if (status === 401)
+    return { message: 'Your session has expired. Please sign in again.', kind: 'invalid_token' };
+  if (status === 403)
+    return { message: 'You do not have permission to access this resource.', kind: 'insufficient_role' };
+  if (status !== undefined && status >= 500)
+    return { message: 'The server is temporarily unavailable. Using cached session.', kind: 'server_error' };
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  if (err instanceof TypeError || msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Network Error'))
+    return { message: 'Cannot reach the server. Check your connection.', kind: 'unreachable' };
+  return { message: msg || 'Authentication check failed.', kind: 'unknown' };
 }
 
-// ---------------------------------------------------------------------------
-// Build a best-effort AuthenticatedUser from the cached token payload
-// so the app stays functional when /auth/me returns 500.
-// ---------------------------------------------------------------------------
+// ─── Cache reader ─────────────────────────────────────────────────────────────
 
-function buildUserFromCache(): AuthenticatedUser | null {
+function readCachedUser(): AuthenticatedUser | null {
   try {
-    const cached = authService.getUser?.();
-    if (cached) return cached as AuthenticatedUser;
+    // Primary: user object stored in localStorage on login
+    const stored = TokenService.getUser<AuthenticatedUser>();
+    if (stored && typeof stored.role === 'string' && stored.role) {
+      return stored;
+    }
 
-    // Fallback: decode JWT payload if getUser isn't available
-    const token = authService.getToken?.();
+    // Fallback: decode the JWT payload
+    const token = TokenService.getAccessToken();
     if (!token) return null;
-    const parts   = token.split('.');
+
+    const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
+
+    const b64    = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '==='.slice((b64.length % 4) || 4);
+    const payload = JSON.parse(atob(padded));
+
+    if (!payload?.sub) return null;
+
     return {
-      userId:             payload.sub ?? payload.userId ?? '',
-      email:              payload.email ?? '',
-      firstName:          payload.firstName ?? '',
-      lastName:           payload.lastName ?? '',
-      role:               payload.role ?? '',
-      hasOrganisation:    payload.hasOrganisation ?? false,
+      userId:             String(payload.sub),
+      email:              String(payload.email ?? ''),
+      firstName:          String(payload.firstName ?? ''),
+      lastName:           String(payload.lastName ?? ''),
+      role:               String(payload.role ?? ''),
+      hasOrganisation:    Boolean(payload.hasOrganisation ?? false),
       organisationStatus: payload.organisationStatus ?? null,
       orgCode:            payload.orgCode ?? payload.organisationId ?? null,
+      organisationId:     payload.organisationId ?? null,
     };
   } catch {
     return null;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+interface UsePermissionsResult {
+  can:                    (perm: Permission) => boolean;
+  isSuperAdmin:           boolean;
+  isOrgAdmin:             boolean;
+  normalizedRole:         string;
+  currentorganisationId:  string | null;
+  user:                   AuthenticatedUser | null;
+  isLoading:              boolean;
+  authError:              string | null;
+  authErrorKind:          ErrorKind;
+  refresh:                () => Promise<void>;
+}
 
 export function usePermissions(): UsePermissionsResult {
-  const [user, setUser]           = useState<AuthenticatedUser | null>(null);
+  const [user,      setUser]      = useState<AuthenticatedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const [error,     setError]     = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ErrorKind>(null);
 
   const loadUser = useCallback(async () => {
@@ -207,13 +173,8 @@ export function usePermissions(): UsePermissionsResult {
     setError(null);
     setErrorKind(null);
 
-    if (!authService.isAuthenticated()) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const token = authService.getToken();
+    // Not logged in
+    const token = TokenService.getAccessToken();
     if (!token) {
       setUser(null);
       setIsLoading(false);
@@ -223,62 +184,39 @@ export function usePermissions(): UsePermissionsResult {
     let status: number | undefined;
 
     try {
-      const response = await fetch('/api/v1/auth/me', {
-        method: 'GET',
-        credentials: 'omit',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-      });
+      // KEY FIX: use apiClient (Axios) instead of raw fetch.
+      // Raw fetch('/api/v1/auth/me') is a RELATIVE URL that hits the Vite
+      // dev server (localhost:3001), not the backend (localhost:3000).
+      // apiClient uses API_CONFIG.BASE_URL which resolves to VITE_API_URL
+      // (localhost:3000) and automatically attaches the Bearer token via
+      // the request interceptor.
+      const response = await apiClient.get<{ data: AuthenticatedUser }>('/auth/me');
+      const data = response.data.data ?? response.data;
+      setUser(data as AuthenticatedUser);
+      // Keep localStorage in sync with fresh data
+      TokenService.setUser(data);
+      setError(null);
+      setErrorKind(null);
 
-      status = response.status;
+    } catch (err: any) {
+      status = err?.response?.status;
 
-      if (!response.ok) {
-        // ── FIX: only log out on auth failures (401/403), NOT on server errors (5xx).
-        // A 500 means the backend crashed — the user's token is still valid.
-        if (status === 401 || status === 403) {
-          authService.logout();
-          let serverMessage: string | undefined;
-          try { const e = await response.json(); serverMessage = e?.message; } catch { /* ignore */ }
-          const { message, kind } = classifyError(new Error(serverMessage ?? `HTTP ${status}`), status);
-          setError(message);
-          setErrorKind(kind);
-          setUser(null);
-          return;
-        }
-
-        // 5xx or other unexpected status — use cached user so app still works
-        const { message, kind } = classifyError(new Error(`HTTP ${status}`), status);
-        const cached = buildUserFromCache();
-        if (cached) {
-          // We have cached data — set user so permissions work, but surface a soft warning
-          setUser(cached);
-          setError(message);
-          setErrorKind(kind);
-        } else {
-          setUser(null);
-          setError(message);
-          setErrorKind(kind);
-        }
+      if (status === 401 || status === 403) {
+        // Genuine auth failure — apiClient interceptor already handles
+        // token refresh for 401. If we still get here, the session is dead.
+        TokenService.clearTokens();
+        const { message, kind } = classifyError(err, status);
+        setUser(null);
+        setError(message);
+        setErrorKind(kind);
+        setIsLoading(false);
         return;
       }
 
-      const data = (await response.json()) as AuthenticatedUser;
-      setUser(data);
-      setError(null);
-      setErrorKind(null);
-    } catch (err: unknown) {
-      console.error('[usePermissions] Failed to load user:', err);
+      // 5xx or network error — fall back to cached user so UI keeps working
       const { message, kind } = classifyError(err, status);
-      // Network error — try to stay functional with cached data
-      const cached = buildUserFromCache();
-      if (cached) {
-        setUser(cached);
-      } else {
-        setUser(null);
-      }
+      const cached = readCachedUser();
+      setUser(cached);
       setError(message);
       setErrorKind(kind);
     } finally {
@@ -286,48 +224,41 @@ export function usePermissions(): UsePermissionsResult {
     }
   }, []);
 
-  useEffect(() => {
-    void loadUser();
-  }, [loadUser]);
+  useEffect(() => { void loadUser(); }, [loadUser]);
 
-  const normalizedRole = useMemo(
+  const _normalizedRole = useMemo(
     () => normalizeRole(user?.role ?? ''),
     [user?.role],
   );
 
-  const isSuperAdmin = normalizedRole === SUPER_ADMIN_ROLE;
-  const isOrgAdmin   = normalizedRole === ORG_ADMIN_ROLE;
+  const isSuperAdmin = _normalizedRole === SUPER_ADMIN_ROLE;
+  const isOrgAdmin   = _normalizedRole === ORG_ADMIN_ROLE;
 
-  // ── FIX: accept multiple field names the backend might return for the org ID
-  const currentorganisationId = useMemo(() => {
+  const currentorganisationId = useMemo((): string | null => {
     if (!user) return null;
-    return (
-      user.orgCode         ??
-      user.organisationId  ??
-      user.orgId           ??
-      null
-    );
+    return user.orgCode ?? user.organisationId ?? user.orgId ?? null;
   }, [user]);
 
   const can = useCallback(
     (permission: Permission): boolean => {
-      if (isLoading || !user) return false;
-      const allowed = ROLE_PERMISSIONS[normalizedRole];
+      if (!user) return false;
+      const allowed = ROLE_PERMISSIONS[_normalizedRole];
       if (!allowed) return false;
       return allowed.includes(permission);
     },
-    [isLoading, user, normalizedRole],
+    [user, _normalizedRole],
   );
 
   return {
     can,
     isSuperAdmin,
     isOrgAdmin,
+    normalizedRole:        _normalizedRole,
     currentorganisationId,
     user,
     isLoading,
-    authError: error,
-    authErrorKind: errorKind,
-    refresh: loadUser,
+    authError:             error,
+    authErrorKind:         errorKind,
+    refresh:               loadUser,
   };
 }
