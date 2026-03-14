@@ -1,169 +1,199 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Shield } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Edit3, Trash2, Shield, Crown, Users, UserCheck, UserX, MoreHorizontal,
+} from 'lucide-react';
+import type { DisplayUser } from './types';
 
-interface User {
-  id: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-  avatar?: string;
-  profilePictureUrl?: string;
-  role: string;
-  title?: string;
-  position?: string;
-  phoneNumber?: string;
-  phone?: string;
-  committees?: string[];
-}
+// ─── Role config ──────────────────────────────────────────────────────────────
 
-interface Props {
-  members: User[];
-  onEdit?: (member: User) => void;
-  onDelete?: (id: string) => void;
-}
-
-const roleConfig: Record<string, { label: string; className: string }> = {
-  SuperAdmin: { label: 'Super Admin', className: 'bg-violet-100 text-violet-700 border-violet-200' },
-  OrgAdmin: { label: 'Org Admin', className: 'bg-blue-100 text-blue-700 border-blue-200' },
-  Admin: { label: 'Admin', className: 'bg-sky-100 text-sky-700 border-sky-200' },
-  BoardMember: { label: 'Board Member', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  User: { label: 'User', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+const ROLE_CONFIG: Record<string, {
+  label: string; color: string; bg: string; border: string; icon: React.ElementType;
+}> = {
+  SuperAdmin:  { label: 'Super Admin',  color: 'text-violet-700 dark:text-violet-300', bg: 'bg-violet-100 dark:bg-violet-900/30', border: 'border-violet-200 dark:border-violet-700', icon: Crown     },
+  OrgAdmin:    { label: 'Org Admin',    color: 'text-blue-700 dark:text-blue-300',     bg: 'bg-blue-100 dark:bg-blue-900/30',     border: 'border-blue-200 dark:border-blue-700',   icon: Shield    },
+  Admin:       { label: 'Admin',        color: 'text-sky-700 dark:text-sky-300',       bg: 'bg-sky-100 dark:bg-sky-900/30',       border: 'border-sky-200 dark:border-sky-700',     icon: Shield    },
+  BoardMember: { label: 'Board Member', color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-100 dark:bg-emerald-900/30', border: 'border-emerald-200 dark:border-emerald-700', icon: UserCheck },
+  User:        { label: 'User',         color: 'text-slate-600 dark:text-slate-400',   bg: 'bg-slate-100 dark:bg-slate-800',      border: 'border-slate-200 dark:border-slate-700', icon: Users     },
 };
 
-const avatarGradients = [
+const AVATAR_GRADIENTS = [
   'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-600',
-  'from-emerald-500 to-teal-600',
-  'from-amber-500 to-orange-600',
-  'from-rose-500 to-pink-600',
+  'from-blue-500 to-cyan-500',
+  'from-emerald-500 to-teal-500',
+  'from-amber-500 to-orange-500',
+  'from-rose-500 to-pink-500',
+  'from-indigo-500 to-blue-600',
 ];
 
-function getInitials(user: User) {
-  if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`;
-  if (user.name) return user.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getRoleConfig(role: string) {
+  return ROLE_CONFIG[role] ?? {
+    label: role, color: 'text-slate-600', bg: 'bg-slate-100',
+    border: 'border-slate-200', icon: Users,
+  };
+}
+
+function getInitials(user: DisplayUser): string {
+  if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+  if (user.name) return user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   return user.email[0].toUpperCase();
 }
 
-function getAvatarGradient(id: string) {
-  return avatarGradients[id.charCodeAt(0) % avatarGradients.length];
+function getGradient(id: string): string {
+  if (!id) return AVATAR_GRADIENTS[0];
+  return AVATAR_GRADIENTS[id.charCodeAt(0) % AVATAR_GRADIENTS.length];
 }
 
-export default function MembersList({ members, onEdit, onDelete }: Props) {
-  const getRole = (r: string) => roleConfig[r] ?? { label: r, className: 'bg-slate-100 text-slate-600 border-slate-200' };
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface Props {
+  members: DisplayUser[];
+  canEdit?: boolean;
+  canDelete?: boolean;
+  onEdit?: (member: DisplayUser) => void;
+  onDelete?: (id: string) => void;
+  onToggleActive?: (member: DisplayUser) => void;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function MembersList({
+  members,
+  canEdit = false,
+  canDelete = false,
+  onEdit,
+  onDelete,
+  onToggleActive,
+}: Props) {
+  const showActions = canEdit || canDelete;
 
   return (
-    <div className="rounded-xl border border-border/60 overflow-hidden bg-card shadow-sm">
+    <div className="rounded-2xl border border-border/60 overflow-hidden bg-card shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
-            <TableHead className="font-semibold text-foreground pl-5 py-3.5">Member</TableHead>
-            <TableHead className="font-semibold text-foreground py-3.5">Role</TableHead>
-            <TableHead className="font-semibold text-foreground py-3.5">Title</TableHead>
-            <TableHead className="font-semibold text-foreground py-3.5">Contact</TableHead>
-            <TableHead className="font-semibold text-foreground py-3.5">Committees</TableHead>
-            {(onEdit || onDelete) && (
-              <TableHead className="font-semibold text-foreground text-right pr-5 py-3.5">Actions</TableHead>
+            <TableHead className="pl-5 py-3.5 font-semibold text-foreground">Member</TableHead>
+            <TableHead className="py-3.5 font-semibold text-foreground">Role</TableHead>
+            <TableHead className="py-3.5 font-semibold text-foreground">Title</TableHead>
+            <TableHead className="py-3.5 font-semibold text-foreground">Phone</TableHead>
+            <TableHead className="py-3.5 font-semibold text-foreground">Status</TableHead>
+            {showActions && (
+              <TableHead className="pr-5 py-3.5 text-right font-semibold text-foreground w-16">
+                Actions
+              </TableHead>
             )}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {members.map((user, idx) => {
-            const { label, className } = getRole(user.role);
-            const gradient = getAvatarGradient(user.id);
+          {members.map(user => {
+            const cfg = getRoleConfig(user.role);
+            const Icon = cfg.icon;
+            const gradient = getGradient(user.id);
             const initials = getInitials(user);
 
             return (
               <TableRow
                 key={user.id}
-                className="border-b border-border/40 hover:bg-muted/30 transition-colors group"
+                className="group border-b border-border/40 hover:bg-muted/20 transition-colors"
               >
                 {/* Member */}
-                <TableCell className="pl-5 py-4">
+                <TableCell className="pl-5 py-3.5">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 shrink-0 ring-1 ring-border/50">
-                      <AvatarImage src={user.profilePictureUrl ?? user.avatar} />
-                      <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-xs font-semibold`}>
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative shrink-0">
+                      <Avatar className="h-9 w-9 ring-1 ring-border/50">
+                        <AvatarImage src={user.avatar} alt={user.name} />
+                        <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-xs font-bold`}>
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${
+                        user.isActive ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'
+                      }`} />
+                    </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-foreground text-sm truncate">{user.name}</p>
+                      <p className="font-medium text-sm text-foreground truncate">{user.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                   </div>
                 </TableCell>
 
                 {/* Role */}
-                <TableCell className="py-4">
-                  <Badge variant="outline" className={`text-xs font-medium border ${className} gap-1`}>
-                    <Shield className="h-2.5 w-2.5" />
-                    {label}
-                  </Badge>
+                <TableCell className="py-3.5">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
+                    <Icon className="h-2.5 w-2.5" />
+                    {cfg.label}
+                  </span>
                 </TableCell>
 
                 {/* Title */}
-                <TableCell className="py-4">
-                  <span className="text-sm text-muted-foreground">
-                    {user.title ?? user.position ?? '—'}
-                  </span>
+                <TableCell className="py-3.5 text-sm text-muted-foreground">
+                  {user.position ?? '—'}
                 </TableCell>
 
-                {/* Contact */}
-                <TableCell className="py-4">
-                  <span className="text-sm text-muted-foreground">
-                    {user.phoneNumber ?? user.phone ?? '—'}
-                  </span>
+                {/* Phone */}
+                <TableCell className="py-3.5 text-sm text-muted-foreground">
+                  {user.phone ?? '—'}
                 </TableCell>
 
-                {/* Committees */}
-                <TableCell className="py-4">
-                  {(user.committees?.length ?? 0) > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {user.committees!.slice(0, 2).map((c) => (
-                        <Badge key={c} variant="outline" className="text-xs px-1.5 py-0 h-5 border-dashed">
-                          {c}
-                        </Badge>
-                      ))}
-                      {user.committees!.length > 2 && (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 text-muted-foreground">
-                          +{user.committees!.length - 2}
-                        </Badge>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
+                {/* Status */}
+                <TableCell className="py-3.5">
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                    user.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${user.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                    {user.isActive ? 'Active' : 'Inactive'}
+                  </span>
                 </TableCell>
 
                 {/* Actions */}
-                {(onEdit || onDelete) && (
-                  <TableCell className="pr-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {onEdit && (
+                {showActions && (
+                  <TableCell className="pr-5 py-3.5 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
-                          onClick={() => onEdit(user)}
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Edit className="h-3.5 w-3.5" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                      )}
-                      {onDelete && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => onDelete(user.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        {canEdit && onEdit && (
+                          <DropdownMenuItem onClick={() => onEdit(user)}>
+                            <Edit3 className="h-3.5 w-3.5 mr-2" />Edit Details
+                          </DropdownMenuItem>
+                        )}
+                        {canEdit && onToggleActive && (
+                          <DropdownMenuItem onClick={() => onToggleActive(user)}>
+                            {user.isActive
+                              ? <><UserX className="h-3.5 w-3.5 mr-2" />Deactivate</>
+                              : <><UserCheck className="h-3.5 w-3.5 mr-2" />Activate</>
+                            }
+                          </DropdownMenuItem>
+                        )}
+                        {canDelete && onDelete && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => onDelete(user.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />Remove
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 )}
               </TableRow>

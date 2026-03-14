@@ -10,6 +10,9 @@ export interface AuthenticatedUser {
   hasOrganisation: boolean;
   organisationStatus: string | null;
   orgCode: string | null;
+  // Some backends also return these field names — accept both
+  organisationId?: string | null;
+  orgId?: string | null;
 }
 
 export type Permission =
@@ -21,47 +24,39 @@ export type Permission =
   | 'members:change_org'
   | 'members:assign:super-admin'
   | 'orgs:view:list'
-  | 'org:manage';           // ← was missing; caused console spam
+  | 'org:manage';
 
 // ---------------------------------------------------------------------------
 // Role normalization
 // ---------------------------------------------------------------------------
-// Centralise all known role strings → canonical internal key.
-// Backend may send "super-admin", "SuperAdmin", "superadmin" etc.
-// We normalise to lowercase-hyphenated before comparing.
 
 const ROLE_ALIAS_MAP: Record<string, string> = {
-  // super-admin variants
-  'super-admin':  'super-admin',
-  'superadmin':   'super-admin',
-  'super_admin':  'super-admin',
-  'superAdmin':   'super-admin',   // camelCase leaks
-  'SuperAdmin':   'super-admin',
+  'super-admin':        'super-admin',
+  'superadmin':         'super-admin',
+  'super_admin':        'super-admin',
+  'superAdmin':         'super-admin',
+  'SuperAdmin':         'super-admin',
 
-  // org-admin variants
-  'org-admin':         'org-admin',
-  'orgadmin':          'org-admin',
-  'org_admin':         'org-admin',
-  'orgAdmin':          'org-admin',
-  'OrgAdmin':          'org-admin',
-  'organization-admin':'org-admin',
-  'admin':             'org-admin',  // treat bare "admin" as org-admin
+  'org-admin':          'org-admin',
+  'orgadmin':           'org-admin',
+  'org_admin':          'org-admin',
+  'orgAdmin':           'org-admin',
+  'OrgAdmin':           'org-admin',
+  'organization-admin': 'org-admin',
+  // NOTE: bare 'admin' intentionally NOT mapped to org-admin here
+  // to avoid false positives — use explicit OrgAdmin from backend
 
-  // board / member
-  'boardmember':  'board-member',
-  'board-member': 'board-member',
-  'BoardMember':  'board-member',
+  'boardmember':        'board-member',
+  'board-member':       'board-member',
+  'BoardMember':        'board-member',
 
-  // plain user
-  'user':  'user',
-  'User':  'user',
+  'user':               'user',
+  'User':               'user',
 };
 
 function normalizeRole(raw: string): string {
   const trimmed = (raw ?? '').trim();
-  // Exact-match lookup first
   if (ROLE_ALIAS_MAP[trimmed]) return ROLE_ALIAS_MAP[trimmed];
-  // Lowercase fallback
   const lower = trimmed.toLowerCase();
   return ROLE_ALIAS_MAP[lower] ?? lower;
 }
@@ -94,16 +89,12 @@ const ROLE_PERMISSIONS: PermissionMap = {
     'members:delete',
     'org:manage',
   ],
-  'board-member': [
-    'members:view:own',
-  ],
-  'user': [
-    'members:view:own',
-  ],
+  'board-member': ['members:view:own'],
+  'user':         ['members:view:own'],
 };
 
 // ---------------------------------------------------------------------------
-// Hook result shape
+// Hook result
 // ---------------------------------------------------------------------------
 
 interface UsePermissionsResult {
@@ -114,15 +105,15 @@ interface UsePermissionsResult {
   user: AuthenticatedUser | null;
   isLoading: boolean;
   authError: string | null;
-  authErrorKind: 'unreachable' | 'invalid_token' | 'insufficient_role' | 'unknown' | null;
+  authErrorKind: 'unreachable' | 'invalid_token' | 'insufficient_role' | 'server_error' | 'unknown' | null;
   refresh: () => Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
-// Classify fetch errors into human-readable kinds
-// ---------------------------------------------------------------------------
-
 type ErrorKind = UsePermissionsResult['authErrorKind'];
+
+// ---------------------------------------------------------------------------
+// Error classifier
+// ---------------------------------------------------------------------------
 
 function classifyError(err: unknown, status?: number): { message: string; kind: ErrorKind } {
   if (status === 401) {
@@ -135,6 +126,15 @@ function classifyError(err: unknown, status?: number): { message: string; kind: 
     return {
       message: 'Your account does not have permission to access this resource.',
       kind: 'insufficient_role',
+    };
+  }
+  // ── FIX: 500 is a server crash — do NOT log the user out.
+  // Show a soft warning and fall back to cached token data so the
+  // app stays functional even when /auth/me is temporarily broken.
+  if (status !== undefined && status >= 500) {
+    return {
+      message: 'The server encountered an error. Some features may be limited.',
+      kind: 'server_error',
     };
   }
   if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
@@ -159,6 +159,37 @@ function classifyError(err: unknown, status?: number): { message: string; kind: 
     message: msg || 'Failed to verify authentication.',
     kind: 'unknown',
   };
+}
+
+// ---------------------------------------------------------------------------
+// Build a best-effort AuthenticatedUser from the cached token payload
+// so the app stays functional when /auth/me returns 500.
+// ---------------------------------------------------------------------------
+
+function buildUserFromCache(): AuthenticatedUser | null {
+  try {
+    const cached = authService.getUser?.();
+    if (cached) return cached as AuthenticatedUser;
+
+    // Fallback: decode JWT payload if getUser isn't available
+    const token = authService.getToken?.();
+    if (!token) return null;
+    const parts   = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return {
+      userId:             payload.sub ?? payload.userId ?? '',
+      email:              payload.email ?? '',
+      firstName:          payload.firstName ?? '',
+      lastName:           payload.lastName ?? '',
+      role:               payload.role ?? '',
+      hasOrganisation:    payload.hasOrganisation ?? false,
+      organisationStatus: payload.organisationStatus ?? null,
+      orgCode:            payload.orgCode ?? payload.organisationId ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -205,23 +236,32 @@ export function usePermissions(): UsePermissionsResult {
       status = response.status;
 
       if (!response.ok) {
+        // ── FIX: only log out on auth failures (401/403), NOT on server errors (5xx).
+        // A 500 means the backend crashed — the user's token is still valid.
         if (status === 401 || status === 403) {
           authService.logout();
+          let serverMessage: string | undefined;
+          try { const e = await response.json(); serverMessage = e?.message; } catch { /* ignore */ }
+          const { message, kind } = classifyError(new Error(serverMessage ?? `HTTP ${status}`), status);
+          setError(message);
+          setErrorKind(kind);
+          setUser(null);
+          return;
         }
-        let serverMessage: string | undefined;
-        try {
-          const errData = await response.json();
-          serverMessage = errData?.message;
-        } catch {
-          // ignore JSON parse failure
+
+        // 5xx or other unexpected status — use cached user so app still works
+        const { message, kind } = classifyError(new Error(`HTTP ${status}`), status);
+        const cached = buildUserFromCache();
+        if (cached) {
+          // We have cached data — set user so permissions work, but surface a soft warning
+          setUser(cached);
+          setError(message);
+          setErrorKind(kind);
+        } else {
+          setUser(null);
+          setError(message);
+          setErrorKind(kind);
         }
-        const { message, kind } = classifyError(
-          new Error(serverMessage ?? `HTTP ${status}`),
-          status,
-        );
-        setError(message);
-        setErrorKind(kind);
-        setUser(null);
         return;
       }
 
@@ -232,9 +272,15 @@ export function usePermissions(): UsePermissionsResult {
     } catch (err: unknown) {
       console.error('[usePermissions] Failed to load user:', err);
       const { message, kind } = classifyError(err, status);
+      // Network error — try to stay functional with cached data
+      const cached = buildUserFromCache();
+      if (cached) {
+        setUser(cached);
+      } else {
+        setUser(null);
+      }
       setError(message);
       setErrorKind(kind);
-      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -244,7 +290,6 @@ export function usePermissions(): UsePermissionsResult {
     void loadUser();
   }, [loadUser]);
 
-  // Derive normalised role once
   const normalizedRole = useMemo(
     () => normalizeRole(user?.role ?? ''),
     [user?.role],
@@ -253,17 +298,22 @@ export function usePermissions(): UsePermissionsResult {
   const isSuperAdmin = normalizedRole === SUPER_ADMIN_ROLE;
   const isOrgAdmin   = normalizedRole === ORG_ADMIN_ROLE;
 
-  const currentorganisationId = user?.orgCode ?? null;
+  // ── FIX: accept multiple field names the backend might return for the org ID
+  const currentorganisationId = useMemo(() => {
+    if (!user) return null;
+    return (
+      user.orgCode         ??
+      user.organisationId  ??
+      user.orgId           ??
+      null
+    );
+  }, [user]);
 
   const can = useCallback(
     (permission: Permission): boolean => {
       if (isLoading || !user) return false;
-
       const allowed = ROLE_PERMISSIONS[normalizedRole];
-      if (!allowed) {
-        // Unknown role → deny but don't spam the console for known app permissions
-        return false;
-      }
+      if (!allowed) return false;
       return allowed.includes(permission);
     },
     [isLoading, user, normalizedRole],

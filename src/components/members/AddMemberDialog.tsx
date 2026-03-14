@@ -1,307 +1,259 @@
-// src/components/members/AddMemberDialog.tsx
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { X, UserPlus, Mail, Phone, Link, Shield, Briefcase } from 'lucide-react';
+import { UserPlus, Mail, Phone, Briefcase, LinkIcon, Eye, EyeOff } from 'lucide-react';
 
-const addMemberSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['SuperAdmin', 'OrgAdmin', 'Admin', 'BoardMember', 'User'], {
-    required_error: 'Please select a role',
-  }),
-  title: z.string().optional(),
-  phoneNumber: z.string().optional(),
-  profilePictureUrl: z.string().url({ message: 'Invalid URL' }).optional().or(z.literal('')),
-  committees: z.array(z.string()).optional().default([]),
-});
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type AddMemberForm = z.infer<typeof addMemberSchema>;
-
-interface Props {
-  onSubmit: (data: AddMemberForm) => void;
-  committees: string[];
-  allowSuperAdminRole: boolean;
+export interface AddMemberFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  role: string;
+  title?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
 }
 
-export default function AddMemberDialog({ onSubmit, committees, allowSuperAdminRole }: Props) {
-  const form = useForm<AddMemberForm>({
-    resolver: zodResolver(addMemberSchema),
-    defaultValues: {
-      firstName: '',
-      lastName: '',
-      email: '',
-      role: 'BoardMember',
-      title: '',
-      phoneNumber: '',
-      profilePictureUrl: '',
-      committees: [],
-    },
-    mode: 'onChange',
-    reValidateMode: 'onChange',
+interface Props {
+  onSubmit: (data: AddMemberFormData) => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+  allowSuperAdminRole?: boolean;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function AddMemberDialog({
+  onSubmit,
+  onCancel,
+  isLoading = false,
+  allowSuperAdminRole = false,
+}: Props) {
+  const [form, setForm] = useState<AddMemberFormData>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    role: 'BoardMember',
+    title: '',
+    phoneNumber: '',
+    profilePictureUrl: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<keyof AddMemberFormData, string>>>({});
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    setValue,
-    watch,
-    trigger,
-  } = form;
+  function set(key: keyof AddMemberFormData, value: string) {
+    setForm(p => ({ ...p, [key]: value }));
+    // Clear error on change
+    if (errors[key]) setErrors(p => ({ ...p, [key]: undefined }));
+  }
 
-  const selectedCommittees = watch('committees') || [];
-
-  const handleAddCommittee = (committee: string) => {
-    if (!selectedCommittees.includes(committee)) {
-      setValue('committees', [...selectedCommittees, committee], { shouldValidate: true });
-      trigger('committees');
+  function validate(): boolean {
+    const e: typeof errors = {};
+    if (!form.firstName.trim()) e.firstName = 'First name is required';
+    if (!form.lastName.trim())  e.lastName  = 'Last name is required';
+    if (!form.email.trim())     e.email     = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
+    if (!form.password)         e.password  = 'Password is required';
+    else if (form.password.length < 8) e.password = 'Password must be at least 8 characters';
+    if (form.profilePictureUrl && !/^https?:\/\/.+/.test(form.profilePictureUrl)) {
+      e.profilePictureUrl = 'Must be a valid URL starting with http(s)://';
     }
-  };
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
 
-  const handleRemoveCommittee = (committee: string) => {
-    setValue(
-      'committees',
-      selectedCommittees.filter((c) => c !== committee),
-      { shouldValidate: true }
-    );
-    trigger('committees');
-  };
-
-  const onFormSubmit = (data: AddMemberForm) => {
-    onSubmit(data);
-  };
-
-  const hasErrors = Object.keys(errors).length > 0;
+  function handleSubmit() {
+    if (!validate()) return;
+    // Strip empty optional fields before submitting
+    const payload: AddMemberFormData = {
+      ...form,
+      title: form.title?.trim() || undefined,
+      phoneNumber: form.phoneNumber?.trim() || undefined,
+      profilePictureUrl: form.profilePictureUrl?.trim() || undefined,
+    };
+    onSubmit(payload);
+  }
 
   return (
     <>
-      <DialogHeader className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <UserPlus className="h-5 w-5 text-primary" />
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2.5 text-lg">
+          <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+            <UserPlus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <div>
-            <DialogTitle className="text-xl font-semibold">Add New Member</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground mt-0.5">
-              Fill in the details below to add a new member to your organization.
-            </DialogDescription>
-          </div>
-        </div>
+          Add New Member
+        </DialogTitle>
+        <DialogDescription>
+          Create an account for a new member. They will be prompted to change their password on first login.
+        </DialogDescription>
       </DialogHeader>
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
-        {/* Names */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-4 py-2">
+        {/* Name row */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="firstName" className="text-sm font-medium">
-              First Name <span className="text-destructive">*</span>
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              First Name <span className="text-destructive normal-case">*</span>
             </Label>
             <Input
-              id="firstName"
-              placeholder="e.g. Jane"
-              {...register('firstName')}
-              className={errors.firstName ? 'border-destructive' : ''}
+              value={form.firstName}
+              onChange={e => set('firstName', e.target.value)}
+              placeholder="Jane"
+              className={`h-9 text-sm ${errors.firstName ? 'border-destructive focus-visible:ring-destructive' : ''}`}
             />
-            {errors.firstName && (
-              <p className="text-xs text-destructive">{errors.firstName.message}</p>
-            )}
+            {errors.firstName && <p className="text-xs text-destructive">{errors.firstName}</p>}
           </div>
-
           <div className="space-y-1.5">
-            <Label htmlFor="lastName" className="text-sm font-medium">
-              Last Name <span className="text-destructive">*</span>
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Last Name <span className="text-destructive normal-case">*</span>
             </Label>
             <Input
-              id="lastName"
-              placeholder="e.g. Smith"
-              {...register('lastName')}
-              className={errors.lastName ? 'border-destructive' : ''}
+              value={form.lastName}
+              onChange={e => set('lastName', e.target.value)}
+              placeholder="Smith"
+              className={`h-9 text-sm ${errors.lastName ? 'border-destructive focus-visible:ring-destructive' : ''}`}
             />
-            {errors.lastName && (
-              <p className="text-xs text-destructive">{errors.lastName.message}</p>
-            )}
+            {errors.lastName && <p className="text-xs text-destructive">{errors.lastName}</p>}
           </div>
         </div>
 
         {/* Email */}
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium">
-            Email Address <span className="text-destructive">*</span>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Email Address <span className="text-destructive normal-case">*</span>
           </Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              id="email"
               type="email"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
               placeholder="jane.smith@company.com"
-              {...register('email')}
-              className={`pl-9 ${errors.email ? 'border-destructive' : ''}`}
+              className={`h-9 text-sm pl-9 ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
             />
           </div>
-          {errors.email && (
-            <p className="text-xs text-destructive">{errors.email.message}</p>
-          )}
+          {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
         </div>
 
-        {/* Role */}
+        {/* Password */}
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">
-            Role <span className="text-destructive">*</span>
-          </Label>
-          <Select
-            defaultValue="BoardMember"
-            onValueChange={(value) => {
-              setValue('role', value as any, { shouldValidate: true });
-              trigger('role');
-            }}
-          >
-            <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-muted-foreground/60" />
-                <SelectValue placeholder="Select role" />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
-              <SelectItem value="OrgAdmin">Org Admin</SelectItem>
-              <SelectItem value="Admin">Admin</SelectItem>
-              <SelectItem value="BoardMember">Board Member</SelectItem>
-              <SelectItem value="User">User</SelectItem>
-            </SelectContent>
-          </Select>
-          {errors.role && (
-            <p className="text-xs text-destructive">{errors.role.message}</p>
-          )}
-        </div>
-
-        {/* Optional fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="title" className="text-sm font-medium">
-              Job Title <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-            </Label>
-            <div className="relative">
-              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-              <Input
-                id="title"
-                placeholder="e.g. Software Engineer"
-                className="pl-9"
-                {...register('title')}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="phoneNumber" className="text-sm font-medium">
-              Phone <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-            </Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-              <Input
-                id="phoneNumber"
-                placeholder="+1 (555) 123-4567"
-                className="pl-9"
-                {...register('phoneNumber')}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="profilePictureUrl" className="text-sm font-medium">
-            Profile Picture URL <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Temporary Password <span className="text-destructive normal-case">*</span>
           </Label>
           <div className="relative">
-            <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
             <Input
-              id="profilePictureUrl"
-              placeholder="https://example.com/avatar.jpg"
-              className={`pl-9 ${errors.profilePictureUrl ? 'border-destructive' : ''}`}
-              {...register('profilePictureUrl')}
+              type={showPassword ? 'text' : 'password'}
+              value={form.password}
+              onChange={e => set('password', e.target.value)}
+              placeholder="Min. 8 characters"
+              className={`h-9 text-sm pr-9 ${errors.password ? 'border-destructive focus-visible:ring-destructive' : ''}`}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(p => !p)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
           </div>
-          {errors.profilePictureUrl && (
-            <p className="text-xs text-destructive">{errors.profilePictureUrl.message}</p>
-          )}
+          {errors.password
+            ? <p className="text-xs text-destructive">{errors.password}</p>
+            : <p className="text-xs text-muted-foreground">Member will be asked to change this on first login.</p>
+          }
         </div>
 
-        {/* Committees */}
-        {committees.length > 0 && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Committees <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-            </Label>
-            <Select onValueChange={handleAddCommittee}>
-              <SelectTrigger>
-                <SelectValue placeholder="Add to committee…" />
+        {/* Role + Title */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</Label>
+            <Select value={form.role} onValueChange={v => set('role', v)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {committees.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
+                {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
+                <SelectItem value="OrgAdmin">Org Admin</SelectItem>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="BoardMember">Board Member</SelectItem>
+                <SelectItem value="User">User</SelectItem>
               </SelectContent>
             </Select>
-
-            {selectedCommittees.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {selectedCommittees.map((c) => (
-                  <Badge
-                    key={c}
-                    variant="secondary"
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs"
-                  >
-                    {c}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCommittee(c)}
-                      className="rounded-full hover:bg-destructive/20 p-0.5 transition-colors ml-0.5"
-                    >
-                      <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
-        )}
-
-        {/* Submit */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-border/60 mt-2">
-          <Button type="button" variant="outline" className="min-w-24">
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="min-w-32 gap-2"
-            disabled={isSubmitting || hasErrors}
-          >
-            <UserPlus className="h-4 w-4" />
-            {isSubmitting ? 'Adding…' : 'Add Member'}
-          </Button>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Title <span className="font-normal normal-case text-muted-foreground">(optional)</span>
+            </Label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={form.title}
+                onChange={e => set('title', e.target.value)}
+                placeholder="e.g. Director"
+                className="h-9 text-sm pl-9"
+              />
+            </div>
+          </div>
         </div>
-      </form>
+
+        {/* Phone */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Phone Number <span className="font-normal normal-case text-muted-foreground">(optional)</span>
+          </Label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={form.phoneNumber}
+              onChange={e => set('phoneNumber', e.target.value)}
+              placeholder="+254 700 000 000"
+              className="h-9 text-sm pl-9"
+            />
+          </div>
+        </div>
+
+        {/* Profile picture URL */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Profile Picture URL <span className="font-normal normal-case text-muted-foreground">(optional)</span>
+          </Label>
+          <div className="relative">
+            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={form.profilePictureUrl}
+              onChange={e => set('profilePictureUrl', e.target.value)}
+              placeholder="https://example.com/avatar.jpg"
+              className={`h-9 text-sm pl-9 ${errors.profilePictureUrl ? 'border-destructive' : ''}`}
+            />
+          </div>
+          {errors.profilePictureUrl && <p className="text-xs text-destructive">{errors.profilePictureUrl}</p>}
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} disabled={isLoading} className="gap-2">
+          {isLoading
+            ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            : <UserPlus className="h-4 w-4" />
+          }
+          Add Member
+        </Button>
+      </DialogFooter>
     </>
   );
 }
