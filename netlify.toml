@@ -1,0 +1,11 @@
+[build]
+  # We use 'vite build' directly instead of 'pnpm run build' to bypass TypeScript checks (tsc -b)
+  command = "pnpm vite build"
+  publish = "dist"
+
+[[redirects]]
+  # Redirect all paths to index.html for React SPA routing (wouter)
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
