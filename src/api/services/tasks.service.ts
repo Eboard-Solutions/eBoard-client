@@ -1,6 +1,4 @@
 // src/api/services/tasks.service.ts
-// Tasks API service
-
 import apiClient from '../client';
 import { ENDPOINTS } from '@/config/api.config';
 import type {
@@ -11,46 +9,61 @@ import type {
   PaginatedResponse,
 } from '@/types/api.types';
 
+function stripEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+  ) as Partial<T>;
+}
+
 export const TasksService = {
-  // Get all tasks with pagination
   async getAll(filters?: TaskFilters): Promise<PaginatedResponse<Task>> {
     const response = await apiClient.get(ENDPOINTS.TASKS.BASE, { params: filters });
-    return response.data.data || response.data;
+    return response.data.data ?? response.data;
   },
 
-  // Get task by ID
   async getById(id: string): Promise<Task> {
     const response = await apiClient.get(ENDPOINTS.TASKS.BY_ID(id));
-    return response.data.data || response.data;
+    return response.data.data ?? response.data;
   },
 
-  // Create task
   async create(data: CreateTaskData): Promise<Task> {
-    const response = await apiClient.post(ENDPOINTS.TASKS.CREATE, data);
-    return response.data.data || response.data;
+    // Required by DTO: title, assigneeId, dueDate (number)
+    // Optional (backend defaults): status → TODO, priority → MEDIUM
+    // Excluded: createdBy → set by backend from JWT
+    const payload: Record<string, unknown> = {
+      title:      data.title.trim(),
+      assigneeId: data.assigneeId,
+      dueDate:    Number(data.dueDate),
+    };
+
+    if (data.status)              payload.status      = data.status;
+    if (data.priority)            payload.priority    = data.priority;
+    if (data.description?.trim()) payload.description = data.description.trim();
+    if (data.meetingId)           payload.meetingId   = data.meetingId;
+
+    const response = await apiClient.post(ENDPOINTS.TASKS.CREATE, payload);
+    return response.data.data ?? response.data;
   },
 
-  // Update task
   async update(id: string, data: UpdateTaskData): Promise<Task> {
-    const response = await apiClient.patch(ENDPOINTS.TASKS.UPDATE(id), data);
-    return response.data.data || response.data;
+    const payload = stripEmpty(data as Record<string, unknown>);
+    if (payload.dueDate !== undefined) payload.dueDate = Number(payload.dueDate);
+    const response = await apiClient.patch(ENDPOINTS.TASKS.UPDATE(id), payload);
+    return response.data.data ?? response.data;
   },
 
-  // Complete task
   async complete(id: string): Promise<Task> {
     const response = await apiClient.patch(ENDPOINTS.TASKS.UPDATE(id), {
-      status: 'COMPLETED',
+      status:      'COMPLETED',
       completedAt: Date.now(),
     });
-    return response.data.data || response.data;
+    return response.data.data ?? response.data;
   },
 
-  // Delete task
   async delete(id: string): Promise<void> {
     await apiClient.delete(ENDPOINTS.TASKS.DELETE(id));
   },
 
-  // Bulk delete tasks
   async bulkDelete(ids: string[]): Promise<void> {
     await apiClient.post(ENDPOINTS.TASKS.BULK_DELETE, { ids });
   },

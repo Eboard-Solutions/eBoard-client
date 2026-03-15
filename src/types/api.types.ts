@@ -1,9 +1,10 @@
 // src/types/api.types.ts
-// API response and request types based on the backend API specification
+// API response and request types — aligned to backend DTOs and enums
 
 // ────────────────────────────────────────────────
 // GENERIC API RESPONSE WRAPPER
 // ────────────────────────────────────────────────
+
 export interface ApiResponse<T> {
   statusCode: number;
   message: string;
@@ -26,6 +27,7 @@ export interface PaginationParams {
 // ────────────────────────────────────────────────
 // AUTH TYPES
 // ────────────────────────────────────────────────
+
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -103,12 +105,9 @@ export interface UpdateProfileData {
 // ────────────────────────────────────────────────
 // USER / MEMBER TYPES
 // ────────────────────────────────────────────────
-export type UserRole = 
-  | 'SuperAdmin' 
-  | 'OrgAdmin' 
-  | 'BoardMember' 
-  | 'Admin' 
-  | 'User';
+
+// Matches backend SystemRole enum values exactly
+export type UserRole = 'superAdmin' | 'OrgAdmin' | 'BoardMember' | 'secretary';
 
 export type UserStatus = 'active' | 'pending' | 'suspended' | 'invited' | 'deactivated';
 
@@ -117,29 +116,17 @@ export interface User {
   firstName: string;
   lastName: string;
   email: string;
-
-  password: string;
-  mustChangePassword?: boolean;
-  passwordChangeAt?: Date;
-
   role: UserRole;
   customRoleId?: string | null;
   isOrganisationAdmin?: boolean;
-
   title?: string;
   phoneNumber?: string;
   profilePictureUrl?: string;
-
   status?: UserStatus;
   lastLogin?: Date;
-
-  refreshToken?: string;
-
   organisationId?: string | null;
-
-  passwordResetToken?: string;
-  passwordResetTokenExpiry?: Date;
-
+  mustChangePassword?: boolean;
+  passwordChangeAt?: Date;
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -176,42 +163,64 @@ export interface UserPermissions {
 // ────────────────────────────────────────────────
 // ORGANISATION TYPES
 // ────────────────────────────────────────────────
+
+// Matches backend OrganisationStatus enum values exactly
+export type OrganisationStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+
 export interface Organisation {
   organisationId: string;
   organisationName: string;
-  code: string;
-  status: OrganisationStatus;
+  orgCode?: string;
+  OrgEmail: string;
   description?: string;
-  website?: string;
-  email?: string;
-  phoneNumber?: string;
   address?: string;
+  phoneNumber?: string;
+  websiteUrl?: string;
   logoUrl?: string;
+  isActive?: boolean;
+  status: OrganisationStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreateOrganisationData {
   organisationName: string;
+  OrgEmail: string;
   description?: string;
-  website?: string;
-  email?: string;
-  phoneNumber?: string;
   address?: string;
+  phoneNumber?: string;
+  websiteUrl?: string;
   logoUrl?: string;
 }
 
-// export type UpdateOrganisationData = Partial<CreateOrganisationData>;
+export type UpdateOrganisationData = Partial<CreateOrganisationData>;
+
+export interface ApproveOrganisationData {
+  organisationId: string;
+  status: 'approved' | 'rejected';
+  rejectionReason?: string;
+}
 
 // ────────────────────────────────────────────────
 // MEETING TYPES
 // ────────────────────────────────────────────────
-export type MeetingFormat = 'online' | 'in-person' | 'hybrid';
-export type MeetingFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+
+export type MeetingFormat = 'online' | 'physical' | 'hybrid';
+export type MeetingFrequency = 'once' | 'weekly' | 'monthly' | 'yearly' | 'custom';
 export type MeetingType = 'regular' | 'special' | 'emergency' | 'annual';
-export type MeetingPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type MeetingStatus = 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-export type RSVPStatus = 'invited' | 'accepted' | 'declined' | 'tentative' | 'attended' | 'absent' | 'checkedIn';
+export type MeetingPriority = 'low' | 'medium' | 'high';
+export type MeetingStatus = 'scheduled' | 'inProgress' | 'completed' | 'cancelled';
+export type RSVPStatus =
+  | 'invited'
+  | 'accepted'
+  | 'declined'
+  | 'tentative'
+  | 'attended'
+  | 'absent'
+  | 'checkedIn';
 
 export interface Meeting {
   id: string;
@@ -281,8 +290,15 @@ export interface MeetingAttendeeStats {
 // ────────────────────────────────────────────────
 // AGENDA TYPES
 // ────────────────────────────────────────────────
-export type AgendaStatus = 'draft' | 'published' | 'archived';
-export type AgendaItemType = 'discussion' | 'decision' | 'information' | 'action' | 'presentation' | 'vote';
+
+export type AgendaStatus = 'draft' | 'published' | 'in_progress' | 'completed';
+export type AgendaItemType =
+  | 'discussion'
+  | 'decision'
+  | 'information'
+  | 'action'
+  | 'presentation'
+  | 'vote';
 export type AgendaItemStatus = 'pending' | 'in-progress' | 'completed' | 'skipped';
 
 export interface AgendaAttachment {
@@ -299,7 +315,7 @@ export interface AgendaItem {
   type: AgendaItemType;
   title: string;
   description?: string;
-  duration: number; // in minutes
+  duration: number; // minutes
   presenterId?: string;
   presenterName?: string;
   attachments?: AgendaAttachment[];
@@ -361,120 +377,22 @@ export interface AgendaStats {
 }
 
 // ────────────────────────────────────────────────
-// ANNOUNCEMENT TYPES
-// ────────────────────────────────────────────────
-export type AnnouncementAudienceType = 'ALL' | 'BOARD_MEMBERS' | 'ADMINS' | 'CUSTOM';
-
-export interface AnnouncementAudience {
-  type: AnnouncementAudienceType;
-  userIds?: string[];
-}
-
-export interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  isPinned: boolean;
-  audience: AnnouncementAudience;
-  publishedBy: string;
-  publishedByName: string;
-  publishedAt: number; // timestamp in milliseconds
-  expiresAt?: number; // timestamp in milliseconds
-  createdAt?: string;
-  updatedAt?: string;
-  version?: number;
-}
-
-export interface CreateAnnouncementData {
-  title: string;
-  content: string;
-  isPinned?: boolean;
-  audience: AnnouncementAudience;
-  publishedBy: string;
-  publishedByName: string;
-  publishedAt: number;
-  expiresAt?: number;
-}
-
-export interface UpdateAnnouncementData {
-  title?: string;
-  content?: string;
-  isPinned?: boolean;
-  audience?: AnnouncementAudience;
-  publishedBy?: string;
-  publishedByName?: string;
-  publishedAt?: number;
-  expiresAt?: number;
-  version: number; // required for optimistic locking
-}
-
-export interface AnnouncementFilters {
-  query?: string;
-  category?: string;
-  page?: number;
-}
-
-export interface BulkDeleteData {
-  ids: string[];
-}
-
-// ────────────────────────────────────────────────
-// DOCUMENT TYPES
-// ────────────────────────────────────────────────
-export type DocumentAccessLevel = 'public' | 'board_only' | 'admin_only' | 'private';
-
-export interface Document {
-  id: string;
-  title: string;
-  fileName: string;
-  fileUrl: string;
-  fileType: string;
-  fileSize: number;
-  folderId?: string;
-  tags?: string[];
-  version: number;
-  uploadedBy: string;
-  uploadedByName?: string;
-  uploadedAt: string;
-  accessLevel?: DocumentAccessLevel;
-  description?: string;
-  meetingId?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateDocumentData {
-  title: string;
-  file: File;
-  description?: string;
-  folderId?: string;
-  tags?: string[];
-  accessLevel?: DocumentAccessLevel;
-  meetingId?: string;
-}
-
-export interface UpdateDocumentData {
-  title?: string;
-  description?: string;
-  folderId?: string;
-  tags?: string[];
-  accessLevel?: DocumentAccessLevel;
-  file?: File;
-}
-
-export interface DocumentFilters {
-  query?: string;
-  folderId?: string;
-  tags?: string[];
-  accessLevel?: DocumentAccessLevel;
-  page?: number;
-  limit?: number;
-}
-
-// ────────────────────────────────────────────────
 // MINUTES TYPES
 // ────────────────────────────────────────────────
-export type MinutesStatus = 'draft' | 'pending_review' | 'approved' | 'published';
+
+export type MinutesStatus =
+  | 'draft'
+  | 'in_progress'
+  | 'review'
+  | 'approved'
+  | 'published';
+
+export type MinuteItemType =
+  | 'general'
+  | 'decision'
+  | 'action_item'
+  | 'discussion'
+  | 'vote';
 
 export interface VotingDetails {
   question: string;
@@ -495,8 +413,6 @@ export interface ActionItemDetails {
   dueDate: string;
   priority: 'low' | 'medium' | 'high';
 }
-
-export type MinuteItemType = 'general' | 'decision' | 'action_item' | 'discussion' | 'vote';
 
 export interface MinuteItem {
   id: string;
@@ -566,9 +482,126 @@ export interface MinutesFilters {
 }
 
 // ────────────────────────────────────────────────
+// ANNOUNCEMENT TYPES
+// ────────────────────────────────────────────────
+
+export type AnnouncementAudienceType = 'ALL' | 'BOARD_MEMBERS' | 'ADMINS' | 'CUSTOM';
+
+export interface AnnouncementAudience {
+  type: AnnouncementAudienceType;
+  userIds?: string[];
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  isPinned: boolean;
+  audience: AnnouncementAudience;
+  publishedBy: string;
+  publishedByName: string;
+  publishedAt: number; // Unix ms timestamp
+  expiresAt?: number;  // Unix ms timestamp
+  createdAt?: string;
+  updatedAt?: string;
+  version?: number;
+}
+
+export interface CreateAnnouncementData {
+  title: string;
+  content: string;
+  isPinned?: boolean;
+  audience: AnnouncementAudience;
+  publishedBy: string;
+  publishedByName: string;
+  publishedAt: number;
+  expiresAt?: number;
+}
+
+export interface UpdateAnnouncementData {
+  title?: string;
+  content?: string;
+  isPinned?: boolean;
+  audience?: AnnouncementAudience;
+  publishedBy?: string;
+  publishedByName?: string;
+  publishedAt?: number;
+  expiresAt?: number;
+  version: number; // required for optimistic locking
+}
+
+export interface AnnouncementFilters {
+  query?: string;
+  category?: string;
+  page?: number;
+}
+
+// ────────────────────────────────────────────────
+// DOCUMENT TYPES
+// ────────────────────────────────────────────────
+
+export type DocumentAccessLevel = 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER';
+
+export interface Document {
+  id: string;
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  folderId?: string;
+  tags?: string[];
+  version: number;
+  uploadedBy: string;
+  uploadedByName?: string;
+  uploadedAt: string;
+  accessLevel?: DocumentAccessLevel;
+  description?: string;
+  meetingId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateDocumentData {
+  title: string;
+  file: File;
+  description?: string;
+  folderId?: string;
+  tags?: string[];
+  accessLevel?: DocumentAccessLevel;
+  meetingId?: string;
+}
+
+export interface UpdateDocumentData {
+  title?: string;
+  description?: string;
+  folderId?: string;
+  tags?: string[];
+  accessLevel?: DocumentAccessLevel;
+  file?: File;
+}
+
+export interface DocumentFilters {
+  query?: string;
+  folderId?: string;
+  tags?: string[];
+  accessLevel?: DocumentAccessLevel;
+  page?: number;
+  limit?: number;
+}
+
+// ────────────────────────────────────────────────
 // NOTIFICATION TYPES
 // ────────────────────────────────────────────────
-export type NotificationCategory = 'SYSTEM' | 'MEETING' | 'VOTING' | 'DOCUMENT' | 'FINANCIAL' | 'ANNOUNCEMENT';
+
+export type NotificationCategory =
+  | 'SYSTEM'
+  | 'MEETING'
+  | 'VOTING'
+  | 'DOCUMENT'
+  | 'FINANCIAL'
+  | 'ANNOUNCEMENT';
+
 export type NotificationPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 export type AttachmentType = 'DOCUMENT' | 'IMAGE' | 'MEETING' | 'TASK' | 'POLL';
 
@@ -633,6 +666,7 @@ export interface NotificationFilters {
 // ────────────────────────────────────────────────
 // POLL TYPES
 // ────────────────────────────────────────────────
+
 export type PollStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED' | 'CANCELLED';
 
 export interface PollOption {
@@ -688,7 +722,11 @@ export interface PollFilters {
 // ────────────────────────────────────────────────
 // TASK TYPES
 // ────────────────────────────────────────────────
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+// Matches backend TaskStatus enum exactly: TODO | IN_PROGRESS | REVIEW | COMPLETED | CANCELLED
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'COMPLETED' | 'CANCELLED';
+
+// Matches backend TaskPriority enum exactly: LOW | MEDIUM | HIGH | URGENT
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export interface Task {
@@ -699,24 +737,25 @@ export interface Task {
   priority: TaskPriority;
   assigneeId?: string;
   assignee?: User;
-  dueDate?: number;
+  dueDate?: number;       // Unix ms timestamp
   meetingId?: string;
   meeting?: Meeting;
   createdBy?: string;
-  completedAt?: number;
+  completedAt?: number;   // Unix ms timestamp
+  organisationId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreateTaskData {
-  title: string;
-  description?: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  assigneeId?: string;
-  dueDate?: number;
-  meetingId?: string;
-  createdBy?: string;
+  title: string;           // required — @IsNotEmpty
+  assigneeId: string;      // required — @IsNotEmpty
+  dueDate: number;         // required — @IsNumber (Unix ms timestamp)
+  description?: string;    // optional
+  status?: TaskStatus;     // optional — backend defaults to TODO
+  priority?: TaskPriority; // optional — backend defaults to MEDIUM
+  meetingId?: string;      // optional
+  // createdBy is intentionally excluded — the backend sets it from the JWT
 }
 
 export interface UpdateTaskData {
@@ -737,44 +776,9 @@ export interface TaskFilters {
 }
 
 // ────────────────────────────────────────────────
-// ORGANISATION TYPES
-// ────────────────────────────────────────────────
-export type OrganisationStatus = 'pending' | 'active' | 'approved' | 'suspended' | 'rejected';
-
-export interface Organisation {
-  organisationId: string;
-  organisationName: string;
-  orgCode?: string;
-  OrgEmail: string;
-  description?: string;
-  address?: string;
-  phoneNumber?: string;
-  websiteUrl?: string;
-  logoUrl?: string;
-  isActive?: boolean;
-  status: OrganisationStatus;
-  approvedBy?: string;
-  approvedAt?: string;
-  rejectionReason?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateOrganisationData {
-  organisationName: string;
-  OrgEmail: string;
-  description?: string;
-  address?: string;
-  phoneNumber?: string;
-  websiteUrl?: string;
-  logoUrl?: string;
-}
-
-export type UpdateOrganisationData = Partial<CreateOrganisationData>;
-
-// ────────────────────────────────────────────────
 // SETTINGS TYPES
 // ────────────────────────────────────────────────
+
 export interface PlatformSettings {
   id: string;
   appName: string;
@@ -813,7 +817,7 @@ export interface PlatformSettings {
   version?: number;
 }
 
-// Keep backward-compat alias
+// Backward-compat alias
 export type OrganisationSettings = PlatformSettings;
 
 export interface UpdateSettingsData {
@@ -826,8 +830,32 @@ export interface UpdateSettingsData {
 }
 
 // ────────────────────────────────────────────────
-// OVERVIEW/ANALYTICS TYPES
+// CUSTOM ROLE TYPES
 // ────────────────────────────────────────────────
+
+export interface CustomRole {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  isActive: boolean;
+  organisationId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateCustomRoleData {
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export type UpdateCustomRoleData = Partial<CreateCustomRoleData>;
+
+// ────────────────────────────────────────────────
+// ANALYTICS / DASHBOARD TYPES
+// ────────────────────────────────────────────────
+
 export interface AnalyticsData {
   upcomingMeetings: Meeting[];
   openTasks: Task[];
@@ -840,6 +868,8 @@ export interface AnalyticsData {
   recentDocuments: Document[];
   attendanceTrend: Array<{ month: string; value: number }>;
 }
+
+export type DashboardStats = AnalyticsData;
 
 export interface FinanceOverview {
   budget: {
@@ -864,55 +894,17 @@ export interface FinanceOverview {
 }
 
 // ────────────────────────────────────────────────
-// DASHBOARD TYPES
+// BULK OPERATIONS
 // ────────────────────────────────────────────────
-export interface DashboardStats {
-  upcomingMeetings: Meeting[];
-  openTasks: Task[];
-  activePolls: Poll[];
-  budgetSummary: {
-    totalAllocated: number;
-    totalSpent: number;
-    percentage: number;
-  };
-  recentDocuments: Document[];
-  attendanceTrend: Array<{ month: string; value: number }>;
-}
 
-// ────────────────────────────────────────────────
-// CUSTOM ROLE TYPES
-// ────────────────────────────────────────────────
-export interface CustomRole {
-  id: string;
-  name: string;
-  description?: string;
-  permissions: string[];
-  isActive: boolean;
-  organisationId: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateCustomRoleData {
-  name: string;
-  description?: string;
-  permissions: string[];
-}
-
-export type UpdateCustomRoleData = Partial<CreateCustomRoleData>;
-
-// ────────────────────────────────────────────────
-// APPROVE ORGANISATION DTO
-// ────────────────────────────────────────────────
-export interface ApproveOrganisationData {
-  organisationId: string;
-  status: 'approved' | 'rejected';
-  rejectionReason?: string;
+export interface BulkDeleteData {
+  ids: string[];
 }
 
 // ────────────────────────────────────────────────
 // ERROR TYPES
 // ────────────────────────────────────────────────
+
 export interface ApiError {
   statusCode: number;
   message: string | string[];
