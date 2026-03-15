@@ -8,12 +8,12 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Globe, Phone, Mail,
   MapPin, Link2, Hash, Calendar, Key, Monitor, LogOut, Bell,
   RefreshCcw, ShieldCheck, Activity, Plus, Users, FileText,
-  Zap, Loader2, WifiOff,
+  Zap, Loader2, WifiOff, Lock, Info,
 } from 'lucide-react';
 
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -28,7 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 
 import { usePermissions } from '@/lib/permissions';
@@ -39,128 +38,40 @@ import {
 } from '@/hooks/api/useOrganisations';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/config/api.config';
-import type { Organisation } from '@/types/api.types';
+import type { Organisation, PlatformSettings, UpdateSettingsData } from '@/types/api.types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Settings API hooks (wired to real SETTINGS endpoints) ────────────────────
 
-interface LoginSession {
-  id: string;
-  device: string;
-  location: string;
-  ip: string;
-  lastActive: string;
-  isCurrent: boolean;
-}
-
-interface LoginHistoryEntry {
-  id: string;
-  event: string;
-  device: string;
-  ip: string;
-  time: string;
-}
-
-interface OrgSettings {
-  meetingDefaultDuration: string;
-  meetingDefaultReminder: string;
-  timezone: string;
-  language: string;
-  notifications: {
-    meetingReminders: boolean;
-    newMemberJoined: boolean;
-    documentUploads: boolean;
-    taskAssignments: boolean;
-    votingOpens: boolean;
-  };
-}
-
-// ─── Real-time API hooks ──────────────────────────────────────────────────────
-// These call the backend; replace endpoint strings to match your actual routes.
-
-function useActiveSessions() {
-  return useQuery<LoginSession[]>({
-    queryKey: ['sessions', 'active'],
+function useOrgSettings(orgId: string | undefined) {
+  return useQuery<PlatformSettings>({
+    queryKey: ['settings', 'org', orgId],
     queryFn: async () => {
-      const res = await apiClient.get(
-        ENDPOINTS.AUTH?.SESSIONS ?? '/auth/sessions'
-      );
-      return res.data.data ?? res.data ?? [];
-    },
-    staleTime: 60_000,
-  });
-}
-
-function useLoginHistory() {
-  return useQuery<LoginHistoryEntry[]>({
-    queryKey: ['sessions', 'history'],
-    queryFn: async () => {
-      const res = await apiClient.get(
-        ENDPOINTS.AUTH?.LOGIN_HISTORY ?? '/auth/login-history'
-      );
-      return res.data.data ?? res.data ?? [];
-    },
-    staleTime: 120_000,
-  });
-}
-
-function useRevokeSession() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (sessionId: string) => {
-      await apiClient.delete(
-        (ENDPOINTS.AUTH?.REVOKE_SESSION ?? '/auth/sessions/') + sessionId
-      );
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions'] }),
-  });
-}
-
-function useRevokeAllSessions() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      await apiClient.post(
-        ENDPOINTS.AUTH?.REVOKE_ALL_SESSIONS ?? '/auth/sessions/revoke-others'
-      );
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions'] }),
-  });
-}
-
-function useOrgSettings(orgId?: string) {
-  return useQuery<OrgSettings>({
-    queryKey: ['org-settings', orgId],
-    queryFn: async () => {
-      const res = await apiClient.get(
-        `${ENDPOINTS.ORGANISATIONS?.SETTINGS ?? '/organisations/settings'}/${orgId}`
-      );
+      const res = await apiClient.get(ENDPOINTS.SETTINGS.BY_ORG(orgId!));
       return res.data.data ?? res.data;
     },
     enabled: !!orgId,
-    staleTime: 300_000,
+    staleTime: 5 * 60 * 1000,
+    retry: (count, err: any) => err?.response?.status === 403 ? false : count < 2,
   });
 }
 
-function useUpdateOrgSettings(orgId?: string) {
+function useUpdateOrgSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: Partial<OrgSettings>) => {
-      const res = await apiClient.patch(
-        `${ENDPOINTS.ORGANISATIONS?.SETTINGS ?? '/organisations/settings'}/${orgId}`,
-        data
-      );
+    mutationFn: async (data: UpdateSettingsData) => {
+      const res = await apiClient.patch(ENDPOINTS.SETTINGS.UPDATE, data);
       return res.data.data ?? res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-settings', orgId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+    },
   });
 }
 
 // ─── Shared UI primitives ─────────────────────────────────────────────────────
 
 function Spinner({ sm }: { sm?: boolean }) {
-  return (
-    <Loader2 className={`animate-spin ${sm ? 'h-3.5 w-3.5' : 'h-5 w-5'}`} />
-  );
+  return <Loader2 className={`animate-spin ${sm ? 'h-3.5 w-3.5' : 'h-5 w-5'}`} />;
 }
 
 function StatusBadge({ isActive }: { isActive: boolean }) {
@@ -183,17 +94,17 @@ function SectionCard({ title, description, icon: Icon, iconColor, children, acti
   return (
     <Card className="border border-border/50 shadow-sm overflow-hidden">
       <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${iconColor}`}>
-              <Icon className="h-4.5 w-4.5" />
+              <Icon className="h-4 w-4" />
             </div>
             <div>
               <CardTitle className="text-sm font-bold">{title}</CardTitle>
               {description && <CardDescription className="text-xs mt-0.5">{description}</CardDescription>}
             </div>
           </div>
-          {action}
+          {action && <div className="shrink-0">{action}</div>}
         </div>
       </CardHeader>
       <CardContent className="px-5 py-5">{children}</CardContent>
@@ -205,7 +116,7 @@ function EmptyState({ icon: Icon, title, description }: {
   icon: React.ElementType; title: string; description: string;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-10 text-center">
+    <div className="flex flex-col items-center gap-3 py-12 text-center">
       <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
         <Icon className="h-7 w-7 text-muted-foreground/40" />
       </div>
@@ -226,6 +137,18 @@ function ServerErrorBanner({ message, onRetry }: { message: string; onRetry: () 
         className="h-7 text-xs gap-1.5 border-amber-300 hover:bg-amber-100 shrink-0 rounded-xl">
         <RefreshCcw className="h-3 w-3" />Retry
       </Button>
+    </div>
+  );
+}
+
+function ComingSoonBanner({ feature }: { feature: string }) {
+  return (
+    <div className="rounded-2xl border border-blue-200/60 bg-blue-50/60 dark:border-blue-800/60 dark:bg-blue-950/20 px-4 py-3 flex items-center gap-3">
+      <Info className="h-4 w-4 shrink-0 text-blue-500" />
+      <p className="text-sm text-blue-800 dark:text-blue-300">
+        <span className="font-semibold">{feature}</span> will appear here once your backend exposes the endpoint.
+        Add the route to <code className="text-xs bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded font-mono">ENDPOINTS</code> in <code className="text-xs bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded font-mono">api.config.ts</code> to enable it.
+      </p>
     </div>
   );
 }
@@ -259,7 +182,8 @@ function CreateOrgDialog({ open, onOpenChange, onCreated }: {
         onOpenChange(false);
         setForm({ organisationName: '', OrgEmail: '', phoneNumber: '', address: '', websiteUrl: '', description: '' });
       },
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to create organisation'),
+      onError: (err: any) =>
+        toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to create organisation'),
     });
   }
 
@@ -322,7 +246,7 @@ function CreateOrgDialog({ open, onOpenChange, onCreated }: {
 
         <DialogFooter className="gap-2 pt-2">
           <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)} disabled={register.isPending}>Cancel</Button>
-          <Button className="rounded-xl gap-2 min-w-[150px]" onClick={handleSubmit} disabled={register.isPending}>
+          <Button className="rounded-xl gap-2 min-w-[160px]" onClick={handleSubmit} disabled={register.isPending}>
             {register.isPending ? <Spinner sm /> : <Plus className="h-4 w-4" />}
             Create Organisation
           </Button>
@@ -417,7 +341,7 @@ function ProfileTab({ org, onSave, isSaving, canManage }: {
               )}
             </div>
 
-            {/* Name / meta */}
+            {/* Name + meta */}
             <div className="flex-1 min-w-0 pb-1">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
                 {current.organisationName || 'Organisation Name'}
@@ -434,7 +358,7 @@ function ProfileTab({ org, onSave, isSaving, canManage }: {
               </div>
             </div>
 
-            {/* Edit / Save actions */}
+            {/* Edit / Save */}
             {canManage && (
               <div className="shrink-0 flex gap-2 pb-1">
                 {editing ? (
@@ -472,7 +396,7 @@ function ProfileTab({ org, onSave, isSaving, canManage }: {
               <Input {...fp('organisationName')} placeholder="Acme Corp" className={inp()} />
             </div>
             <div>
-              <label className={lbl}>Org Code (read-only)</label>
+              <label className={lbl}>Org Code <span className="normal-case font-normal text-muted-foreground">(read-only)</span></label>
               <Input value={org.orgCode ?? ''} disabled readOnly
                 className="h-11 rounded-xl border-border/60 bg-muted/50 text-sm font-mono text-muted-foreground" />
             </div>
@@ -530,7 +454,7 @@ function ProfileTab({ org, onSave, isSaving, canManage }: {
             </div>
           </SectionCard>
 
-          {/* System info */}
+          {/* System info — all from real org object */}
           <Card className="border border-border/50 shadow-sm overflow-hidden">
             <CardHeader className="px-5 pt-4 pb-3 border-b border-border/30 bg-muted/30">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">System Information</p>
@@ -552,36 +476,48 @@ function ProfileTab({ org, onSave, isSaving, canManage }: {
   );
 }
 
-// ─── Settings Tab ─────────────────────────────────────────────────────────────
+// ─── Settings Tab — wired to ENDPOINTS.SETTINGS ───────────────────────────────
 
-const NOTIFICATION_KEYS = [
-  { key: 'meetingReminders' as const, label: 'Meeting reminders',  description: 'Send reminders before scheduled meetings',   icon: Calendar   },
-  { key: 'newMemberJoined'  as const, label: 'New member joined',  description: 'Notify admins when someone joins the org',   icon: Users      },
-  { key: 'documentUploads'  as const, label: 'Document uploads',   description: 'Alert members when new documents are added', icon: FileText   },
-  { key: 'taskAssignments'  as const, label: 'Task assignments',   description: 'Notify users when tasks are assigned',       icon: Zap        },
-  { key: 'votingOpens'      as const, label: 'Voting opens',       description: 'Notify members when a new vote is created',  icon: CheckCircle2 },
+const NOTIFICATION_KEYS: Array<{
+  key: keyof NonNullable<PlatformSettings['notificationSettings']>;
+  label: string; description: string; icon: React.ElementType;
+}> = [
+  { key: 'meetingReminders', label: 'Meeting reminders',  description: 'Send reminders before scheduled meetings',   icon: Calendar    },
+  { key: 'taskAssignments',  label: 'Task assignments',   description: 'Notify users when tasks are assigned',       icon: Zap         },
+  { key: 'emailNotifications', label: 'Email notifications', description: 'Send email alerts for key events',        icon: Mail        },
+  { key: 'weeklyDigest',     label: 'Weekly digest',      description: 'Send a weekly summary email to all members', icon: FileText    },
 ];
 
 function SettingsTab({ org, canManage }: { org: Organisation; canManage: boolean }) {
-  const { data: settings, isLoading } = useOrgSettings(org.organisationId);
-  const updateSettings = useUpdateOrgSettings(org.organisationId);
-
-  const [local, setLocal] = useState<Partial<OrgSettings>>({});
-  const merged: Partial<OrgSettings> = { ...settings, ...local };
+  const { data: settings, isLoading, error, refetch } = useOrgSettings(org.organisationId);
+  const updateSettings = useUpdateOrgSettings();
+  const [localPatch, setLocalPatch] = useState<UpdateSettingsData>({});
   const [saved, setSaved] = useState(false);
+  const isDirty = Object.keys(localPatch).length > 0;
+
+  // Merge real data with unsaved local changes
+  const notif = { ...settings?.notificationSettings, ...(localPatch.notificationSettings ?? {}) };
+  const security = { ...settings?.securitySettings, ...(localPatch.securitySettings ?? {}) };
 
   const sel = 'h-11 rounded-xl border-border/60 text-sm';
   const lbl = 'block text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2';
 
+  function patchNotif(key: string, val: boolean) {
+    setLocalPatch(p => ({
+      ...p,
+      notificationSettings: { ...notif, [key]: val } as any,
+    }));
+  }
+
   async function handleSave() {
     try {
-      await updateSettings.mutateAsync(local);
+      await updateSettings.mutateAsync({ ...localPatch, version: settings?.version });
       toast.success('Settings saved');
       setSaved(true);
-      setLocal({});
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      toast.error('Failed to save settings');
+      setLocalPatch({});
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Failed to save settings');
     }
   }
 
@@ -591,108 +527,154 @@ function SettingsTab({ org, canManage }: { org: Organisation; canManage: boolean
     </div>
   );
 
+  if (error) return (
+    <div className="max-w-3xl space-y-4">
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
+          <WifiOff className="h-7 w-7 text-muted-foreground/40" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-foreground/70">Could not load settings</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {(error as any)?.response?.data?.message ?? 'An error occurred loading your organisation settings.'}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetch()}>
+          <RefreshCcw className="h-4 w-4" />Try Again
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-5 max-w-3xl">
 
-      {/* Meeting defaults */}
-      <SectionCard title="Meeting Defaults" description="Applied to all newly created meetings" icon={Calendar}
+      {/* Organisation settings — from ENDPOINTS.SETTINGS.BY_ORG */}
+      <SectionCard title="Organisation Settings" description="Applied across meetings and members" icon={Settings}
         iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
-            <label className={lbl}>Default Duration</label>
-            <Select
-              value={merged.meetingDefaultDuration ?? '60'}
-              onValueChange={(v) => setLocal(p => ({ ...p, meetingDefaultDuration: v }))}
-              disabled={!canManage}>
-              <SelectTrigger className={sel}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="30">30 minutes</SelectItem>
-                <SelectItem value="45">45 minutes</SelectItem>
-                <SelectItem value="60">1 hour</SelectItem>
-                <SelectItem value="90">1.5 hours</SelectItem>
-                <SelectItem value="120">2 hours</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className={lbl}>App Name</label>
+            <Input
+              defaultValue={settings?.appName ?? ''}
+              disabled={!canManage}
+              onChange={(e) => setLocalPatch(p => ({ ...p, appName: e.target.value }))}
+              className="h-11 rounded-xl border-border/60 text-sm bg-background" />
           </div>
           <div>
-            <label className={lbl}>Default Reminder</label>
-            <Select
-              value={merged.meetingDefaultReminder ?? '24h'}
-              onValueChange={(v) => setLocal(p => ({ ...p, meetingDefaultReminder: v }))}
-              disabled={!canManage}>
-              <SelectTrigger className={sel}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1h">1 hour before</SelectItem>
-                <SelectItem value="3h">3 hours before</SelectItem>
-                <SelectItem value="24h">24 hours before</SelectItem>
-                <SelectItem value="48h">48 hours before</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className={lbl}>Max Members</label>
+            <Input
+              type="number"
+              defaultValue={settings?.memberSettings?.maxMembers ?? ''}
+              disabled={!canManage}
+              onChange={(e) => setLocalPatch(p => ({
+                ...p,
+                memberSettings: { ...p.memberSettings, maxMembers: +e.target.value },
+              }))}
+              className="h-11 rounded-xl border-border/60 text-sm bg-background" />
           </div>
         </div>
       </SectionCard>
 
-      {/* Localisation */}
-      <SectionCard title="Localisation" description="Timezone and language preferences" icon={Globe}
-        iconColor="bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label className={lbl}>Timezone</label>
-            <Select
-              value={merged.timezone ?? 'Africa/Nairobi'}
-              onValueChange={(v) => setLocal(p => ({ ...p, timezone: v }))}
-              disabled={!canManage}>
-              <SelectTrigger className={sel}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Africa/Nairobi">Africa/Nairobi (EAT +3)</SelectItem>
-                <SelectItem value="UTC">UTC</SelectItem>
-                <SelectItem value="America/New_York">America/New_York (EST)</SelectItem>
-                <SelectItem value="Europe/London">Europe/London (GMT)</SelectItem>
-                <SelectItem value="Asia/Dubai">Asia/Dubai (GST +4)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className={lbl}>Language</label>
-            <Select
-              value={merged.language ?? 'en'}
-              onValueChange={(v) => setLocal(p => ({ ...p, language: v }))}
-              disabled={!canManage}>
-              <SelectTrigger className={sel}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="sw">Swahili</SelectItem>
-                <SelectItem value="fr">French</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* Notifications */}
+      {/* Notification preferences — stored in PlatformSettings.notificationSettings */}
       <SectionCard title="Notification Preferences" description="Control which events trigger notifications" icon={Bell}
         iconColor="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
         <div className="space-y-0.5">
-          {NOTIFICATION_KEYS.map(({ key, label, description, icon: Icon }) => {
-            const checked = merged.notifications?.[key] ?? false;
+          {NOTIFICATION_KEYS.map(({ key, label, description, icon: Icon }) => (
+            <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-8 w-8 rounded-xl bg-muted/60 flex items-center justify-center shrink-0">
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                </div>
+              </div>
+              <Switch
+                checked={!!(notif as any)?.[key]}
+                disabled={!canManage}
+                onCheckedChange={(v) => patchNotif(key, v)}
+                className="shrink-0"
+              />
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* Security settings */}
+      <SectionCard title="Security Settings" description="Access control and session management" icon={Shield}
+        iconColor="bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+        <div className="space-y-0.5">
+          {[
+            { key: 'autoLogout',      label: 'Auto Logout',       description: 'Automatically log out inactive sessions'       },
+            { key: 'pinRequired',     label: 'PIN Required',      description: 'Require a PIN for sensitive operations'        },
+            { key: 'dataEncryption',  label: 'Data Encryption',   description: 'Encrypt sensitive data at rest'               },
+            { key: 'auditLogEnabled', label: 'Audit Log',         description: 'Track all admin actions in an audit trail'    },
+          ].map(({ key, label, description }) => (
+            <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+              <div>
+                <p className="text-sm font-semibold">{label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+              </div>
+              <Switch
+                checked={!!(security as any)?.[key]}
+                disabled={!canManage}
+                onCheckedChange={(v) =>
+                  setLocalPatch(p => ({
+                    ...p,
+                    securitySettings: { ...security, [key]: v } as any,
+                  }))
+                }
+                className="shrink-0"
+              />
+            </div>
+          ))}
+          <div className="flex items-center justify-between gap-4 py-3.5">
+            <div>
+              <p className="text-sm font-semibold">Session Timeout</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Automatically log out after inactivity (minutes)</p>
+            </div>
+            <Input
+              type="number"
+              defaultValue={settings?.securitySettings?.sessionTimeout ?? 30}
+              disabled={!canManage}
+              onChange={(e) => setLocalPatch(p => ({
+                ...p,
+                securitySettings: { ...security, sessionTimeout: +e.target.value } as any,
+              }))}
+              className="h-9 w-24 rounded-xl border-border/60 text-sm bg-background text-right"
+            />
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Integration settings */}
+      <SectionCard title="Integrations" description="Third-party service connections" icon={Globe}
+        iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <div className="space-y-0.5">
+          {[
+            { key: 'slackEnabled',         label: 'Slack',           description: 'Post notifications to Slack channels'      },
+            { key: 'outlookEnabled',        label: 'Outlook',         description: 'Sync meetings with Outlook Calendar'       },
+            { key: 'googleCalendarEnabled', label: 'Google Calendar', description: 'Sync meetings with Google Calendar'        },
+          ].map(({ key, label, description }) => {
+            const integrations = {
+              ...settings?.integrationSettings,
+              ...(localPatch.integrationSettings ?? {}),
+            };
             return (
               <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-8 w-8 rounded-xl bg-muted/60 flex items-center justify-center shrink-0">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                  </div>
+                <div>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                 </div>
                 <Switch
-                  checked={checked}
+                  checked={!!(integrations as any)?.[key]}
                   disabled={!canManage}
                   onCheckedChange={(v) =>
-                    setLocal(p => ({
+                    setLocalPatch(p => ({
                       ...p,
-                      notifications: { ...(merged.notifications ?? {}), [key]: v } as OrgSettings['notifications'],
+                      integrationSettings: { ...integrations, [key]: v } as any,
                     }))
                   }
                   className="shrink-0"
@@ -704,13 +686,21 @@ function SettingsTab({ org, canManage }: { org: Organisation; canManage: boolean
       </SectionCard>
 
       {canManage && (
-        <div className="flex items-center justify-between">
-          {Object.keys(local).length > 0 && (
-            <p className="text-xs text-muted-foreground">You have unsaved changes</p>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          {isDirty && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Unsaved changes
+            </p>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-3">
+            {isDirty && (
+              <Button variant="outline" className="rounded-xl h-10 text-sm gap-2" onClick={() => setLocalPatch({})}>
+                <X className="h-4 w-4" />Discard
+              </Button>
+            )}
             <Button className="rounded-xl gap-2 min-w-[140px] h-10" onClick={handleSave}
-              disabled={updateSettings.isPending || Object.keys(local).length === 0}>
+              disabled={updateSettings.isPending || !isDirty}>
               {updateSettings.isPending
                 ? <><Spinner sm />Saving…</>
                 : saved
@@ -726,185 +716,114 @@ function SettingsTab({ org, canManage }: { org: Organisation; canManage: boolean
 }
 
 // ─── Security Tab ─────────────────────────────────────────────────────────────
+// Sessions & login history endpoints don't exist in your backend yet.
+// The tab shows real security policy toggles (wired to SETTINGS.UPDATE) and
+// clear "coming soon" placeholders for the parts that need new backend routes.
 
-const SECURITY_POLICIES = [
-  { label: 'Two-Factor Authentication', description: 'Require all members to use 2FA when signing in',    icon: Shield,  color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'    },
-  { label: 'Strong Password Policy',    description: 'Require passwords of at least 12 characters',      icon: Key,     color: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' },
-  { label: 'Security Alerts',           description: 'Email admins when suspicious activity is detected', icon: Bell,    color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'  },
-  { label: 'Single Session Only',       description: 'Prevent simultaneous logins on multiple devices',   icon: Monitor, color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'   },
+const SECURITY_POLICIES_CONFIG = [
+  { key: 'auditLogEnabled', label: 'Audit Log Enabled',    description: 'Track all admin actions in an audit trail',          icon: Shield,  color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'    },
+  { key: 'pinRequired',     label: 'PIN Required',         description: 'Require a PIN code for sensitive operations',        icon: Key,     color: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' },
+  { key: 'dataEncryption',  label: 'Data Encryption',      description: 'Encrypt sensitive data stored at rest',             icon: Lock,    color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'  },
+  { key: 'autoLogout',      label: 'Auto Logout',          description: 'Automatically sign out inactive sessions',          icon: Monitor, color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'   },
 ] as const;
 
-function SecurityTab({ canManage }: { canManage: boolean }) {
-  const { data: sessions = [], isLoading: sessionsLoading, error: sessionsError, refetch: refetchSessions } = useActiveSessions();
-  const { data: history = [],  isLoading: historyLoading,  error: historyError,  refetch: refetchHistory  } = useLoginHistory();
-  const revokeOne  = useRevokeSession();
-  const revokeAll  = useRevokeAllSessions();
-  const [revokeId, setRevokeId] = useState<string | null>(null);
+function SecurityTab({ org, canManage }: { org: Organisation; canManage: boolean }) {
+  const { data: settings, isLoading } = useOrgSettings(org.organisationId);
+  const updateSettings = useUpdateOrgSettings();
+  const [localSec, setLocalSec] = useState<Record<string, boolean>>({});
+  const isDirty = Object.keys(localSec).length > 0;
+
+  const security = { ...settings?.securitySettings, ...localSec };
+
+  async function handleSaveSecurityPolicies() {
+    try {
+      await updateSettings.mutateAsync({
+        securitySettings: security as any,
+        version: settings?.version,
+      });
+      toast.success('Security policies updated');
+      setLocalSec({});
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Failed to save security settings');
+    }
+  }
 
   return (
     <div className="space-y-5 max-w-3xl">
 
-      {/* Policies */}
-      <SectionCard title="Security Policies" description="Organisation-wide security enforcement" icon={ShieldCheck}
+      {/* Real: security policies from SETTINGS endpoint */}
+      <SectionCard title="Security Policies" description="Organisation-wide access and data enforcement" icon={ShieldCheck}
         iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-        <div className="space-y-0.5">
-          {SECURITY_POLICIES.map(({ label, description, icon: Icon, color }) => (
-            <div key={label} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-                  <Icon className="h-4 w-4" />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10 gap-2">
+            <Spinner /><span className="text-sm text-muted-foreground">Loading…</span>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-0.5">
+              {SECURITY_POLICIES_CONFIG.map(({ key, label, description, icon: Icon, color }) => (
+                <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={!!(security as any)?.[key]}
+                    disabled={!canManage}
+                    onCheckedChange={(v) => setLocalSec(p => ({ ...p, [key]: v }))}
+                    className="shrink-0"
+                  />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">{label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                </div>
-              </div>
-              <Switch disabled={!canManage} className="shrink-0" />
+              ))}
             </div>
-          ))}
+
+            {canManage && isDirty && (
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border/30">
+                <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => setLocalSec({})}>
+                  <X className="h-3.5 w-3.5" />Discard
+                </Button>
+                <Button size="sm" className="rounded-xl gap-1.5 min-w-[130px]"
+                  onClick={handleSaveSecurityPolicies} disabled={updateSettings.isPending}>
+                  {updateSettings.isPending ? <Spinner sm /> : <Save className="h-3.5 w-3.5" />}
+                  Save Policies
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </SectionCard>
+
+      {/* Placeholder: Active Sessions — backend route not yet available */}
+      <SectionCard title="Active Sessions" description="Devices currently logged in to your account" icon={Monitor}
+        iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <div className="space-y-4">
+          <ComingSoonBanner feature="Active session management" />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Add these routes to your backend and register them in <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">ENDPOINTS.AUTH</code>:
+          </p>
+          <div className="rounded-xl bg-muted/50 border border-border/40 p-3.5 space-y-1.5 font-mono text-xs text-muted-foreground">
+            <div><span className="text-emerald-600 font-semibold">GET</span>    /auth/sessions</div>
+            <div><span className="text-red-500 font-semibold">DELETE</span> /auth/sessions/:id</div>
+            <div><span className="text-blue-500 font-semibold">POST</span>   /auth/sessions/revoke-others</div>
+          </div>
         </div>
       </SectionCard>
 
-      {/* Active Sessions */}
-      <SectionCard title="Active Sessions" description="Devices currently logged in to your account" icon={Monitor}
-        iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-        action={
-          canManage && sessions.length > 1 ? (
-            <Button variant="outline" size="sm"
-              className="h-8 text-xs gap-1.5 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-              disabled={revokeAll.isPending}
-              onClick={() => revokeAll.mutate(undefined, {
-                onSuccess: () => toast.success('All other sessions revoked'),
-                onError: () => toast.error('Failed to revoke sessions'),
-              })}>
-              {revokeAll.isPending ? <Spinner sm /> : <LogOut className="h-3.5 w-3.5" />}
-              Revoke All Others
-            </Button>
-          ) : undefined
-        }>
-
-        {sessionsLoading ? (
-          <div className="flex items-center justify-center py-10 gap-2">
-            <Spinner /><span className="text-sm text-muted-foreground">Loading sessions…</span>
-          </div>
-        ) : sessionsError ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <WifiOff className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Could not load sessions</p>
-            <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => refetchSessions()}>
-              <RefreshCcw className="h-3.5 w-3.5" />Retry
-            </Button>
-          </div>
-        ) : sessions.length === 0 ? (
-          <EmptyState icon={Monitor} title="No active sessions" description="No other devices are currently logged in." />
-        ) : (
-          <div className="space-y-2.5">
-            {sessions.map((sess) => (
-              <div key={sess.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/20 p-3.5 hover:bg-muted/40 transition-colors">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-10 w-10 shrink-0 rounded-xl bg-background border border-border/60 flex items-center justify-center">
-                    <Monitor className="h-4.5 w-4.5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold">{sess.device}</p>
-                      {sess.isCurrent && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />Current
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {sess.location} · {sess.ip} · {sess.lastActive}
-                    </p>
-                  </div>
-                </div>
-                {!sess.isCurrent && canManage && (
-                  <Button variant="ghost" size="sm"
-                    className="h-8 px-3 text-xs shrink-0 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10"
-                    disabled={revokeOne.isPending && revokeId === sess.id}
-                    onClick={() => setRevokeId(sess.id)}>
-                    {revokeOne.isPending && revokeId === sess.id ? <Spinner sm /> : 'Revoke'}
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
-
-      {/* Login History */}
-      <SectionCard title="Login History" description="Recent authentication events for your account" icon={Activity}
+      {/* Placeholder: Login History — backend route not yet available */}
+      <SectionCard title="Login History" description="Recent authentication events" icon={Activity}
         iconColor="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-
-        {historyLoading ? (
-          <div className="flex items-center justify-center py-10 gap-2">
-            <Spinner /><span className="text-sm text-muted-foreground">Loading history…</span>
+        <div className="space-y-4">
+          <ComingSoonBanner feature="Login history" />
+          <div className="rounded-xl bg-muted/50 border border-border/40 p-3.5 font-mono text-xs text-muted-foreground">
+            <span className="text-emerald-600 font-semibold">GET</span>    /auth/login-history
           </div>
-        ) : historyError ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <WifiOff className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Could not load login history</p>
-            <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => refetchHistory()}>
-              <RefreshCcw className="h-3.5 w-3.5" />Retry
-            </Button>
-          </div>
-        ) : history.length === 0 ? (
-          <EmptyState icon={Activity} title="No login history" description="Authentication events will appear here." />
-        ) : (
-          <div className="divide-y divide-border/20">
-            {history.map((entry) => {
-              const isSuccess = entry.event.toLowerCase().includes('success');
-              const isFail    = entry.event.toLowerCase().includes('fail') || entry.event.toLowerCase().includes('invalid');
-              const iconBg    = isSuccess
-                ? 'bg-emerald-100 dark:bg-emerald-900/30'
-                : isFail ? 'bg-red-100 dark:bg-red-900/30'
-                : 'bg-amber-100 dark:bg-amber-900/30';
-              const icon = isSuccess
-                ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                : isFail ? <XCircle className="h-3.5 w-3.5 text-red-600" />
-                : <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />;
-              return (
-                <div key={entry.id} className="flex items-center gap-3 py-3 hover:bg-muted/30 rounded-lg px-2 transition-colors -mx-2">
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconBg}`}>{icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{entry.event}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{entry.device} · {entry.ip}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0 font-mono hidden sm:block">{entry.time}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        </div>
       </SectionCard>
-
-      {/* Revoke confirm */}
-      <AlertDialog open={!!revokeId} onOpenChange={() => setRevokeId(null)}>
-        <AlertDialogContent className="max-w-sm rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg">Revoke Session?</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              This device will be signed out immediately and will need to log in again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (!revokeId) return;
-                revokeOne.mutate(revokeId, {
-                  onSuccess: () => { toast.success('Session revoked'); setRevokeId(null); },
-                  onError: () => toast.error('Failed to revoke session'),
-                });
-              }}>
-              Revoke Session
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -949,7 +868,8 @@ export default function OrganisationPage() {
           queryClient.invalidateQueries({ queryKey: ['organisations'] });
           toast.success('Organisation profile updated');
         },
-        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to save changes'),
+        onError: (err: any) =>
+          toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to save changes'),
       },
     );
   }, [org, updateOrg, queryClient]);
@@ -999,7 +919,9 @@ export default function OrganisationPage() {
         <div>
           <h2 className="text-xl font-bold">Failed to Load Organisation</h2>
           <p className="mt-1.5 max-w-md text-muted-foreground text-sm">
-            {orgFetchError instanceof Error ? orgFetchError.message : 'An unexpected error occurred.'}
+            {(orgFetchError as any)?.response?.data?.message
+              ?? (orgFetchError as Error)?.message
+              ?? 'An unexpected error occurred.'}
           </p>
         </div>
         <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetchOrg()}>
@@ -1009,7 +931,7 @@ export default function OrganisationPage() {
     );
   }
 
-  // ── No org, can create ────────────────────────────────────────────────────
+  // ── No org — admin can create ─────────────────────────────────────────────
   if (canManage && !org) {
     return (
       <>
@@ -1045,7 +967,8 @@ export default function OrganisationPage() {
                 Create your organisation profile to start managing meetings, members, documents, and more.
               </p>
             </div>
-            <Button size="lg" className="gap-2.5 rounded-xl px-8 h-12 text-base shadow-md" onClick={() => setShowCreateOrg(true)}>
+            <Button size="lg" className="gap-2.5 rounded-xl px-8 h-12 text-base shadow-md"
+              onClick={() => setShowCreateOrg(true)}>
               <Plus className="h-5 w-5" />Create Organisation
             </Button>
             <p className="text-xs text-muted-foreground">Your organisation will be reviewed before becoming fully active.</p>
@@ -1123,7 +1046,7 @@ export default function OrganisationPage() {
           <SettingsTab org={org} canManage={canManage} />
         </TabsContent>
         <TabsContent value="security" className="mt-6 focus-visible:outline-none">
-          <SecurityTab canManage={canManage} />
+          <SecurityTab org={org} canManage={canManage} />
         </TabsContent>
       </Tabs>
     </div>
