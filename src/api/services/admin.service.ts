@@ -3,15 +3,17 @@
 
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/config/api.config';
-import type { ApiResponse, Organisation } from '@/types/api.types';
+import type { ApiResponse, Organisation, ApproveOrganisationData } from '@/types/api.types';
 
 export const adminService = {
   /**
    * Approve organization registration
    */
   async approveOrganisation(id: string): Promise<Organisation> {
+    const body: ApproveOrganisationData = { organisationId: id, status: 'approved' };
     const response = await apiClient.patch<ApiResponse<Organisation>>(
-      ENDPOINTS.ADMIN.APPROVE_ORG(id)
+      ENDPOINTS.ADMIN.APPROVE_ORG(id),
+      body
     );
     return response.data.data;
   },
@@ -20,9 +22,10 @@ export const adminService = {
    * Reject organization registration
    */
   async rejectOrganisation(id: string, reason?: string): Promise<Organisation> {
+    const body: ApproveOrganisationData = { organisationId: id, status: 'rejected', rejectionReason: reason };
     const response = await apiClient.patch<ApiResponse<Organisation>>(
       ENDPOINTS.ADMIN.APPROVE_ORG(id),
-      { status: 'rejected', reason }
+      body
     );
     return response.data.data;
   },

@@ -1,5 +1,5 @@
 // src/components/layout/Topbar.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import {
   Bell, Plus, Search, Moon, Sun,
@@ -8,8 +8,7 @@ import {
   Check, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -160,10 +159,9 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
       : notificationsList.filter(n => !n.isRead).length;
 
   // User — read after mount
-  const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
-  useEffect(() => {
-    try { setUser(authService.getUser()); } catch { /* unauthenticated */ }
-  }, []);
+  const [user] = useState<ReturnType<typeof authService.getUser>>(() => {
+    try { return authService.getUser(); } catch { return null; }
+  });
 
   if (!user) return null; // don't render topbar before auth resolves
 
@@ -429,7 +427,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                 <Avatar className="h-8 w-8 ring-2 ring-indigo-100 dark:ring-indigo-900/60">
                   <AvatarImage src={(user as any)?.avatar} alt={fullName} />
                   <AvatarFallback className="text-[11px] font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
-                    {initials}
+                    {initials || <User className="h-4 w-4" />}
                   </AvatarFallback>
                 </Avatar>
                 {/* Online dot */}
@@ -444,7 +442,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                   <Avatar className="h-9 w-9 ring-2 ring-white dark:ring-gray-700 shrink-0">
                     <AvatarImage src={(user as any)?.avatar} alt={fullName} />
                     <AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
-                      {initials}
+                      {initials || <User className="h-4 w-4" />}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">

@@ -108,7 +108,7 @@ export function UserLogin() {
   const isFormValid = email.trim() && password.trim() && orgCode.trim();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
 
       {/* Notification Toast */}
       {notification && (
@@ -121,9 +121,9 @@ export function UserLogin() {
         >
           <div className="flex items-start gap-3">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
             ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
             )}
             <div>
               <p className="font-medium text-sm">{notification.message}</p>
@@ -145,7 +145,7 @@ export function UserLogin() {
       >
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board Logo"
@@ -180,7 +180,7 @@ export function UserLogin() {
         {/* Card */}
         <Card className="border-gray-200/60 dark:border-gray-800/50 bg-white/95 dark:bg-gray-900/80 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
           {/* Top accent line — matches indigo theme */}
-          <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-500" />
+          <div className="h-1 w-full bg-linear-to-r from-indigo-500 via-blue-500 to-indigo-500" />
 
           <CardHeader className="px-10 pt-8 pb-6 text-center">
             <CardTitle className="text-2xl font-semibold">Member Sign In</CardTitle>

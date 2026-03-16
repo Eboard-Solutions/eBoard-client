@@ -154,3 +154,18 @@ export function useToggleUserStatus() {
     },
   });
 }
+
+/**
+ * Hook to create a super admin
+ */
+export function useCreateSuperAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { firstName: string; lastName: string; email: string; password?: string; role?: string }) =>
+      usersService.createSuperAdmin({ firstName: data.firstName, lastName: data.lastName, email: data.email, password: data.password ?? '' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.all });
+    },
+  });
+}

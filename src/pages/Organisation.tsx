@@ -1,1676 +1,907 @@
 'use client';
 
-import {
-  useState,
-  useMemo,
-  useCallback,
-  useRef,
-} from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useCallback, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Building2,
-  Users,
-  FileText,
-  Settings,
-  Shield,
-  Edit3,
-  Save,
-  X,
-  Upload,
-  Camera,
-  Search,
-  Trash2,
-  Download,
-  Send,
-  UserPlus,
-  UserMinus,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Globe,
-  Phone,
-  Mail,
-  MapPin,
-  Link2,
-  Hash,
-  Calendar,
-  Lock,
-  Key,
-  Monitor,
-  LogOut,
-  Bell,
-  RefreshCcw,
-  ShieldCheck,
-  Activity,
-  MoreHorizontal,
+  Building2, Settings, Shield, Edit3, Save, X, Camera,
+  AlertTriangle, CheckCircle2, XCircle, Globe, Phone, Mail,
+  MapPin, Link2, Hash, Calendar, Key, Monitor, LogOut, Bell,
+  RefreshCcw, ShieldCheck, Activity, Plus, Users, FileText,
+  Zap, Loader2, WifiOff, Lock, Info,
 } from 'lucide-react';
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '@/components/ui/tabs';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 
 import { usePermissions } from '@/lib/permissions';
-import { useOrganisations, useUpdateOrganisation } from '@/hooks/api/useOrganisations';
 import {
-  useOrganisationUsers,
-  useUpdateUser,
-  useDeleteUser,
-} from '@/hooks/api/useUsers';
-import type { Organisation, User as ApiUser } from '@/types/api.types';
+  useMyOrganisation,
+  useUpdateOrganisation,
+  useRegisterOrganisation,
+} from '@/hooks/api/useOrganisations';
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/config/api.config';
+import type { Organisation, PlatformSettings, UpdateSettingsData } from '@/types/api.types';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Settings API hooks (wired to real SETTINGS endpoints) ────────────────────
 
-interface OrgDocument {
-  id: string;
-  name: string;
-  type: string;
-  size: string;
-  uploadedBy: string;
-  uploadedAt: string;
-  url: string;
-  category: 'policy' | 'meeting' | 'report' | 'other';
+function useOrgSettings(orgId: string | undefined) {
+  return useQuery<PlatformSettings>({
+    queryKey: ['settings', 'org', orgId],
+    queryFn: async () => {
+      const res = await apiClient.get(ENDPOINTS.SETTINGS.BY_ORG(orgId!));
+      return res.data.data ?? res.data;
+    },
+    enabled: !!orgId,
+    staleTime: 5 * 60 * 1000,
+    retry: (count, err: any) => err?.response?.status === 403 ? false : count < 2,
+  });
 }
 
-interface LoginSession {
-  id: string;
-  device: string;
-  location: string;
-  ip: string;
-  lastActive: string;
-  isCurrent: boolean;
+function useUpdateOrgSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: UpdateSettingsData) => {
+      const res = await apiClient.patch(ENDPOINTS.SETTINGS.UPDATE, data);
+      return res.data.data ?? res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
 }
 
-interface LoginHistoryEntry {
-  id: string;
-  event: string;
-  device: string;
-  ip: string;
-  time: string;
-}
+// ─── Shared UI primitives ─────────────────────────────────────────────────────
 
-// ─── Constants ─────────────────────────────────────────────────────────────────
-
-const ROLE_COLORS: Record<string, string> = {
-  SuperAdmin:  'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800',
-  OrgAdmin:    'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-violet-200 dark:border-violet-800',
-  Admin:       'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  BoardMember: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-  User:        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700',
-};
-
-const DOC_CATEGORY_COLORS: Record<string, string> = {
-  policy:  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  meeting: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  report:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  other:   'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-};
-
-const MEMBER_ROLES = ['OrgAdmin', 'Admin', 'BoardMember', 'User'] as const;
-type MemberRole = (typeof MEMBER_ROLES)[number];
-
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-
-const MOCK_DOCS: OrgDocument[] = [
-  {
-    id: '1',
-    name: 'Board Charter 2024.pdf',
-    type: 'PDF',
-    size: '2.4 MB',
-    uploadedBy: 'Alice Kim',
-    uploadedAt: '2024-03-01',
-    url: '#',
-    category: 'policy',
-  },
-  {
-    id: '2',
-    name: 'Q1 Meeting Minutes.docx',
-    type: 'DOCX',
-    size: '340 KB',
-    uploadedBy: 'Bob Chen',
-    uploadedAt: '2024-04-10',
-    url: '#',
-    category: 'meeting',
-  },
-  {
-    id: '3',
-    name: 'Annual Report 2023.pdf',
-    type: 'PDF',
-    size: '8.1 MB',
-    uploadedBy: 'Alice Kim',
-    uploadedAt: '2024-02-15',
-    url: '#',
-    category: 'report',
-  },
-  {
-    id: '4',
-    name: 'Privacy Policy.pdf',
-    type: 'PDF',
-    size: '1.2 MB',
-    uploadedBy: 'Carol Diaz',
-    uploadedAt: '2024-01-20',
-    url: '#',
-    category: 'policy',
-  },
-];
-
-const MOCK_SESSIONS: LoginSession[] = [
-  {
-    id: '1',
-    device: 'Chrome on macOS',
-    location: 'Nairobi, KE',
-    ip: '197.232.10.4',
-    lastActive: '2 minutes ago',
-    isCurrent: true,
-  },
-  {
-    id: '2',
-    device: 'Safari on iPhone',
-    location: 'Nairobi, KE',
-    ip: '197.232.10.5',
-    lastActive: '3 hours ago',
-    isCurrent: false,
-  },
-  {
-    id: '3',
-    device: 'Firefox on Windows',
-    location: 'Mombasa, KE',
-    ip: '41.89.12.7',
-    lastActive: '2 days ago',
-    isCurrent: false,
-  },
-];
-
-const MOCK_LOGIN_HISTORY: LoginHistoryEntry[] = [
-  {
-    id: '1',
-    event: 'Successful login',
-    device: 'Chrome on macOS',
-    ip: '197.232.10.4',
-    time: '2025-03-09 08:12',
-  },
-  {
-    id: '2',
-    event: 'Successful login',
-    device: 'Safari on iPhone',
-    ip: '197.232.10.5',
-    time: '2025-03-08 17:45',
-  },
-  {
-    id: '3',
-    event: 'Failed login attempt',
-    device: 'Unknown',
-    ip: '45.33.32.156',
-    time: '2025-03-07 03:22',
-  },
-  {
-    id: '4',
-    event: 'Password changed',
-    device: 'Chrome on macOS',
-    ip: '197.232.10.4',
-    time: '2025-03-06 14:01',
-  },
-];
-
-// ─── Shared Small Components ────────────────────────────────────────────────────
-
-interface FieldRowProps {
-  label: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-}
-
-function FieldRow({ label, icon: Icon, children }: FieldRowProps) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium flex items-center gap-1.5 text-foreground/80">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-        {label}
-      </Label>
-      {children}
-    </div>
-  );
+function Spinner({ sm }: { sm?: boolean }) {
+  return <Loader2 className={`animate-spin ${sm ? 'h-3.5 w-3.5' : 'h-5 w-5'}`} />;
 }
 
 function StatusBadge({ isActive }: { isActive: boolean }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${
-        isActive
-          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
-          : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400'
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
+      isActive
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
+        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+    }`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
       {isActive ? 'Active' : 'Inactive'}
     </span>
   );
 }
 
-function Spinner({ className }: { className?: string }) {
+function SectionCard({ title, description, icon: Icon, iconColor, children, action }: {
+  title: string; description?: string; icon: React.ElementType;
+  iconColor: string; children: React.ReactNode; action?: React.ReactNode;
+}) {
   return (
-    <div
-      className={`animate-spin rounded-full border-2 border-current border-t-transparent ${className ?? 'h-3.5 w-3.5'}`}
-    />
+    <Card className="border border-border/50 shadow-sm overflow-hidden">
+      <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${iconColor}`}>
+              <Icon className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-bold">{title}</CardTitle>
+              {description && <CardDescription className="text-xs mt-0.5">{description}</CardDescription>}
+            </div>
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
+        </div>
+      </CardHeader>
+      <CardContent className="px-5 py-5">{children}</CardContent>
+    </Card>
   );
 }
 
-// ─── Profile Tab ────────────────────────────────────────────────────────────────
-
-interface ProfileTabProps {
-  org: Organisation;
-  onSave: (data: Partial<Organisation>) => void;
-  isSaving: boolean;
+function EmptyState({ icon: Icon, title, description }: {
+  icon: React.ElementType; title: string; description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-12 text-center">
+      <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
+        <Icon className="h-7 w-7 text-muted-foreground/40" />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-foreground/70">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+    </div>
+  );
 }
 
-function ProfileTab({ org, onSave, isSaving }: ProfileTabProps) {
+function ServerErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-center gap-3 dark:border-amber-800 dark:bg-amber-900/20">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+      <p className="flex-1 text-sm text-amber-900 dark:text-amber-300">{message}</p>
+      <Button variant="outline" size="sm" onClick={onRetry}
+        className="h-7 text-xs gap-1.5 border-amber-300 hover:bg-amber-100 shrink-0 rounded-xl">
+        <RefreshCcw className="h-3 w-3" />Retry
+      </Button>
+    </div>
+  );
+}
+
+function ComingSoonBanner({ feature }: { feature: string }) {
+  return (
+    <div className="rounded-2xl border border-blue-200/60 bg-blue-50/60 dark:border-blue-800/60 dark:bg-blue-950/20 px-4 py-3 flex items-center gap-3">
+      <Info className="h-4 w-4 shrink-0 text-blue-500" />
+      <p className="text-sm text-blue-800 dark:text-blue-300">
+        <span className="font-semibold">{feature}</span> will appear here once your backend exposes the endpoint.
+        Add the route to <code className="text-xs bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded font-mono">ENDPOINTS</code> in <code className="text-xs bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded font-mono">api.config.ts</code> to enable it.
+      </p>
+    </div>
+  );
+}
+
+// ─── Create Organisation Dialog ───────────────────────────────────────────────
+
+function CreateOrgDialog({ open, onOpenChange, onCreated }: {
+  open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void;
+}) {
+  const register = useRegisterOrganisation();
+  const [form, setForm] = useState({
+    organisationName: '', OrgEmail: '', phoneNumber: '',
+    address: '', websiteUrl: '', description: '',
+  });
+
+  const f = (k: keyof typeof form) => ({
+    value: form[k],
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm(p => ({ ...p, [k]: e.target.value })),
+  });
+
+  const inp = 'h-11 rounded-xl border-border/60 focus:border-primary/70 bg-background text-sm';
+  const lbl = 'block text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2';
+
+  function handleSubmit() {
+    if (!form.organisationName.trim()) { toast.error('Organisation name is required'); return; }
+    register.mutate(form as any, {
+      onSuccess: () => {
+        toast.success('Organisation created — awaiting review before activation.');
+        onCreated();
+        onOpenChange(false);
+        setForm({ organisationName: '', OrgEmail: '', phoneNumber: '', address: '', websiteUrl: '', description: '' });
+      },
+      onError: (err: any) =>
+        toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to create organisation'),
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg rounded-2xl">
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="h-11 w-11 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold">Create Organisation</DialogTitle>
+              <DialogDescription className="text-xs mt-0.5">Will be reviewed before becoming fully active.</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div>
+            <label className={lbl}>Organisation Name <span className="text-red-500 normal-case">*</span></label>
+            <Input {...f('organisationName')} placeholder="Acme Corp" className={inp} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>Contact Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input {...f('OrgEmail')} type="email" placeholder="hello@company.com" className={`${inp} pl-10`} />
+              </div>
+            </div>
+            <div>
+              <label className={lbl}>Phone Number</label>
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input {...f('phoneNumber')} placeholder="+254 700 000 000" className={`${inp} pl-10`} />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Address</label>
+            <div className="relative">
+              <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input {...f('address')} placeholder="123 Main St, Nairobi" className={`${inp} pl-10`} />
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Website</label>
+            <div className="relative">
+              <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input {...f('websiteUrl')} placeholder="https://company.com" className={`${inp} pl-10`} />
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Description</label>
+            <Textarea {...f('description')} placeholder="Brief description of your organisation…"
+              rows={3} className="resize-none rounded-xl border-border/60 focus:border-primary/70 bg-background text-sm" />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)} disabled={register.isPending}>Cancel</Button>
+          <Button className="rounded-xl gap-2 min-w-[160px]" onClick={handleSubmit} disabled={register.isPending}>
+            {register.isPending ? <Spinner sm /> : <Plus className="h-4 w-4" />}
+            Create Organisation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Profile Tab ──────────────────────────────────────────────────────────────
+
+function ProfileTab({ org, onSave, isSaving, canManage }: {
+  org: Organisation; onSave: (d: Partial<Organisation>) => void;
+  isSaving: boolean; canManage: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Organisation>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  const current = { ...org, ...form };
 
-  const current: Partial<Organisation> = { ...org, ...form };
+  const inp = (extra = '') =>
+    `h-11 rounded-xl border-border/60 bg-background text-sm transition-colors ${
+      editing ? 'focus:border-primary/70' : 'opacity-80 cursor-default'
+    } ${extra}`;
+  const lbl = 'block text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2';
 
-  function fieldProps(key: keyof Organisation) {
+  function fp(key: keyof Organisation) {
     return {
       value: (form[key] as string) ?? (org[key] as string) ?? '',
       onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        setForm((prev) => ({ ...prev, [key]: e.target.value })),
+        setForm(p => ({ ...p, [key]: e.target.value })),
       disabled: !editing,
     };
   }
 
-  function handleSave() {
-    onSave(form);
-    setEditing(false);
-    setForm({});
-  }
-
-  function handleCancel() {
-    setEditing(false);
-    setForm({});
-  }
-
-  const createdAtLabel = org.createdAt
-    ? new Date(org.createdAt).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      })
+  const createdLabel = org.createdAt
+    ? new Date(org.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
 
-  const systemInfo = [
-    { label: 'Organisation ID', value: org.organisationId ?? '—' },
-    { label: 'Status', value: org.status ?? 'PENDING' },
-    { label: 'Approved By', value: org.approvedBy ?? 'Not yet approved' },
-    {
-      label: 'Approved At',
-      value: org.approvedAt ? new Date(org.approvedAt).toLocaleDateString() : '—',
-    },
+  const systemFields = [
+    { label: 'Organisation ID', value: org.organisationId ?? '—', mono: true  },
+    { label: 'Status',          value: org.status ?? 'PENDING',   mono: false },
+    { label: 'Org Code',        value: org.orgCode ?? '—',        mono: true  },
+    { label: 'Approved By',     value: org.approvedBy ?? 'Pending approval', mono: false },
+    { label: 'Approved At',     value: org.approvedAt ? new Date(org.approvedAt).toLocaleDateString('en-GB') : '—', mono: false },
+    { label: 'Created',         value: createdLabel,              mono: false },
   ];
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      {/* Identity Banner */}
-      <Card className="border border-border/60 shadow-sm overflow-hidden">
-        <div className="h-28 bg-gradient-to-r from-indigo-600/20 via-blue-500/15 to-violet-500/20 relative">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_60%)]" />
+    <div className="space-y-6 max-w-5xl">
+
+      {/* ── Hero banner ── */}
+      <Card className="border border-border/50 shadow-sm overflow-hidden">
+        <div className="h-36 sm:h-44 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900" />
+          <div className="absolute inset-0"
+            style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(59,130,246,0.5) 0%, transparent 50%), radial-gradient(circle at 85% 20%, rgba(139,92,246,0.4) 0%, transparent 50%)' }} />
+          <div className="absolute inset-0 opacity-[0.06]"
+            style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 24px, rgba(255,255,255,1) 24px, rgba(255,255,255,1) 25px)' }} />
+          <div className="absolute top-4 right-4">
+            <StatusBadge isActive={org.isActive ?? false} />
+          </div>
         </div>
-        <CardContent className="pt-0 pb-6 px-6">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-5 -mt-10">
+
+        <CardContent className="pt-0 pb-6 px-5 sm:px-7">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-5 -mt-10 sm:-mt-12">
+
             {/* Logo */}
             <div className="relative shrink-0">
-              <div className="h-20 w-20 rounded-2xl border-4 border-background bg-muted overflow-hidden shadow-lg">
-                {current.logoUrl ? (
-                  <img
-                    src={current.logoUrl}
-                    alt="Organisation logo"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/40">
-                    <Building2 className="h-9 w-9 text-indigo-400" />
-                  </div>
-                )}
+              <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl border-4 border-background bg-white overflow-hidden shadow-xl ring-1 ring-black/5">
+                {current.logoUrl
+                  ? <img src={current.logoUrl} alt="logo" className="h-full w-full object-cover" />
+                  : (
+                    <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40">
+                      <Building2 className="h-9 w-9 text-blue-400" />
+                    </div>
+                  )
+                }
               </div>
               {editing && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md hover:bg-indigo-700 transition-colors"
-                    aria-label="Upload logo"
-                  >
-                    <Camera className="h-3.5 w-3.5" />
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors border-2 border-background">
+                    <Camera className="h-3 w-3" />
                   </button>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    aria-hidden="true"
-                  />
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" aria-hidden
+                    onChange={(e) => {
+                      const url = e.target.files?.[0] ? URL.createObjectURL(e.target.files[0]) : undefined;
+                      if (url) setForm(p => ({ ...p, logoUrl: url }));
+                    }} />
                 </>
               )}
             </div>
 
             {/* Name + meta */}
             <div className="flex-1 min-w-0 pb-1">
-              <h2 className="text-xl font-bold text-foreground truncate">
-                {current.organisationName ?? 'Organisation Name'}
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
+                {current.organisationName || 'Organisation Name'}
               </h2>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5">
+              <div className="flex flex-wrap items-center gap-2.5 mt-2">
                 {org.orgCode && (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Hash className="h-3 w-3" />
-                    {org.orgCode}
+                  <span className="inline-flex items-center gap-1.5 text-xs font-mono bg-muted px-2.5 py-1 rounded-lg border border-border/60 text-muted-foreground">
+                    <Hash className="h-3 w-3" />{org.orgCode}
                   </span>
                 )}
-                <StatusBadge isActive={org.isActive ?? false} />
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Calendar className="h-3 w-3" />
-                  Created {createdAtLabel}
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Calendar className="h-3 w-3" />Created {createdLabel}
                 </span>
               </div>
             </div>
 
-            {/* Edit actions */}
-            <div className="shrink-0 flex gap-2 pb-1">
-              {editing ? (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCancel}
-                    className="h-8 gap-1.5"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Cancel
+            {/* Edit / Save */}
+            {canManage && (
+              <div className="shrink-0 flex gap-2 pb-1">
+                {editing ? (
+                  <>
+                    <Button variant="outline" size="sm" className="rounded-xl gap-1.5 h-9"
+                      onClick={() => { setEditing(false); setForm({}); }}>
+                      <X className="h-3.5 w-3.5" />Cancel
+                    </Button>
+                    <Button size="sm" className="rounded-xl gap-1.5 h-9 min-w-[90px]"
+                      onClick={() => { onSave(form); setEditing(false); setForm({}); }} disabled={isSaving}>
+                      {isSaving ? <Spinner sm /> : <Save className="h-3.5 w-3.5" />}Save
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" className="rounded-xl gap-1.5 h-9"
+                    onClick={() => setEditing(true)}>
+                    <Edit3 className="h-3.5 w-3.5" />Edit Profile
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="h-8 gap-1.5"
-                  >
-                    {isSaving ? <Spinner /> : <Save className="h-3.5 w-3.5" />}
-                    Save Changes
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditing(true)}
-                  className="h-8 gap-1.5"
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                  Edit Profile
-                </Button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Detail cards */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Basic Info */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-sm font-semibold">Basic Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FieldRow label="Organisation Name" icon={Building2}>
-              <Input
-                {...fieldProps('organisationName')}
-                placeholder="Acme Corp"
-                className="h-9 text-sm"
-              />
-            </FieldRow>
-            <FieldRow label="Organisation Code" icon={Hash}>
-              <Input
-                value={org.orgCode ?? ''}
-                disabled
-                placeholder="ORG-001"
-                className="h-9 text-sm bg-muted/40"
-                readOnly
-              />
-            </FieldRow>
-            <FieldRow label="Description" icon={FileText}>
+      {/* ── Detail grid ── */}
+      <div className="grid gap-5 lg:grid-cols-2">
+
+        {/* Basic info */}
+        <SectionCard title="Basic Information" description="Core organisation details" icon={Building2}
+          iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+          <div className="space-y-4">
+            <div>
+              <label className={lbl}>Organisation Name</label>
+              <Input {...fp('organisationName')} placeholder="Acme Corp" className={inp()} />
+            </div>
+            <div>
+              <label className={lbl}>Org Code <span className="normal-case font-normal text-muted-foreground">(read-only)</span></label>
+              <Input value={org.orgCode ?? ''} disabled readOnly
+                className="h-11 rounded-xl border-border/60 bg-muted/50 text-sm font-mono text-muted-foreground" />
+            </div>
+            <div>
+              <label className={lbl}>Description</label>
               <Textarea
                 value={(form.description as string) ?? (org.description as string) ?? ''}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, description: e.target.value }))
-                }
-                disabled={!editing}
-                placeholder="Brief description…"
-                rows={3}
-                className="resize-none text-sm"
-              />
-            </FieldRow>
-            <FieldRow label="Website" icon={Globe}>
-              <Input
-                {...fieldProps('websiteUrl')}
-                placeholder="https://company.com"
-                className="h-9 text-sm"
-              />
-            </FieldRow>
-            <FieldRow label="Logo URL" icon={Link2}>
-              <Input
-                {...fieldProps('logoUrl')}
-                placeholder="https://company.com/logo.png"
-                className="h-9 text-sm"
-              />
-            </FieldRow>
-          </CardContent>
-        </Card>
+                onChange={(e) => setForm(p => ({ ...p, description: e.target.value }))}
+                disabled={!editing} placeholder="Brief description of your organisation…"
+                rows={4} className="resize-none rounded-xl border-border/60 bg-background text-sm leading-relaxed" />
+            </div>
+            <div>
+              <label className={lbl}>Website</label>
+              <div className="relative">
+                <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input {...fp('websiteUrl')} placeholder="https://company.com" className={inp('pl-10')} />
+              </div>
+            </div>
+            <div>
+              <label className={lbl}>Logo URL</label>
+              <div className="relative">
+                <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input {...fp('logoUrl')} placeholder="https://company.com/logo.png" className={inp('pl-10')} />
+              </div>
+            </div>
+          </div>
+        </SectionCard>
 
-        {/* Contact Info */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-sm font-semibold">Contact Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FieldRow label="Contact Email" icon={Mail}>
-              <Input
-                {...fieldProps('OrgEmail')}
-                type="email"
-                placeholder="hello@company.com"
-                className="h-9 text-sm"
-              />
-            </FieldRow>
-            <FieldRow label="Phone Number" icon={Phone}>
-              <Input
-                {...fieldProps('phoneNumber')}
-                placeholder="+254 700 000 000"
-                className="h-9 text-sm"
-              />
-            </FieldRow>
-            <FieldRow label="Address" icon={MapPin}>
-              <Input
-                {...fieldProps('address')}
-                placeholder="123 Main St, City, Country"
-                className="h-9 text-sm"
-              />
-            </FieldRow>
-            <Separator />
-            <div className="rounded-lg bg-muted/40 border border-border/50 p-4 space-y-3">
-              <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                System Info
-              </p>
-              {systemInfo.map(({ label, value }) => (
-                <div key={label} className="flex justify-between gap-3">
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                  <span className="text-xs font-medium text-foreground truncate max-w-[160px]">
+        <div className="space-y-5">
+          {/* Contact details */}
+          <SectionCard title="Contact Details" description="How to reach your organisation" icon={Phone}
+            iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+            <div className="space-y-4">
+              <div>
+                <label className={lbl}>Contact Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input {...fp('OrgEmail')} type="email" placeholder="hello@company.com" className={inp('pl-10')} />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input {...fp('phoneNumber')} placeholder="+254 700 000 000" className={inp('pl-10')} />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Address</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input {...fp('address')} placeholder="123 Main St, City" className={inp('pl-10')} />
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* System info — all from real org object */}
+          <Card className="border border-border/50 shadow-sm overflow-hidden">
+            <CardHeader className="px-5 pt-4 pb-3 border-b border-border/30 bg-muted/30">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">System Information</p>
+            </CardHeader>
+            <CardContent className="px-5 py-2 divide-y divide-border/30">
+              {systemFields.map(({ label, value, mono }) => (
+                <div key={label} className="flex items-center justify-between gap-4 py-2.5">
+                  <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+                  <span className={`text-xs font-semibold truncate text-right max-w-[200px] ${mono ? 'font-mono' : ''}`}>
                     {value}
                   </span>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// ─── Members Tab ────────────────────────────────────────────────────────────────
-
-interface OrgMembersTabProps {
-  canManage: boolean;
-}
-
-function OrgMembersTab({ canManage }: OrgMembersTabProps) {
-  const { data: membersRaw, isLoading } = useOrganisationUsers();
-  const updateUser = useUpdateUser();
-  const deleteUser = useDeleteUser();
-  const queryClient = useQueryClient();
-
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [showInvite, setShowInvite] = useState(false);
-  const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
-
-  const members = useMemo<ApiUser[]>(() => {
-    const items: ApiUser[] = Array.isArray(membersRaw)
-      ? membersRaw
-      : (membersRaw as { items?: ApiUser[] } | undefined)?.items ?? [];
-
-    return items.filter((u) => {
-      const matchSearch = !search.trim()
-        ? true
-        : `${u.firstName ?? ''} ${u.lastName ?? ''}`
-            .toLowerCase()
-            .includes(search.toLowerCase()) ||
-          u.email?.toLowerCase().includes(search.toLowerCase());
-
-      const matchRole = roleFilter === 'all' ? true : u.role === roleFilter;
-      return matchSearch && matchRole;
-    });
-  }, [membersRaw, search, roleFilter]);
-
-  function handleRoleChange(userId: string, newRole: string) {
-    updateUser.mutate(
-      { userId, data: { role: newRole } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['users', 'organisation-users'] });
-          toast.success('Role updated');
-        },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : 'Failed to update role'),
-      }
-    );
-  }
-
-  function handleToggleActive(user: ApiUser) {
-    updateUser.mutate(
-      { userId: user.id, data: { isActive: !user.isActive } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['users', 'organisation-users'] });
-          toast.success(user.isActive ? 'Member deactivated' : 'Member activated');
-        },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : 'Failed to update member'),
-      }
-    );
-  }
-
-  function handleDelete() {
-    if (!memberToDelete) return;
-    deleteUser.mutate(memberToDelete, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['users', 'organisation-users'] });
-        toast.success('Member removed');
-        setMemberToDelete(null);
-      },
-      onError: (err) =>
-        toast.error(err instanceof Error ? err.message : 'Failed to remove member'),
-    });
-  }
-
-  const colSpan = canManage ? 5 : 4;
-
-  return (
-    <div className="space-y-5 max-w-6xl">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="flex gap-2 flex-1 min-w-0">
-          <div className="relative flex-1 min-w-0 max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search members…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 pl-9 text-sm"
-            />
-          </div>
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="h-9 w-36 text-sm shrink-0">
-              <SelectValue placeholder="Role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All roles</SelectItem>
-              {MEMBER_ROLES.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {canManage && (
-          <Button
-            size="sm"
-            className="h-9 gap-2 shrink-0"
-            onClick={() => setShowInvite(true)}
-          >
-            <Send className="h-4 w-4" />
-            Invite Member
-          </Button>
-        )}
-      </div>
-
-      {/* Table */}
-      <Card className="border border-border/60 shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
-              <TableHead className="pl-5 py-3 font-semibold text-foreground">Member</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Email</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Role</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Status</TableHead>
-              {canManage && (
-                <TableHead className="w-14 pr-5 text-right py-3 font-semibold text-foreground">
-                  Actions
-                </TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: colSpan }).map((_, j) => (
-                    <TableCell key={j} className="py-4">
-                      <div className="h-4 animate-pulse rounded bg-muted/60 w-3/4" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : members.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={colSpan}
-                  className="h-32 text-center text-sm text-muted-foreground"
-                >
-                  {search || roleFilter !== 'all'
-                    ? 'No matching members.'
-                    : 'No members in this organisation yet.'}
-                </TableCell>
-              </TableRow>
-            ) : (
-              members.map((user) => {
-                const displayName =
-                  `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || '—';
-                const initials =
-                  `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() ||
-                  'U';
-                const roleClass = ROLE_COLORS[user.role] ?? ROLE_COLORS['User'];
-
-                return (
-                  <TableRow
-                    key={user.id}
-                    className="group border-b border-border/40 hover:bg-muted/30 transition-colors"
-                  >
-                    <TableCell className="pl-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8 shrink-0">
-                          <AvatarImage src={user.profilePictureUrl} />
-                          <AvatarFallback className="text-xs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm font-medium text-foreground">
-                          {displayName}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-muted-foreground">
-                      {user.email}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${roleClass}`}
-                      >
-                        {user.role}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            user.isActive ? 'bg-emerald-500' : 'bg-gray-400'
-                          }`}
-                        />
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </TableCell>
-                    {canManage && (
-                      <TableCell className="pr-5 py-3.5 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            {MEMBER_ROLES.map((role) => (
-                              <DropdownMenuItem
-                                key={role}
-                                disabled={user.role === role}
-                                onClick={() => handleRoleChange(user.id, role)}
-                              >
-                                Assign as {role}
-                              </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleToggleActive(user)}>
-                              {user.isActive ? (
-                                <>
-                                  <UserMinus className="h-3.5 w-3.5 mr-2" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <UserPlus className="h-3.5 w-3.5 mr-2" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setMemberToDelete(user.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
-                              Remove Member
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Invite Dialog */}
-      <Dialog open={showInvite} onOpenChange={setShowInvite}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Invite Member</DialogTitle>
-            <DialogDescription>
-              Send an invitation email to add a new member to this organisation.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Email Address</Label>
-              <Input type="email" placeholder="member@company.com" className="h-9" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Role</Label>
-              <Select defaultValue="BoardMember">
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MEMBER_ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowInvite(false)}>
-              Cancel
-            </Button>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                toast.success('Invitation sent');
-                setShowInvite(false);
-              }}
-            >
-              <Send className="h-4 w-4" />
-              Send Invite
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirm */}
-      <AlertDialog
-        open={!!memberToDelete}
-        onOpenChange={() => setMemberToDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Member</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove the member from the organisation.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteUser.isPending}
-            >
-              {deleteUser.isPending ? 'Removing…' : 'Remove'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-// ─── Documents Tab ──────────────────────────────────────────────────────────────
-
-interface DocumentsTabProps {
-  canManage: boolean;
-}
-
-function DocumentsTab({ canManage }: DocumentsTabProps) {
-  const [docs, setDocs] = useState<OrgDocument[]>(MOCK_DOCS);
-  const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('all');
-  const [docToDelete, setDocToDelete] = useState<string | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const filtered = useMemo(
-    () =>
-      docs.filter((d) => {
-        const matchCat = catFilter === 'all' || d.category === catFilter;
-        const matchSearch =
-          !search.trim() || d.name.toLowerCase().includes(search.toLowerCase());
-        return matchCat && matchSearch;
-      }),
-    [docs, search, catFilter]
-  );
-
-  const docStats = [
-    { label: 'Total', value: docs.length, color: 'text-foreground' },
-    {
-      label: 'Policies',
-      value: docs.filter((d) => d.category === 'policy').length,
-      color: 'text-blue-600',
-    },
-    {
-      label: 'Meeting Files',
-      value: docs.filter((d) => d.category === 'meeting').length,
-      color: 'text-amber-600',
-    },
-    {
-      label: 'Reports',
-      value: docs.filter((d) => d.category === 'report').length,
-      color: 'text-emerald-600',
-    },
-  ];
-
-  function handleDeleteDoc() {
-    if (!docToDelete) return;
-    setDocs((prev) => prev.filter((d) => d.id !== docToDelete));
-    toast.success('Document deleted');
-    setDocToDelete(null);
-  }
-
-  return (
-    <div className="space-y-5 max-w-6xl">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="flex gap-2 flex-1 min-w-0">
-          <div className="relative flex-1 min-w-0 max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search documents…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 pl-9 text-sm"
-            />
-          </div>
-          <Select value={catFilter} onValueChange={setCatFilter}>
-            <SelectTrigger className="h-9 w-36 text-sm shrink-0">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="policy">Policy</SelectItem>
-              <SelectItem value="meeting">Meeting</SelectItem>
-              <SelectItem value="report">Report</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {canManage && (
-          <Button
-            size="sm"
-            className="h-9 gap-2 shrink-0"
-            onClick={() => setShowUpload(true)}
-          >
-            <Upload className="h-4 w-4" />
-            Upload Document
-          </Button>
-        )}
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {docStats.map(({ label, value, color }) => (
-          <Card key={label} className="border border-border/60 shadow-sm">
-            <CardContent className="p-4">
-              <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
             </CardContent>
           </Card>
-        ))}
+        </div>
       </div>
-
-      {/* Table */}
-      <Card className="border border-border/60 shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
-              <TableHead className="pl-5 py-3 font-semibold text-foreground">Document</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Category</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Size</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Uploaded By</TableHead>
-              <TableHead className="py-3 font-semibold text-foreground">Date</TableHead>
-              <TableHead className="w-20 pr-5 text-right py-3 font-semibold text-foreground">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="h-32 text-center text-sm text-muted-foreground"
-                >
-                  No documents found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((doc) => (
-                <TableRow
-                  key={doc.id}
-                  className="group border-b border-border/40 hover:bg-muted/30 transition-colors"
-                >
-                  <TableCell className="pl-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted border border-border/50">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground max-w-[220px] truncate">
-                        {doc.name}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-3.5">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
-                        DOC_CATEGORY_COLORS[doc.category]
-                      }`}
-                    >
-                      {doc.category}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-3.5 text-sm text-muted-foreground">
-                    {doc.size}
-                  </TableCell>
-                  <TableCell className="py-3.5 text-sm text-muted-foreground">
-                    {doc.uploadedBy}
-                  </TableCell>
-                  <TableCell className="py-3.5 text-sm text-muted-foreground">
-                    {doc.uploadedAt}
-                  </TableCell>
-                  <TableCell className="pr-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 hover:bg-primary/10 hover:text-primary"
-                        asChild
-                      >
-                        <a href={doc.url} download>
-                          <Download className="h-3.5 w-3.5" />
-                        </a>
-                      </Button>
-                      {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => setDocToDelete(doc.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Upload Dialog */}
-      <Dialog open={showUpload} onOpenChange={setShowUpload}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
-            <DialogDescription>
-              Upload a file to the organisation document library.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => fileRef.current?.click()}
-              onKeyDown={(e) => e.key === 'Enter' && fileRef.current?.click()}
-              className="border-2 border-dashed border-border/70 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
-            >
-              <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm font-medium text-foreground">Click to select file</p>
-              <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, XLSX up to 20 MB</p>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".pdf,.docx,.xlsx,.pptx"
-                className="hidden"
-                aria-hidden="true"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Category</Label>
-              <Select defaultValue="other">
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="policy">Policy</SelectItem>
-                  <SelectItem value="meeting">Meeting</SelectItem>
-                  <SelectItem value="report">Report</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUpload(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                toast.success('Document uploaded');
-                setShowUpload(false);
-              }}
-            >
-              Upload
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirm */}
-      <AlertDialog open={!!docToDelete} onOpenChange={() => setDocToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              This document will be permanently removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleDeleteDoc}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
 
-// ─── Settings Tab ───────────────────────────────────────────────────────────────
+// ─── Settings Tab — wired to ENDPOINTS.SETTINGS ───────────────────────────────
 
-interface SettingsTabProps {
-  canManage: boolean;
-}
+const NOTIFICATION_KEYS: Array<{
+  key: keyof NonNullable<PlatformSettings['notificationSettings']>;
+  label: string; description: string; icon: React.ElementType;
+}> = [
+  { key: 'meetingReminders', label: 'Meeting reminders',  description: 'Send reminders before scheduled meetings',   icon: Calendar    },
+  { key: 'taskAssignments',  label: 'Task assignments',   description: 'Notify users when tasks are assigned',       icon: Zap         },
+  { key: 'emailNotifications', label: 'Email notifications', description: 'Send email alerts for key events',        icon: Mail        },
+  { key: 'weeklyDigest',     label: 'Weekly digest',      description: 'Send a weekly summary email to all members', icon: FileText    },
+];
 
-const NOTIFICATION_SETTINGS = [
-  {
-    label: 'Meeting reminders',
-    description: 'Send reminders before scheduled meetings',
-    defaultChecked: true,
-  },
-  {
-    label: 'New member joined',
-    description: 'Notify admins when someone joins the org',
-    defaultChecked: true,
-  },
-  {
-    label: 'Document uploads',
-    description: 'Alert members when new documents are added',
-    defaultChecked: false,
-  },
-  {
-    label: 'Task assignments',
-    description: 'Notify users when tasks are assigned to them',
-    defaultChecked: true,
-  },
-  {
-    label: 'Voting opens',
-    description: 'Notify members when a new vote is created',
-    defaultChecked: true,
-  },
-] as const;
-
-function SettingsTab({ canManage }: SettingsTabProps) {
+function SettingsTab({ org, canManage }: { org: Organisation; canManage: boolean }) {
+  const { data: settings, isLoading, error, refetch } = useOrgSettings(org.organisationId);
+  const updateSettings = useUpdateOrgSettings();
+  const [localPatch, setLocalPatch] = useState<UpdateSettingsData>({});
   const [saved, setSaved] = useState(false);
+  const isDirty = Object.keys(localPatch).length > 0;
 
-  function handleSave() {
-    toast.success('Settings saved');
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // Merge real data with unsaved local changes
+  const notif = { ...settings?.notificationSettings, ...(localPatch.notificationSettings ?? {}) };
+  const security = { ...settings?.securitySettings, ...(localPatch.securitySettings ?? {}) };
+
+  const sel = 'h-11 rounded-xl border-border/60 text-sm';
+  const lbl = 'block text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2';
+
+  function patchNotif(key: string, val: boolean) {
+    setLocalPatch(p => ({
+      ...p,
+      notificationSettings: { ...notif, [key]: val } as any,
+    }));
   }
 
+  async function handleSave() {
+    try {
+      await updateSettings.mutateAsync({ ...localPatch, version: settings?.version });
+      toast.success('Settings saved');
+      setSaved(true);
+      setLocalPatch({});
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Failed to save settings');
+    }
+  }
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-24 gap-3">
+      <Spinner /><span className="text-sm text-muted-foreground">Loading settings…</span>
+    </div>
+  );
+
+  if (error) return (
+    <div className="max-w-3xl space-y-4">
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
+          <WifiOff className="h-7 w-7 text-muted-foreground/40" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-foreground/70">Could not load settings</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {(error as any)?.response?.data?.message ?? 'An error occurred loading your organisation settings.'}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetch()}>
+          <RefreshCcw className="h-4 w-4" />Try Again
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Meeting Defaults */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-sm font-semibold">Meeting Defaults</CardTitle>
-          <CardDescription className="text-xs">
-            Default settings applied to all new meetings
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Default Duration</Label>
-              <Select defaultValue="60" disabled={!canManage}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="45">45 minutes</SelectItem>
-                  <SelectItem value="60">1 hour</SelectItem>
-                  <SelectItem value="90">1.5 hours</SelectItem>
-                  <SelectItem value="120">2 hours</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Default Reminder</Label>
-              <Select defaultValue="24h" disabled={!canManage}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1h">1 hour before</SelectItem>
-                  <SelectItem value="3h">3 hours before</SelectItem>
-                  <SelectItem value="24h">24 hours before</SelectItem>
-                  <SelectItem value="48h">48 hours before</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-5 max-w-3xl">
 
-      {/* Localisation */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-sm font-semibold">Localisation</CardTitle>
-          <CardDescription className="text-xs">
-            Timezone and language preferences for the organisation
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium flex items-center gap-1.5">
-                <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                Timezone
-              </Label>
-              <Select defaultValue="Africa/Nairobi" disabled={!canManage}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Africa/Nairobi">Africa/Nairobi (EAT +3)</SelectItem>
-                  <SelectItem value="UTC">UTC</SelectItem>
-                  <SelectItem value="America/New_York">America/New_York (EST)</SelectItem>
-                  <SelectItem value="Europe/London">Europe/London (GMT)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Language</Label>
-              <Select defaultValue="en" disabled={!canManage}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="sw">Swahili</SelectItem>
-                  <SelectItem value="fr">French</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Organisation settings — from ENDPOINTS.SETTINGS.BY_ORG */}
+      <SectionCard title="Organisation Settings" description="Applied across meetings and members" icon={Settings}
+        iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label className={lbl}>App Name</label>
+            <Input
+              defaultValue={settings?.appName ?? ''}
+              disabled={!canManage}
+              onChange={(e) => setLocalPatch(p => ({ ...p, appName: e.target.value }))}
+              className="h-11 rounded-xl border-border/60 text-sm bg-background" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <label className={lbl}>Max Members</label>
+            <Input
+              type="number"
+              defaultValue={settings?.memberSettings?.maxMembers ?? ''}
+              disabled={!canManage}
+              onChange={(e) => setLocalPatch(p => ({
+                ...p,
+                memberSettings: { ...p.memberSettings, maxMembers: +e.target.value },
+              }))}
+              className="h-11 rounded-xl border-border/60 text-sm bg-background" />
+          </div>
+        </div>
+      </SectionCard>
 
-      {/* Notifications */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-sm font-semibold">Notification Preferences</CardTitle>
-          <CardDescription className="text-xs">
-            Control which events trigger notifications
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          {NOTIFICATION_SETTINGS.map(({ label, description, defaultChecked }) => (
-            <div
-              key={label}
-              className="flex items-center justify-between gap-4 py-2.5 border-b border-border/40 last:border-0"
-            >
-              <div>
-                <p className="text-sm font-medium text-foreground">{label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      {/* Notification preferences — stored in PlatformSettings.notificationSettings */}
+      <SectionCard title="Notification Preferences" description="Control which events trigger notifications" icon={Bell}
+        iconColor="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+        <div className="space-y-0.5">
+          {NOTIFICATION_KEYS.map(({ key, label, description, icon: Icon }) => (
+            <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-8 w-8 rounded-xl bg-muted/60 flex items-center justify-center shrink-0">
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                </div>
               </div>
-              <Switch defaultChecked={defaultChecked} disabled={!canManage} />
+              <Switch
+                checked={!!(notif as any)?.[key]}
+                disabled={!canManage}
+                onCheckedChange={(v) => patchNotif(key, v)}
+                className="shrink-0"
+              />
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
+
+      {/* Security settings */}
+      <SectionCard title="Security Settings" description="Access control and session management" icon={Shield}
+        iconColor="bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+        <div className="space-y-0.5">
+          {[
+            { key: 'autoLogout',      label: 'Auto Logout',       description: 'Automatically log out inactive sessions'       },
+            { key: 'pinRequired',     label: 'PIN Required',      description: 'Require a PIN for sensitive operations'        },
+            { key: 'dataEncryption',  label: 'Data Encryption',   description: 'Encrypt sensitive data at rest'               },
+            { key: 'auditLogEnabled', label: 'Audit Log',         description: 'Track all admin actions in an audit trail'    },
+          ].map(({ key, label, description }) => (
+            <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+              <div>
+                <p className="text-sm font-semibold">{label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+              </div>
+              <Switch
+                checked={!!(security as any)?.[key]}
+                disabled={!canManage}
+                onCheckedChange={(v) =>
+                  setLocalPatch(p => ({
+                    ...p,
+                    securitySettings: { ...security, [key]: v } as any,
+                  }))
+                }
+                className="shrink-0"
+              />
+            </div>
+          ))}
+          <div className="flex items-center justify-between gap-4 py-3.5">
+            <div>
+              <p className="text-sm font-semibold">Session Timeout</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Automatically log out after inactivity (minutes)</p>
+            </div>
+            <Input
+              type="number"
+              defaultValue={settings?.securitySettings?.sessionTimeout ?? 30}
+              disabled={!canManage}
+              onChange={(e) => setLocalPatch(p => ({
+                ...p,
+                securitySettings: { ...security, sessionTimeout: +e.target.value } as any,
+              }))}
+              className="h-9 w-24 rounded-xl border-border/60 text-sm bg-background text-right"
+            />
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Integration settings */}
+      <SectionCard title="Integrations" description="Third-party service connections" icon={Globe}
+        iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <div className="space-y-0.5">
+          {[
+            { key: 'slackEnabled',         label: 'Slack',           description: 'Post notifications to Slack channels'      },
+            { key: 'outlookEnabled',        label: 'Outlook',         description: 'Sync meetings with Outlook Calendar'       },
+            { key: 'googleCalendarEnabled', label: 'Google Calendar', description: 'Sync meetings with Google Calendar'        },
+          ].map(({ key, label, description }) => {
+            const integrations = {
+              ...settings?.integrationSettings,
+              ...(localPatch.integrationSettings ?? {}),
+            };
+            return (
+              <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+                <div>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                </div>
+                <Switch
+                  checked={!!(integrations as any)?.[key]}
+                  disabled={!canManage}
+                  onCheckedChange={(v) =>
+                    setLocalPatch(p => ({
+                      ...p,
+                      integrationSettings: { ...integrations, [key]: v } as any,
+                    }))
+                  }
+                  className="shrink-0"
+                />
+              </div>
+            );
+          })}
+        </div>
+      </SectionCard>
 
       {canManage && (
-        <div className="flex justify-end">
-          <Button size="sm" className="h-9 gap-2 min-w-32" onClick={handleSave}>
-            {saved ? (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Save Settings
-              </>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          {isDirty && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Unsaved changes
+            </p>
+          )}
+          <div className="ml-auto flex gap-3">
+            {isDirty && (
+              <Button variant="outline" className="rounded-xl h-10 text-sm gap-2" onClick={() => setLocalPatch({})}>
+                <X className="h-4 w-4" />Discard
+              </Button>
             )}
-          </Button>
+            <Button className="rounded-xl gap-2 min-w-[140px] h-10" onClick={handleSave}
+              disabled={updateSettings.isPending || !isDirty}>
+              {updateSettings.isPending
+                ? <><Spinner sm />Saving…</>
+                : saved
+                ? <><CheckCircle2 className="h-4 w-4" />Saved!</>
+                : <><Save className="h-4 w-4" />Save Settings</>
+              }
+            </Button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Security Tab ───────────────────────────────────────────────────────────────
+// ─── Security Tab ─────────────────────────────────────────────────────────────
+// Sessions & login history endpoints don't exist in your backend yet.
+// The tab shows real security policy toggles (wired to SETTINGS.UPDATE) and
+// clear "coming soon" placeholders for the parts that need new backend routes.
 
-interface SecurityTabProps {
-  canManage: boolean;
-}
-
-const SECURITY_POLICIES = [
-  {
-    label: 'Enforce Two-Factor Authentication',
-    description: 'Require all members to use 2FA when signing in',
-    defaultChecked: false,
-    icon: Shield,
-  },
-  {
-    label: 'Strong Password Policy',
-    description: 'Require passwords to be at least 12 characters with mixed complexity',
-    defaultChecked: true,
-    icon: Key,
-  },
-  {
-    label: 'Security Alerts',
-    description: 'Email admins when suspicious activity is detected',
-    defaultChecked: true,
-    icon: Bell,
-  },
-  {
-    label: 'Single Session Enforcement',
-    description: 'Prevent members from being logged in on multiple devices simultaneously',
-    defaultChecked: false,
-    icon: Monitor,
-  },
+const SECURITY_POLICIES_CONFIG = [
+  { key: 'auditLogEnabled', label: 'Audit Log Enabled',    description: 'Track all admin actions in an audit trail',          icon: Shield,  color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'    },
+  { key: 'pinRequired',     label: 'PIN Required',         description: 'Require a PIN code for sensitive operations',        icon: Key,     color: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' },
+  { key: 'dataEncryption',  label: 'Data Encryption',      description: 'Encrypt sensitive data stored at rest',             icon: Lock,    color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'  },
+  { key: 'autoLogout',      label: 'Auto Logout',          description: 'Automatically sign out inactive sessions',          icon: Monitor, color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'   },
 ] as const;
 
-function SecurityTab({ canManage }: SecurityTabProps) {
-  const [sessions, setSessions] = useState<LoginSession[]>(MOCK_SESSIONS);
-  const [revokeId, setRevokeId] = useState<string | null>(null);
+function SecurityTab({ org, canManage }: { org: Organisation; canManage: boolean }) {
+  const { data: settings, isLoading } = useOrgSettings(org.organisationId);
+  const updateSettings = useUpdateOrgSettings();
+  const [localSec, setLocalSec] = useState<Record<string, boolean>>({});
+  const isDirty = Object.keys(localSec).length > 0;
 
-  function revokeAllOthers() {
-    setSessions((prev) => prev.filter((s) => s.isCurrent));
-    toast.success('All other sessions revoked');
-  }
+  const security = { ...settings?.securitySettings, ...localSec };
 
-  function revokeSession() {
-    if (!revokeId) return;
-    setSessions((prev) => prev.filter((s) => s.id !== revokeId));
-    toast.success('Session revoked');
-    setRevokeId(null);
+  async function handleSaveSecurityPolicies() {
+    try {
+      await updateSettings.mutateAsync({
+        securitySettings: security as any,
+        version: settings?.version,
+      });
+      toast.success('Security policies updated');
+      setLocalSec({});
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Failed to save security settings');
+    }
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Security Policies */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-indigo-500" />
-            Security Policies
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Organisation-wide security enforcement settings
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          {SECURITY_POLICIES.map(({ label, description, defaultChecked, icon: Icon }) => (
-            <div
-              key={label}
-              className="flex items-start justify-between gap-4 py-3 border-b border-border/40 last:border-0"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/30">
-                  <Icon className="h-4 w-4 text-indigo-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                </div>
-              </div>
-              <Switch
-                defaultChecked={defaultChecked}
-                disabled={!canManage}
-                className="shrink-0 mt-0.5"
-              />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+    <div className="space-y-5 max-w-3xl">
 
-      {/* Active Sessions */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Monitor className="h-4 w-4 text-emerald-500" />
-                Active Sessions
-              </CardTitle>
-              <CardDescription className="text-xs mt-0.5">
-                Devices currently logged into the organisation portal
-              </CardDescription>
-            </div>
-            {canManage && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                onClick={revokeAllOthers}
-              >
-                <LogOut className="h-3 w-3" />
-                Revoke All Others
-              </Button>
-            )}
+      {/* Real: security policies from SETTINGS endpoint */}
+      <SectionCard title="Security Policies" description="Organisation-wide access and data enforcement" icon={ShieldCheck}
+        iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10 gap-2">
+            <Spinner /><span className="text-sm text-muted-foreground">Loading…</span>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {sessions.map((sess) => (
-            <div
-              key={sess.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border/50 p-3.5 hover:bg-muted/30 transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Monitor className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {sess.device}
-                    </p>
-                    {sess.isCurrent && (
-                      <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                        Current
-                      </span>
-                    )}
+        ) : (
+          <>
+            <div className="space-y-0.5">
+              {SECURITY_POLICIES_CONFIG.map(({ key, label, description, icon: Icon, color }) => (
+                <div key={key} className="flex items-center justify-between gap-4 py-3.5 border-b border-border/30 last:border-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {sess.location} · {sess.ip} · {sess.lastActive}
-                  </p>
+                  <Switch
+                    checked={!!(security as any)?.[key]}
+                    disabled={!canManage}
+                    onCheckedChange={(v) => setLocalSec(p => ({ ...p, [key]: v }))}
+                    className="shrink-0"
+                  />
                 </div>
-              </div>
-              {!sess.isCurrent && canManage && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => setRevokeId(sess.id)}
-                >
-                  Revoke
+              ))}
+            </div>
+
+            {canManage && isDirty && (
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border/30">
+                <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => setLocalSec({})}>
+                  <X className="h-3.5 w-3.5" />Discard
                 </Button>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+                <Button size="sm" className="rounded-xl gap-1.5 min-w-[130px]"
+                  onClick={handleSaveSecurityPolicies} disabled={updateSettings.isPending}>
+                  {updateSettings.isPending ? <Spinner sm /> : <Save className="h-3.5 w-3.5" />}
+                  Save Policies
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </SectionCard>
 
-      {/* Login History */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Activity className="h-4 w-4 text-amber-500" />
-            Login History
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Recent authentication events for your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-1">
-            {MOCK_LOGIN_HISTORY.map((entry) => {
-              const isSuccess = entry.event.startsWith('Successful');
-              const isFail = entry.event.startsWith('Failed');
-
-              const iconBg = isSuccess
-                ? 'bg-emerald-100 dark:bg-emerald-900/30'
-                : isFail
-                ? 'bg-red-100 dark:bg-red-900/30'
-                : 'bg-amber-100 dark:bg-amber-900/30';
-
-              const icon = isSuccess ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              ) : isFail ? (
-                <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-              ) : (
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-              );
-
-              return (
-                <div
-                  key={entry.id}
-                  className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted/30 transition-colors"
-                >
-                  <div
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${iconBg}`}
-                  >
-                    {icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{entry.event}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {entry.device} · {entry.ip}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">{entry.time}</span>
-                </div>
-              );
-            })}
+      {/* Placeholder: Active Sessions — backend route not yet available */}
+      <SectionCard title="Active Sessions" description="Devices currently logged in to your account" icon={Monitor}
+        iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <div className="space-y-4">
+          <ComingSoonBanner feature="Active session management" />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Add these routes to your backend and register them in <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">ENDPOINTS.AUTH</code>:
+          </p>
+          <div className="rounded-xl bg-muted/50 border border-border/40 p-3.5 space-y-1.5 font-mono text-xs text-muted-foreground">
+            <div><span className="text-emerald-600 font-semibold">GET</span>    /auth/sessions</div>
+            <div><span className="text-red-500 font-semibold">DELETE</span> /auth/sessions/:id</div>
+            <div><span className="text-blue-500 font-semibold">POST</span>   /auth/sessions/revoke-others</div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      {/* Revoke Session Confirm */}
-      <AlertDialog open={!!revokeId} onOpenChange={() => setRevokeId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Revoke Session</AlertDialogTitle>
-            <AlertDialogDescription>
-              This device will be signed out immediately.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={revokeSession}>
-              Revoke
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Placeholder: Login History — backend route not yet available */}
+      <SectionCard title="Login History" description="Recent authentication events" icon={Activity}
+        iconColor="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+        <div className="space-y-4">
+          <ComingSoonBanner feature="Login history" />
+          <div className="rounded-xl bg-muted/50 border border-border/40 p-3.5 font-mono text-xs text-muted-foreground">
+            <span className="text-emerald-600 font-semibold">GET</span>    /auth/login-history
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 }
 
-// ─── Tab Config ─────────────────────────────────────────────────────────────────
+// ─── Tab config ───────────────────────────────────────────────────────────────
 
-const TAB_CONFIG = [
-  { value: 'profile',   label: 'Profile',   icon: Building2 },
-  { value: 'members',   label: 'Members',   icon: Users     },
-  { value: 'documents', label: 'Documents', icon: FileText  },
-  { value: 'settings',  label: 'Settings',  icon: Settings  },
-  { value: 'security',  label: 'Security',  icon: Shield    },
+const TABS = [
+  { value: 'profile',  label: 'Profile',  icon: Building2, activeColor: 'text-blue-500'    },
+  { value: 'settings', label: 'Settings', icon: Settings,  activeColor: 'text-violet-500'  },
+  { value: 'security', label: 'Security', icon: Shield,    activeColor: 'text-emerald-500' },
 ] as const;
 
-type TabValue = (typeof TAB_CONFIG)[number]['value'];
+type TabValue = (typeof TABS)[number]['value'];
 
-// ─── Main Page ──────────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OrganisationPage() {
   const {
-    can,
-    isSuperAdmin,
-    isOrgAdmin,
-    isLoading: authLoading,
-    authError,
-    refresh: refreshAuth,
+    can, isSuperAdmin, isOrgAdmin,
+    isLoading: authLoading, authError, authErrorKind,
+    refresh: refreshAuth, user,
   } = usePermissions();
 
   const queryClient = useQueryClient();
-  const { data: orgsRaw, isLoading: orgsLoading } = useOrganisations();
-  const updateOrg = useUpdateOrganisation();
+  const canManage   = isSuperAdmin || isOrgAdmin || can('org:manage');
 
-  const [activeTab, setActiveTab] = useState<TabValue>('profile');
+  const {
+    data: org, isLoading: orgLoading,
+    error: orgFetchError, refetch: refetchOrg,
+  } = useMyOrganisation(!authLoading && canManage);
 
-  const org = useMemo<Organisation | null>(() => {
-    const items: Organisation[] = Array.isArray(orgsRaw)
-      ? orgsRaw
-      : (orgsRaw as { items?: Organisation[] } | undefined)?.items ?? [];
-    return items[0] ?? null;
-  }, [orgsRaw]);
+  const updateOrg                         = useUpdateOrganisation();
+  const [activeTab, setActiveTab]         = useState<TabValue>('profile');
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
 
-  const canManage = isSuperAdmin || isOrgAdmin || can('org:manage');
+  const handleSaveProfile = useCallback((data: Partial<Organisation>) => {
+    if (!org) return;
+    updateOrg.mutate(
+      { organisationId: org.organisationId, data },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['organisations'] });
+          toast.success('Organisation profile updated');
+        },
+        onError: (err: any) =>
+          toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to save changes'),
+      },
+    );
+  }, [org, updateOrg, queryClient]);
 
-  const handleSaveProfile = useCallback(
-    (data: Partial<Organisation>) => {
-      if (!org) return;
-      updateOrg.mutate(
-        { orgId: org.organisationId, data },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['organisations'] });
-            toast.success('Organisation profile updated');
-          },
-          onError: (err) =>
-            toast.error(err instanceof Error ? err.message : 'Failed to save changes'),
-        }
-      );
-    },
-    [org, updateOrg, queryClient]
-  );
-
-  // ── Loading state ────────────────────────────────────────────────────────────
-  if (authLoading || orgsLoading) {
+  // ── Loading ───────────────────────────────────────────────────────────────
+  if (authLoading || orgLoading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center text-muted-foreground">
-        <div className="flex items-center gap-2 text-sm">
-          <Spinner />
-          Loading organisation…
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading organisation…</p>
         </div>
       </div>
     );
   }
 
-  // ── Auth error ───────────────────────────────────────────────────────────────
-  if (authError) {
+  // ── Hard auth error ───────────────────────────────────────────────────────
+  if (authError && (authErrorKind === 'invalid_token' || authErrorKind === 'insufficient_role')) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+        <div className="h-16 w-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
           <AlertTriangle className="h-8 w-8 text-destructive" />
         </div>
         <div>
-          <h2 className="text-2xl font-semibold">Access Problem</h2>
-          <p className="mt-2 max-w-md text-muted-foreground text-sm">{authError}</p>
+          <h2 className="text-xl font-bold">Access Problem</h2>
+          <p className="mt-1.5 max-w-md text-muted-foreground text-sm">{authError}</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={refreshAuth}>
-            <RefreshCcw className="h-4 w-4 mr-2" />
-            Retry
+          <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={refreshAuth}>
+            <RefreshCcw className="h-4 w-4" />Retry
           </Button>
-          <Button asChild>
+          <Button size="sm" className="rounded-xl" asChild>
             <a href="/auth/signin">Sign In</a>
           </Button>
         </div>
@@ -1678,77 +909,144 @@ export default function OrganisationPage() {
     );
   }
 
-  // ── No org ───────────────────────────────────────────────────────────────────
-  if (!org) {
+  // ── Org fetch error ───────────────────────────────────────────────────────
+  if (orgFetchError) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <Building2 className="h-8 w-8 text-muted-foreground/50" />
+        <div className="h-16 w-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
+          <AlertTriangle className="h-8 w-8 text-destructive" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">No Organisation Found</h2>
-          <p className="mt-2 max-w-md text-muted-foreground text-sm">
-            You don't appear to be linked to an organisation yet.
+          <h2 className="text-xl font-bold">Failed to Load Organisation</h2>
+          <p className="mt-1.5 max-w-md text-muted-foreground text-sm">
+            {(orgFetchError as any)?.response?.data?.message
+              ?? (orgFetchError as Error)?.message
+              ?? 'An unexpected error occurred.'}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetchOrg()}>
+          <RefreshCcw className="h-4 w-4" />Retry
+        </Button>
+      </div>
+    );
+  }
+
+  // ── No org — admin can create ─────────────────────────────────────────────
+  if (canManage && !org) {
+    return (
+      <>
+        <div className="container mx-auto py-8 px-4 md:px-6 max-w-5xl space-y-6">
+          {authError && authErrorKind === 'server_error' && (
+            <ServerErrorBanner message={authError} onRetry={refreshAuth} />
+          )}
+
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center">
+              <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Organisation</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Welcome{user?.firstName ? `, ${user.firstName}` : ''}! Set up your organisation to get started.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex min-h-[44vh] flex-col items-center justify-center gap-6 text-center py-12">
+            <div className="relative">
+              <div className="h-24 w-24 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/20 flex items-center justify-center ring-8 ring-blue-50 dark:ring-blue-900/10 shadow-lg">
+                <Building2 className="h-12 w-12 text-blue-500" />
+              </div>
+              <div className="absolute -bottom-1 -right-1 h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center shadow-md border-2 border-background">
+                <Plus className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">No Organisation Yet</h2>
+              <p className="mt-2 max-w-sm text-muted-foreground text-sm leading-relaxed">
+                Create your organisation profile to start managing meetings, members, documents, and more.
+              </p>
+            </div>
+            <Button size="lg" className="gap-2.5 rounded-xl px-8 h-12 text-base shadow-md"
+              onClick={() => setShowCreateOrg(true)}>
+              <Plus className="h-5 w-5" />Create Organisation
+            </Button>
+            <p className="text-xs text-muted-foreground">Your organisation will be reviewed before becoming fully active.</p>
+          </div>
+        </div>
+
+        <CreateOrgDialog
+          open={showCreateOrg}
+          onOpenChange={setShowCreateOrg}
+          onCreated={() => refreshAuth().then(() => refetchOrg())}
+        />
+      </>
+    );
+  }
+
+  // ── Non-admin, no org ─────────────────────────────────────────────────────
+  if (!org) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-5 px-4 text-center">
+        <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
+          <Building2 className="h-8 w-8 text-muted-foreground/40" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">No Organisation Found</h2>
+          <p className="mt-1.5 max-w-md text-muted-foreground text-sm">
+            You're not linked to an organisation yet. Contact your administrator.
           </p>
         </div>
       </div>
     );
   }
 
-  // ── Main render ──────────────────────────────────────────────────────────────
+  // ── Main render ───────────────────────────────────────────────────────────
   return (
-    <div className="container mx-auto space-y-7 py-8 px-4 md:px-6 max-w-7xl">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Organisation</h1>
-          <p className="text-sm text-muted-foreground">
-            {canManage
-              ? "Manage your organisation's profile, members, documents, and security settings."
-              : "View your organisation's details and member directory."}
-          </p>
+    <div className="container mx-auto space-y-6 py-8 px-4 md:px-6 max-w-5xl pb-12">
+
+      {authError && authErrorKind === 'server_error' && (
+        <ServerErrorBanner message={authError} onRetry={refreshAuth} />
+      )}
+
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="shrink-0 h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center">
+            <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Organisation</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {canManage
+                ? 'Manage your organisation profile, settings, and security.'
+                : 'View your organisation details.'}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge isActive={org.isActive ?? false} />
-        </div>
+        <StatusBadge isActive={org.isActive ?? false} />
       </div>
 
       {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as TabValue)}
-      >
-        <TabsList className="h-10 p-1 bg-muted/50 border border-border/60 flex-wrap">
-          {TAB_CONFIG.map(({ value, label, icon: Icon }) => (
-            <TabsTrigger key={value} value={value} className="gap-2 text-sm h-8 px-4">
-              <Icon className="h-3.5 w-3.5" />
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+        <TabsList className="h-auto p-1 bg-muted/40 rounded-xl border border-border/30 gap-1 flex-wrap sm:flex-nowrap">
+          {TABS.map(({ value, label, icon: Icon, activeColor }) => (
+            <TabsTrigger key={value} value={value}
+              className="flex-1 sm:flex-none rounded-lg text-sm h-9 px-4 sm:px-5 font-medium data-[state=active]:shadow-sm gap-2">
+              <Icon className={`h-4 w-4 ${activeTab === value ? activeColor : ''}`} />
               {label}
             </TabsTrigger>
           ))}
         </TabsList>
 
-        <TabsContent value="profile" className="mt-6">
-          <ProfileTab
-            org={org}
-            onSave={handleSaveProfile}
-            isSaving={updateOrg.isPending}
-          />
+        <TabsContent value="profile"  className="mt-6 focus-visible:outline-none">
+          <ProfileTab org={org} onSave={handleSaveProfile} isSaving={updateOrg.isPending} canManage={canManage} />
         </TabsContent>
-
-        <TabsContent value="members" className="mt-6">
-          <OrgMembersTab canManage={canManage} />
+        <TabsContent value="settings" className="mt-6 focus-visible:outline-none">
+          <SettingsTab org={org} canManage={canManage} />
         </TabsContent>
-
-        <TabsContent value="documents" className="mt-6">
-          <DocumentsTab canManage={canManage} />
-        </TabsContent>
-
-        <TabsContent value="settings" className="mt-6">
-          <SettingsTab canManage={canManage} />
-        </TabsContent>
-
-        <TabsContent value="security" className="mt-6">
-          <SecurityTab canManage={canManage} />
+        <TabsContent value="security" className="mt-6 focus-visible:outline-none">
+          <SecurityTab org={org} canManage={canManage} />
         </TabsContent>
       </Tabs>
     </div>

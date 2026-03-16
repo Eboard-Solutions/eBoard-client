@@ -1,282 +1,271 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { X, Mail, Phone, Link, Shield, Briefcase, Save } from 'lucide-react';
+import { Save, Mail, Phone, Briefcase, LinkIcon, Edit3 } from 'lucide-react';
 
-interface User {
-  id: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface EditMemberFormData {
+  firstName: string;
+  lastName: string;
   email: string;
-  avatar?: string;
-  profilePictureUrl?: string;
   role: string;
   title?: string;
-  position?: string;
   phoneNumber?: string;
-  phone?: string;
-  committees?: string[];
+  profilePictureUrl?: string;
 }
 
-const schema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email'),
-  role: z.enum(['SuperAdmin', 'OrgAdmin', 'Admin', 'BoardMember', 'User']),
-  title: z.string().optional(),
-  phoneNumber: z.string().optional(),
-  profilePictureUrl: z.string().url().optional().or(z.literal('')),
-  committees: z.array(z.string()).optional(),
-});
-
-type FormData = z.infer<typeof schema>;
+export interface EditableMember {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatar?: string;
+  role: string;
+  position?: string;
+  phone?: string;
+}
 
 interface Props {
-  member: User;
-  onSubmit: (data: FormData) => void;
-  committees: string[];
-  allowSuperAdminRole: boolean;
+  member: EditableMember;
+  onSubmit: (userId: string, data: EditMemberFormData) => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+  allowSuperAdminRole?: boolean;
 }
 
-const avatarGradients = [
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const AVATAR_GRADIENTS = [
   'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-600',
-  'from-emerald-500 to-teal-600',
-  'from-amber-500 to-orange-600',
-  'from-rose-500 to-pink-600',
+  'from-blue-500 to-cyan-500',
+  'from-emerald-500 to-teal-500',
+  'from-amber-500 to-orange-500',
+  'from-rose-500 to-pink-500',
 ];
 
-function getInitials(user: User) {
-  if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`;
-  if (user.name) return user.name.split(' ').map(n => n[0]).join('').slice(0, 2);
-  return user.email[0].toUpperCase();
+function getGradient(id: string) {
+  if (!id) return AVATAR_GRADIENTS[0];
+  return AVATAR_GRADIENTS[id.charCodeAt(0) % AVATAR_GRADIENTS.length];
 }
 
-export default function EditMemberDialog({ member, onSubmit, committees, allowSuperAdminRole }: Props) {
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      firstName: member.firstName ?? '',
-      lastName: member.lastName ?? '',
-      email: member.email,
-      role: member.role as any,
-      title: member.title ?? '',
-      phoneNumber: member.phoneNumber ?? member.phone ?? '',
-      profilePictureUrl: member.profilePictureUrl ?? member.avatar ?? '',
-      committees: member.committees ?? [],
-    },
+function getInitials(member: EditableMember) {
+  if (member.firstName && member.lastName) {
+    return `${member.firstName[0]}${member.lastName[0]}`.toUpperCase();
+  }
+  return member.name.slice(0, 2).toUpperCase();
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function EditMemberDialog({
+  member,
+  onSubmit,
+  onCancel,
+  isLoading = false,
+  allowSuperAdminRole = false,
+}: Props) {
+  const [form, setForm] = useState<EditMemberFormData>({
+    firstName: member.firstName,
+    lastName:  member.lastName,
+    email:     member.email,
+    role:      member.role,
+    title:     member.position ?? '',
+    phoneNumber: member.phone ?? '',
+    profilePictureUrl: member.avatar ?? '',
   });
+  const [errors, setErrors] = useState<Partial<Record<keyof EditMemberFormData, string>>>({});
 
-  const selectedCommittees = watch('committees') ?? [];
-  const gradient = avatarGradients[member.id?.charCodeAt(0) % avatarGradients.length] ?? avatarGradients[0];
+  // Re-populate when member changes (dialog reuse)
+  useEffect(() => {
+    setForm({
+      firstName: member.firstName,
+      lastName:  member.lastName,
+      email:     member.email,
+      role:      member.role,
+      title:     member.position ?? '',
+      phoneNumber: member.phone ?? '',
+      profilePictureUrl: member.avatar ?? '',
+    });
+    setErrors({});
+  }, [member.id]);
 
-  const addCommittee = (committee: string) => {
-    if (!selectedCommittees.includes(committee)) {
-      setValue('committees', [...selectedCommittees, committee], { shouldDirty: true });
+  function set(key: keyof EditMemberFormData, value: string) {
+    setForm(p => ({ ...p, [key]: value }));
+    if (errors[key]) setErrors(p => ({ ...p, [key]: undefined }));
+  }
+
+  function validate(): boolean {
+    const e: typeof errors = {};
+    if (!form.firstName.trim()) e.firstName = 'First name is required';
+    if (!form.lastName.trim())  e.lastName  = 'Last name is required';
+    if (!form.email.trim())     e.email     = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
+    if (form.profilePictureUrl?.trim() && !/^https?:\/\/.+/.test(form.profilePictureUrl)) {
+      e.profilePictureUrl = 'Must be a valid URL starting with http(s)://';
     }
-  };
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
 
-  const removeCommittee = (committee: string) => {
-    setValue('committees', selectedCommittees.filter(c => c !== committee), { shouldDirty: true });
-  };
+  function handleSubmit() {
+    if (!validate()) return;
+    onSubmit(member.id, {
+      ...form,
+      title: form.title?.trim() || undefined,
+      phoneNumber: form.phoneNumber?.trim() || undefined,
+      profilePictureUrl: form.profilePictureUrl?.trim() || undefined,
+    });
+  }
+
+  const gradient = getGradient(member.id);
+  const initials = getInitials(member);
 
   return (
     <>
-      <DialogHeader className="mb-5">
-        <div className="flex items-center gap-3 mb-1">
-          <Avatar className="h-11 w-11 ring-2 ring-border/50 shadow">
-            <AvatarImage src={member.profilePictureUrl ?? member.avatar} alt={member.name} />
-            <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white font-semibold`}>
-              {getInitials(member)}
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-3 text-lg">
+          <Avatar className="h-9 w-9 ring-2 ring-border/50 shadow-sm">
+            <AvatarImage src={member.avatar} alt={member.name} />
+            <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-sm font-bold`}>
+              {initials}
             </AvatarFallback>
           </Avatar>
-          <div>
-            <DialogTitle className="text-xl font-semibold">Edit Member</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground mt-0.5">
-              {member.name ?? member.email}
-            </DialogDescription>
-          </div>
-        </div>
+          Edit Member
+        </DialogTitle>
+        <DialogDescription>
+          Updating profile for <strong>{member.name}</strong>
+        </DialogDescription>
       </DialogHeader>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        {/* Names */}
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4 py-2">
+        {/* Name row */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="firstName" className="text-sm font-medium">
-              First Name <span className="text-destructive">*</span>
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              First Name <span className="text-destructive normal-case">*</span>
             </Label>
             <Input
-              id="firstName"
-              {...register('firstName')}
-              className={errors.firstName ? 'border-destructive' : ''}
+              value={form.firstName}
+              onChange={e => set('firstName', e.target.value)}
+              className={`h-9 text-sm ${errors.firstName ? 'border-destructive' : ''}`}
             />
-            {errors.firstName && (
-              <p className="text-xs text-destructive">{errors.firstName.message}</p>
-            )}
+            {errors.firstName && <p className="text-xs text-destructive">{errors.firstName}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="lastName" className="text-sm font-medium">
-              Last Name <span className="text-destructive">*</span>
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Last Name <span className="text-destructive normal-case">*</span>
             </Label>
             <Input
-              id="lastName"
-              {...register('lastName')}
-              className={errors.lastName ? 'border-destructive' : ''}
+              value={form.lastName}
+              onChange={e => set('lastName', e.target.value)}
+              className={`h-9 text-sm ${errors.lastName ? 'border-destructive' : ''}`}
             />
-            {errors.lastName && (
-              <p className="text-xs text-destructive">{errors.lastName.message}</p>
-            )}
+            {errors.lastName && <p className="text-xs text-destructive">{errors.lastName}</p>}
           </div>
         </div>
 
         {/* Email */}
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium">
-            Email <span className="text-destructive">*</span>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Email Address <span className="text-destructive normal-case">*</span>
           </Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              id="email"
               type="email"
-              className={`pl-9 ${errors.email ? 'border-destructive' : ''}`}
-              {...register('email')}
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              className={`h-9 text-sm pl-9 ${errors.email ? 'border-destructive' : ''}`}
             />
           </div>
-          {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
         </div>
 
-        {/* Role */}
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Role</Label>
-          <Select
-            onValueChange={(v) => setValue('role', v as any, { shouldDirty: true })}
-            defaultValue={member.role}
-          >
-            <SelectTrigger>
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-muted-foreground/60" />
+        {/* Role + Title */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</Label>
+            <Select value={form.role} onValueChange={v => set('role', v)}>
+              <SelectTrigger className="h-9 text-sm">
                 <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
-              <SelectItem value="OrgAdmin">Org Admin</SelectItem>
-              <SelectItem value="Admin">Admin</SelectItem>
-              <SelectItem value="BoardMember">Board Member</SelectItem>
-              <SelectItem value="User">User</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Title & Phone */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="title" className="text-sm font-medium">Title</Label>
-            <div className="relative">
-              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-              <Input id="title" className="pl-9" {...register('title')} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="phoneNumber" className="text-sm font-medium">Phone</Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-              <Input id="phoneNumber" className="pl-9" {...register('phoneNumber')} />
-            </div>
-          </div>
-        </div>
-
-        {/* Profile URL */}
-        <div className="space-y-1.5">
-          <Label htmlFor="profilePictureUrl" className="text-sm font-medium">Profile Picture URL</Label>
-          <div className="relative">
-            <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-            <Input id="profilePictureUrl" className="pl-9" {...register('profilePictureUrl')} />
-          </div>
-        </div>
-
-        {/* Committees */}
-        {committees.length > 0 && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Committees</Label>
-            <Select onValueChange={addCommittee}>
-              <SelectTrigger>
-                <SelectValue placeholder="Add to committee…" />
               </SelectTrigger>
               <SelectContent>
-                {committees.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
+                {allowSuperAdminRole && <SelectItem value="SuperAdmin">Super Admin</SelectItem>}
+                <SelectItem value="OrgAdmin">Org Admin</SelectItem>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="BoardMember">Board Member</SelectItem>
+                <SelectItem value="User">User</SelectItem>
               </SelectContent>
             </Select>
-            {selectedCommittees.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {selectedCommittees.map((c) => (
-                  <Badge key={c} variant="secondary" className="flex items-center gap-1 text-xs px-2.5 py-1">
-                    {c}
-                    <button
-                      type="button"
-                      onClick={() => removeCommittee(c)}
-                      className="rounded-full hover:bg-destructive/20 p-0.5 transition-colors"
-                    >
-                      <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-3 pt-4 border-t border-border/60 mt-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => reset()}
-          >
-            Reset
-          </Button>
-          <Button
-            type="submit"
-            className="flex-1 gap-2"
-            disabled={!isDirty}
-          >
-            <Save className="h-4 w-4" />
-            Save Changes
-          </Button>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Title</Label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={form.title}
+                onChange={e => set('title', e.target.value)}
+                placeholder="e.g. Director"
+                className="h-9 text-sm pl-9"
+              />
+            </div>
+          </div>
         </div>
-      </form>
+
+        {/* Phone */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phone Number</Label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={form.phoneNumber}
+              onChange={e => set('phoneNumber', e.target.value)}
+              placeholder="+254 700 000 000"
+              className="h-9 text-sm pl-9"
+            />
+          </div>
+        </div>
+
+        {/* Profile picture URL */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Profile Picture URL</Label>
+          <div className="relative">
+            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={form.profilePictureUrl}
+              onChange={e => set('profilePictureUrl', e.target.value)}
+              placeholder="https://example.com/avatar.jpg"
+              className={`h-9 text-sm pl-9 ${errors.profilePictureUrl ? 'border-destructive' : ''}`}
+            />
+          </div>
+          {errors.profilePictureUrl && <p className="text-xs text-destructive">{errors.profilePictureUrl}</p>}
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} disabled={isLoading} className="gap-2">
+          {isLoading
+            ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            : <Save className="h-4 w-4" />
+          }
+          Save Changes
+        </Button>
+      </DialogFooter>
     </>
   );
 }

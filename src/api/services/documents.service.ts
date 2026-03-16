@@ -11,22 +11,14 @@ import type {
   PaginatedResponse,
 } from '@/types/api.types';
 
-// ─── Error normaliser ──────────────────────────────────────────────────────────
-
-/**
- * Extracts a human-readable message from any API / network error.
- */
 function normaliseError(error: unknown, fallback: string): Error {
   if (error instanceof Error) {
-    // Axios wraps the response on error.response
     const axiosMessage = (error as any).response?.data?.message;
     if (axiosMessage) return new Error(axiosMessage);
     return error;
   }
   return new Error(fallback);
 }
-
-// ─── Validators ────────────────────────────────────────────────────────────────
 
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -38,7 +30,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 function validateFile(file: File): void {
   if (!ALLOWED_MIME_TYPES.has(file.type)) {
@@ -51,12 +43,7 @@ function validateFile(file: File): void {
   }
 }
 
-// ─── Service ───────────────────────────────────────────────────────────────────
-
 export const documentsService = {
-  /**
-   * Fetch documents with optional filters and pagination.
-   */
   async getDocuments(filters: DocumentFilters = {}): Promise<PaginatedResponse<Document>> {
     try {
       const response = await apiClient.get<ApiResponse<PaginatedResponse<Document>>>(
@@ -69,9 +56,6 @@ export const documentsService = {
     }
   },
 
-  /**
-   * Fetch a single document by ID.
-   */
   async getDocumentById(id: string): Promise<Document> {
     if (!id?.trim()) throw new Error('Document ID is required.');
     try {
@@ -84,35 +68,34 @@ export const documentsService = {
     }
   },
 
-  /**
-   * Upload a new document (multipart/form-data).
-   */
   async createDocument(data: CreateDocumentData): Promise<Document> {
-    // Client-side validation
     if (!data.file) throw new Error('A file is required to upload a document.');
     if (!data.title?.trim()) throw new Error('Document title is required.');
     validateFile(data.file);
 
     try {
+      // Send placeholder file metadata to satisfy @IsNotEmpty() DTO validators.
+      // The backend service.create() ALWAYS overwrites fileName/fileType/fileSize/fileUrl
+      // from the actual multer file after storage upload, so these values are never persisted.
+      // uploadedBy is also overwritten by the service from @GetUser(), but the DTO requires it.
+      const documentMetadata: Record<string, unknown> = {
+        title: data.title.trim(),
+        fileName: data.file.name,
+        fileType: data.file.type,
+        fileSize: data.file.size,
+        uploadedBy: 'pending', // overwritten server-side from JWT via @GetUser()
+        // accessLevel MUST be one of: 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER'
+        accessLevel: data.accessLevel ?? 'VIEWER',
+      };
+
+      if (data.description?.trim()) documentMetadata.description = data.description.trim();
+      if (data.folderId) documentMetadata.folderId = data.folderId;
+      if (Array.isArray(data.tags) && data.tags.length > 0) documentMetadata.tags = data.tags;
+      if (data.meetingId) documentMetadata.meetingId = data.meetingId;
+
       const formData = new FormData();
       formData.append('file', data.file);
-      formData.append('title', data.title.trim());
-
-      if (data.description?.trim()) {
-        formData.append('description', data.description.trim());
-      }
-      if (data.folderId) {
-        formData.append('folderId', data.folderId);
-      }
-      if (Array.isArray(data.tags) && data.tags.length > 0) {
-        formData.append('tags', JSON.stringify(data.tags));
-      }
-      if (data.accessLevel) {
-        formData.append('accessLevel', data.accessLevel);
-      }
-      if (data.meetingId) {
-        formData.append('meetingId', data.meetingId);
-      }
+      formData.append('document', JSON.stringify(documentMetadata));
 
       const response = await apiClient.post<ApiResponse<Document>>(
         ENDPOINTS.DOCUMENTS.CREATE,
@@ -125,9 +108,6 @@ export const documentsService = {
     }
   },
 
-  /**
-   * Update document metadata and/or replace the file.
-   */
   async updateDocument(id: string, data: UpdateDocumentData): Promise<Document> {
     if (!id?.trim()) throw new Error('Document ID is required.');
     if (data.title !== undefined && !data.title.trim()) {
@@ -138,40 +118,40 @@ export const documentsService = {
     }
 
     try {
-      let payload: FormData | Partial<UpdateDocumentData>;
-      const headers: Record<string, string> = {};
-
       if (data.file) {
-        // Replace file → multipart
+        // File replacement — backend overwrites fileName/fileType/fileSize/fileUrl
+        // from the uploaded file, so we only send user-editable metadata.
+        const documentMetadata: Record<string, unknown> = {};
+        if (data.title?.trim()) documentMetadata.title = data.title.trim();
+        if (data.description?.trim()) documentMetadata.description = data.description.trim();
+        if (data.folderId) documentMetadata.folderId = data.folderId;
+        if (Array.isArray(data.tags)) documentMetadata.tags = data.tags;
+        if (data.accessLevel) documentMetadata.accessLevel = data.accessLevel;
+
         const fd = new FormData();
         fd.append('file', data.file);
-        if (data.title?.trim()) fd.append('title', data.title.trim());
-        if (data.description?.trim()) fd.append('description', data.description.trim());
-        if (data.folderId) fd.append('folderId', data.folderId);
-        if (Array.isArray(data.tags)) fd.append('tags', JSON.stringify(data.tags));
-        if (data.accessLevel) fd.append('accessLevel', data.accessLevel);
-        payload = fd;
-        headers['Content-Type'] = 'multipart/form-data';
-      } else {
-        // Metadata only → JSON (omit 'file' key)
-        const { file: _file, ...rest } = data as any;
-        payload = rest;
-      }
+        fd.append('document', JSON.stringify(documentMetadata));
 
-      const response = await apiClient.patch<ApiResponse<Document>>(
-        ENDPOINTS.DOCUMENTS.UPDATE(id),
-        payload,
-        { headers }
-      );
-      return response.data.data;
+        const response = await apiClient.patch<ApiResponse<Document>>(
+          ENDPOINTS.DOCUMENTS.UPDATE(id),
+          fd,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        return response.data.data;
+      } else {
+        // Metadata-only update → plain JSON body, no FormData needed
+        const { file: _file, ...rest } = data as any;
+        const response = await apiClient.patch<ApiResponse<Document>>(
+          ENDPOINTS.DOCUMENTS.UPDATE(id),
+          rest
+        );
+        return response.data.data;
+      }
     } catch (error) {
       throw normaliseError(error, `Failed to update document. Please try again.`);
     }
   },
 
-  /**
-   * Permanently delete a single document.
-   */
   async deleteDocument(id: string): Promise<void> {
     if (!id?.trim()) throw new Error('Document ID is required.');
     try {
@@ -181,9 +161,6 @@ export const documentsService = {
     }
   },
 
-  /**
-   * Bulk delete multiple documents.
-   */
   async bulkDeleteDocuments(data: BulkDeleteData): Promise<void> {
     if (!Array.isArray(data.ids) || data.ids.length === 0) {
       throw new Error('At least one document ID is required for bulk delete.');

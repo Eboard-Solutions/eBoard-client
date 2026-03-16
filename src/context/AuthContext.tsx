@@ -47,10 +47,7 @@ const AuthContext = createContext<AuthContextValue>({
  */
 function normaliseUser(raw: AuthUser | null): AuthUser | null {
   if (!raw) return null;
-  return {
-    ...raw,
-    name: raw.name ?? `${raw.firstName} ${raw.lastName}`.trim(),
-  };
+  return { ...raw };
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
