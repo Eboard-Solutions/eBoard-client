@@ -6,13 +6,13 @@ import type { CreateOrganisationData, UpdateOrganisationData } from '@/types/api
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const organisationKeys = {
-  all:    ['organisations'] as const,
-  lists:  () => [...organisationKeys.all, 'list'] as const,
-  list:   () => [...organisationKeys.lists()] as const,
-  mine:   () => [...organisationKeys.all, 'mine'] as const,   // OrgAdmin's own org
-  pending:() => [...organisationKeys.all, 'pending'] as const,
-  details:() => [...organisationKeys.all, 'detail'] as const,
-  detail: (id: string) => [...organisationKeys.details(), id] as const,
+  all:     ['organisations'] as const,
+  lists:   () => [...organisationKeys.all, 'list']    as const,
+  list:    () => [...organisationKeys.lists()]        as const,
+  mine:    () => [...organisationKeys.all, 'mine']    as const,
+  pending: () => [...organisationKeys.all, 'pending'] as const,
+  details: () => [...organisationKeys.all, 'detail']  as const,
+  detail:  (id: string) => [...organisationKeys.details(), id] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ export function useOrganisations() {
 
 /**
  * OrgAdmin — fetches only their own organisation via
- * GET /organisations/my-organisation.
+ * GET /organisations/my-organisation (no UUID in the URL).
  *
  * Returns null (not an error) when the OrgAdmin has no org yet,
  * so the frontend can show the "Create Organisation" flow.
@@ -43,7 +43,7 @@ export function useMyOrganisation(enabled = true) {
     queryKey: organisationKeys.mine(),
     queryFn:  () => OrganisationsService.getMyOrganisation(),
     enabled,
-    // Don't retry on 403 — that means the user genuinely lacks access
+    // Don't retry on 403 — the user genuinely lacks access
     retry: (failureCount, error: any) => {
       if (error?.response?.status === 403) return false;
       return failureCount < 2;
@@ -78,13 +78,23 @@ export function usePendingOrganisations() {
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
-/** Register (create) a new organisation */
+/**
+ * Register (create) a new organisation.
+ *
+ * FIX: After registration the user's JWT still contains the OLD payload
+ * (no organisationId claim) because it was issued before the org was created.
+ * The onSuccess here invalidates the cache; the OrganisationPage's onCreated
+ * callback calls refreshAuth() first (to get a new token with organisationId)
+ * and then refetchOrg() — that ordering is critical and already correct in
+ * the page component.
+ */
 export function useRegisterOrganisation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateOrganisationData) => OrganisationsService.register(data),
     onSuccess: () => {
-      // Invalidate both the OrgAdmin's own-org cache and the SuperAdmin list
+      // Invalidate caches so the next fetch gets fresh data once the token
+      // has been refreshed by the caller (OrganisationPage.onCreated)
       queryClient.invalidateQueries({ queryKey: organisationKeys.mine() });
       queryClient.invalidateQueries({ queryKey: organisationKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organisationKeys.pending() });
