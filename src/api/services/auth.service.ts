@@ -71,15 +71,15 @@ export const authService = {
    * We decode the JWT to extract user info.
    */
   async superAdminLogin(credentials: SuperAdminLoginCredentials): Promise<LoginResponse> {
-    const response = await apiClient.post<ResponseObject<{ at: string; rt: string }>>(
+    const response = await apiClient.post<ResponseObject<LoginResponse>>(
         ENDPOINTS.AUTH.SUPER_ADMIN_LOGIN,
         credentials
     );
     const data = response.data.data!;
-    TokenService.setTokens(data.at, data.rt);
+    TokenService.setTokens(data.accessToken, data.refreshToken);
 
     // Super admin login doesn't return user object - decode from JWT
-    const payload = decodeJwtPayload(data.at);
+    const payload = decodeJwtPayload(data.accessToken);
     const user = {
       userId: (payload?.sub as string) || '',
       email: (payload?.email as string) || credentials.email,
@@ -92,7 +92,7 @@ export const authService = {
     };
 
     TokenService.setUser(user);
-    return { accessToken: data.at, refreshToken: data.rt, user };
+    return { accessToken: data.accessToken, refreshToken: data.refreshToken, user };
   },
 
   /**
