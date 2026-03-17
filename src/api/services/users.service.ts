@@ -117,7 +117,14 @@ export const usersService = {
             ENDPOINTS.USERS.BASE,
             { params },
         );
-        return response.data;
+        const body = response.data as any;
+        const data = body?.data ?? body;
+        
+        if(Array.isArray(data)) return data;
+        if(Array.isArray(data?.items)) return data.items;
+        if(Array.isArray(data?.users)) return data.users;
+
+        return [];
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to load users'));
       }
