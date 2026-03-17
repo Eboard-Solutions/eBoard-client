@@ -52,6 +52,25 @@ const BLANK: TaskForm = {
   priority: 'MEDIUM', assigneeId: '', dueDateStr: '',
 };
 
+// ─── Unwrap helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Safely extract an array from a ResponseObject or any unknown shape.
+ * The backend always returns { statusCode, message, data: T[], pageInfo? }.
+ * Previous code used `.items` which never exists — fixed to use `.data`.
+ */
+function extractArray<T>(raw: unknown): T[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as T[];
+  const obj = raw as Record<string, unknown>;
+  if (Array.isArray(obj.data))    return obj.data    as T[];
+  if (Array.isArray(obj.items))   return obj.items   as T[];  // fallback
+  if (Array.isArray(obj.tasks))   return obj.tasks   as T[];
+  if (Array.isArray(obj.users))   return obj.users   as T[];
+  if (Array.isArray(obj.members)) return obj.members as T[];
+  return [];
+}
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const P: Record<TaskPriority, { label: string; bar: string; chip: string; dot: string; detailBg: string }> = {
@@ -149,11 +168,8 @@ const toStr = (ts?: number) => ts ? new Date(ts).toISOString().split('T')[0] : '
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
 
 function TaskDetailModal({ task, users, open, onClose, onEdit, onDelete, onStatusChange }: {
-  task: TaskDisplay | null;
-  users: ApiUser[];
-  open: boolean;
-  onClose: () => void;
-  onEdit: (t: TaskDisplay) => void;
+  task: TaskDisplay | null; users: ApiUser[]; open: boolean;
+  onClose: () => void; onEdit: (t: TaskDisplay) => void;
   onDelete: (t: TaskDisplay) => void;
   onStatusChange: (t: TaskDisplay, s: TaskStatus) => void;
 }) {
@@ -172,51 +188,31 @@ function TaskDetailModal({ task, users, open, onClose, onEdit, onDelete, onStatu
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg w-full rounded-3xl p-0 overflow-hidden gap-0">
-
-        {/* ── Hero header ── */}
         <div className={`relative bg-gradient-to-br ${sCfg.detailGrad} px-6 pt-6 pb-8`}>
-          {/* Decorative blobs */}
           <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10 pointer-events-none" />
           <div className="absolute right-8 bottom-0 h-16 w-16 rounded-full bg-black/10 pointer-events-none" />
-
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-          >
+          <button onClick={onClose}
+            className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
             <X className="h-4 w-4 text-white" />
           </button>
-
-          {/* Status badge */}
           <div className="relative flex items-center gap-2.5 mb-4">
-            <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center text-white">
-              {sCfg.icon}
-            </div>
+            <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center text-white">{sCfg.icon}</div>
             <span className="text-sm font-semibold text-white/80">{sCfg.label}</span>
           </div>
-
-          {/* Title */}
           <h2 className={`relative text-xl font-bold text-white leading-snug pr-8 ${done ? 'line-through opacity-70' : ''}`}>
             {task.title}
           </h2>
-
-          {/* Priority chip */}
           <div className="relative mt-3 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold">
-              <Flag className="h-3 w-3" />
-              {pCfg.label} Priority
+              <Flag className="h-3 w-3" />{pCfg.label} Priority
             </span>
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold ${due.urgent ? 'bg-red-500/40' : ''}`}>
-              <CalendarDays className="h-3 w-3" />
-              {due.text}
+              <CalendarDays className="h-3 w-3" />{due.text}
             </span>
           </div>
         </div>
 
-        {/* ── Body ── */}
         <div className="px-6 py-5 space-y-5 bg-background">
-
-          {/* Description */}
           {task.description ? (
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -231,13 +227,8 @@ function TaskDetailModal({ task, users, open, onClose, onEdit, onDelete, onStatu
               No description provided.
             </div>
           )}
-
           <Separator className="opacity-50" />
-
-          {/* Detail grid */}
           <div className="grid grid-cols-2 gap-4">
-
-            {/* Assignee */}
             <div className="space-y-1.5">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                 <User2 className="h-3.5 w-3.5" /> Assigned To
@@ -262,8 +253,6 @@ function TaskDetailModal({ task, users, open, onClose, onEdit, onDelete, onStatu
                 </div>
               )}
             </div>
-
-            {/* Due date */}
             <div className="space-y-1.5">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                 <CalendarClock className="h-3.5 w-3.5" /> Due Date
@@ -276,21 +265,19 @@ function TaskDetailModal({ task, users, open, onClose, onEdit, onDelete, onStatu
               </div>
             </div>
           </div>
-
-          {/* Status pipeline */}
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Progress Pipeline</p>
             <div className="flex items-center gap-1.5">
               {cycle.map((st, idx) => {
-                const isDone  = idx < currentIdx;
+                const isDone   = idx < currentIdx;
                 const isActive = idx === currentIdx;
                 const cfg = S[st];
                 return (
                   <div key={st} className="flex items-center gap-1.5 flex-1 min-w-0">
                     <div className={`
                       flex-1 flex flex-col items-center gap-1 px-1 py-2 rounded-xl border text-center transition-all
-                      ${isActive  ? `${cfg.pillBg} ${cfg.pillRing} ring-1 border-transparent` : ''}
-                      ${isDone    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : ''}
+                      ${isActive ? `${cfg.pillBg} ${cfg.pillRing} ring-1 border-transparent` : ''}
+                      ${isDone   ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : ''}
                       ${!isActive && !isDone ? 'bg-muted/30 border-border/30' : ''}
                     `}>
                       <span className={`${isActive ? cfg.accent : isDone ? 'text-emerald-500' : 'text-muted-foreground/40'}`}>
@@ -308,36 +295,22 @@ function TaskDetailModal({ task, users, open, onClose, onEdit, onDelete, onStatu
               })}
             </div>
           </div>
-
           <Separator className="opacity-50" />
-
-          {/* Action buttons */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
-            {/* Advance status */}
             {!done && (
-              <Button
-                variant="outline"
-                className="flex-1 rounded-xl text-sm gap-2 border-border/60"
-                onClick={() => { onStatusChange(task, nextStatus); onClose(); }}
-              >
+              <Button variant="outline" className="flex-1 rounded-xl text-sm gap-2 border-border/60"
+                onClick={() => { onStatusChange(task, nextStatus); onClose(); }}>
                 <span className={S[nextStatus].accent}>{S[nextStatus].icon}</span>
                 Move to {S[nextStatus].label}
               </Button>
             )}
-
-            <Button
-              variant="outline"
-              className="flex-1 rounded-xl text-sm gap-2 border-border/60"
-              onClick={() => { onClose(); onEdit(task); }}
-            >
+            <Button variant="outline" className="flex-1 rounded-xl text-sm gap-2 border-border/60"
+              onClick={() => { onClose(); onEdit(task); }}>
               <Pencil className="h-4 w-4" /> Edit Task
             </Button>
-
-            <Button
-              variant="outline"
+            <Button variant="outline"
               className="flex-1 rounded-xl text-sm gap-2 border-red-200 dark:border-red-800 text-destructive hover:bg-red-50 dark:hover:bg-red-950/30"
-              onClick={() => { onClose(); onDelete(task); }}
-            >
+              onClick={() => { onClose(); onDelete(task); }}>
               <Trash2 className="h-4 w-4" /> Delete
             </Button>
           </div>
@@ -378,8 +351,9 @@ function TaskFormFields({ form, onChange, users }: {
               {users.map((u) => (
                 <SelectItem key={u.userId} value={u.userId}>
                   <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6"><AvatarImage src={u.profilePictureUrl} />
-                      <AvatarFallback className="text-[10px]">{(u.firstName?.[0]??'')+(u.lastName?.[0]??'')}</AvatarFallback>
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={u.profilePictureUrl} />
+                      <AvatarFallback className="text-[10px]">{(u.firstName?.[0] ?? '') + (u.lastName?.[0] ?? '')}</AvatarFallback>
                     </Avatar>
                     <span className="text-sm">{u.firstName} {u.lastName}</span>
                   </div>
@@ -435,11 +409,9 @@ function TaskFormFields({ form, onChange, users }: {
 
 function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compact }: {
   task: TaskDisplay; users: ApiUser[];
-  onEdit: (t: TaskDisplay) => void;
-  onDelete: (t: TaskDisplay) => void;
+  onEdit: (t: TaskDisplay) => void; onDelete: (t: TaskDisplay) => void;
   onStatusChange: (t: TaskDisplay, s: TaskStatus) => void;
-  onView: (t: TaskDisplay) => void;
-  compact?: boolean;
+  onView: (t: TaskDisplay) => void; compact?: boolean;
 }) {
   const assignee = users.find((u) => u.userId === task.assigneeId);
   const due      = dueFmtShort(task.dueDate);
@@ -454,30 +426,20 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
       hover:-translate-y-0.5 transition-all duration-200
       ${done ? 'opacity-65' : ''}
     `}>
-      {/* Priority accent bar */}
       <div className={`absolute left-0 top-0 bottom-0 w-[3.5px] rounded-l-2xl ${pCfg.bar}`} />
-
       <div className={`pl-5 pr-4 ${compact ? 'py-3.5' : 'py-4'}`}>
         <div className="flex items-start gap-3.5">
-
-          {/* Status cycle button */}
           <button
             onClick={() => {
               const cycle: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'];
               onStatusChange(task, cycle[(cycle.indexOf(task.status) + 1) % cycle.length]);
             }}
             title={`Status: ${sCfg.label} — click to advance`}
-            className={`
-              mt-0.5 shrink-0 h-7 w-7 rounded-full flex items-center justify-center
-              ${sCfg.pillBg} ${sCfg.accent} ring-1 ${sCfg.pillRing}
-              hover:scale-110 hover:ring-2 transition-all duration-150
-            `}
+            className={`mt-0.5 shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${sCfg.pillBg} ${sCfg.accent} ring-1 ${sCfg.pillRing} hover:scale-110 hover:ring-2 transition-all duration-150`}
           >
             {sCfg.icon}
           </button>
-
           <div className="flex-1 min-w-0">
-            {/* Title row */}
             <div className="flex items-start justify-between gap-2">
               <p
                 className={`font-semibold text-[15px] leading-snug cursor-pointer hover:text-primary transition-colors ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}
@@ -485,7 +447,6 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
               >
                 {task.title}
               </p>
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon"
@@ -516,15 +477,9 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-
-            {/* Description (list mode only) */}
             {!compact && task.description && (
-              <p className="text-sm text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
-                {task.description}
-              </p>
+              <p className="text-sm text-muted-foreground line-clamp-2 mt-1 leading-relaxed">{task.description}</p>
             )}
-
-            {/* Meta + View Details button row */}
             <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${pCfg.chip}`}>
@@ -534,9 +489,7 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
                   <CalendarDays className="h-3.5 w-3.5 shrink-0" />{due.text}
                 </span>
               </div>
-
               <div className="flex items-center gap-2 shrink-0">
-                {/* Assignee avatar */}
                 {assignee && (
                   <div className="flex items-center gap-1.5">
                     <Avatar className="h-6 w-6 ring-1 ring-border">
@@ -545,19 +498,11 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
                         {(assignee.firstName?.[0] ?? '') + (assignee.lastName?.[0] ?? '')}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-xs text-muted-foreground font-medium hidden sm:block">
-                      {assignee.firstName}
-                    </span>
+                    <span className="text-xs text-muted-foreground font-medium hidden sm:block">{assignee.firstName}</span>
                   </div>
                 )}
-
-                {/* View Details button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onView(task)}
-                  className="h-7 px-2.5 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
+                <Button variant="ghost" size="sm" onClick={() => onView(task)}
+                  className="h-7 px-2.5 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Eye className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Details</span>
                 </Button>
@@ -574,10 +519,8 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
 
 function KanbanColumn({ status, tasks, users, onEdit, onDelete, onStatusChange, onView }: {
   status: TaskStatus; tasks: TaskDisplay[]; users: ApiUser[];
-  onEdit: (t: TaskDisplay) => void;
-  onDelete: (t: TaskDisplay) => void;
-  onStatusChange: (t: TaskDisplay, s: TaskStatus) => void;
-  onView: (t: TaskDisplay) => void;
+  onEdit: (t: TaskDisplay) => void; onDelete: (t: TaskDisplay) => void;
+  onStatusChange: (t: TaskDisplay, s: TaskStatus) => void; onView: (t: TaskDisplay) => void;
 }) {
   const cfg = S[status];
   return (
@@ -597,7 +540,6 @@ function KanbanColumn({ status, tasks, users, onEdit, onDelete, onStatusChange, 
             style={{ width: tasks.length > 0 ? '100%' : '4px' }} />
         </div>
       </div>
-
       <div className="flex flex-col gap-2.5">
         {tasks.map((t) => (
           <TaskCard key={t.id} task={t} users={users}
@@ -624,7 +566,7 @@ export function Tasks() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTask, setEditTask]     = useState<TaskDisplay | null>(null);
   const [delTarget, setDelTarget]   = useState<TaskDisplay | null>(null);
-  const [viewTask, setViewTask]     = useState<TaskDisplay | null>(null);  // ← new
+  const [viewTask, setViewTask]     = useState<TaskDisplay | null>(null);
   const [createForm, setCreateForm] = useState<TaskForm>(BLANK);
   const [editForm, setEditForm]     = useState<TaskForm>(BLANK);
 
@@ -634,16 +576,19 @@ export function Tasks() {
   const updateM = useUpdateTask();
   const deleteM = useDeleteTask();
 
-  const rawTasks: Task[]   = Array.isArray(tasksData) ? tasksData : (tasksData as { items?: Task[] })?.items ?? [];
-  const users:   ApiUser[] = Array.isArray(usersData) ? usersData : (usersData as { items?: ApiUser[] })?.items ?? [];
+  // FIX: both were using `.items` — backend returns ResponseObject { data: T[] }
+  const rawTasks = extractArray<Task>(tasksData);
+  const users    = extractArray<ApiUser>(usersData);
 
   const tasks: TaskDisplay[] = rawTasks.map((t) => ({
-    id: t.id, title: t.title, description: t.description,
-    status:   (t.status?.toUpperCase()   as TaskStatus)   ?? 'TODO',
-    priority: (t.priority?.toUpperCase() as TaskPriority) ?? 'MEDIUM',
-    dueDate:  typeof t.dueDate === 'number' ? t.dueDate : new Date(t.dueDate ?? Date.now()).getTime(),
-    assigneeId: t.assigneeId,
-    assignee:   t.assignee as unknown as ApiUser | undefined,
+    id:          t.id,
+    title:       t.title,
+    description: t.description,
+    status:      (t.status?.toUpperCase()   as TaskStatus)   ?? 'TODO',
+    priority:    (t.priority?.toUpperCase() as TaskPriority) ?? 'MEDIUM',
+    dueDate:     typeof t.dueDate === 'number' ? t.dueDate : new Date(t.dueDate ?? Date.now()).getTime(),
+    assigneeId:  t.assigneeId,
+    assignee:    t.assignee as unknown as ApiUser | undefined,
   }));
 
   const filtered = tasks.filter((t) =>
@@ -666,7 +611,8 @@ export function Tasks() {
     const e = validate(createForm); if (e) { toast.error(e); return; }
     try {
       await createM.mutateAsync({
-        title: createForm.title.trim(), description: createForm.description.trim() || undefined,
+        title: createForm.title.trim(),
+        description: createForm.description.trim() || undefined,
         status: createForm.status, priority: createForm.priority,
         assigneeId: createForm.assigneeId, dueDate: toTs(createForm.dueDateStr)!,
       } as CreateTaskData);
@@ -685,7 +631,8 @@ export function Tasks() {
     const e = validate(editForm); if (e) { toast.error(e); return; }
     try {
       await updateM.mutateAsync({ taskId: editTask.id, data: {
-        title: editForm.title.trim(), description: editForm.description.trim() || undefined,
+        title: editForm.title.trim(),
+        description: editForm.description.trim() || undefined,
         status: editForm.status, priority: editForm.priority,
         assigneeId: editForm.assigneeId, dueDate: toTs(editForm.dueDateStr)!,
       } as UpdateTaskData });
@@ -696,7 +643,6 @@ export function Tasks() {
   async function handleStatusChange(t: TaskDisplay, s: TaskStatus) {
     try {
       await updateM.mutateAsync({ taskId: t.id, data: { status: s } });
-      // Keep viewTask in sync if the detail modal is open for this task
       if (viewTask?.id === t.id) setViewTask({ ...t, status: s });
       toast.success(`Moved to ${S[s].label}`);
     } catch { toast.error('Failed to update'); }
@@ -710,13 +656,7 @@ export function Tasks() {
     } catch { toast.error('Failed to delete'); }
   }
 
-  const cp = {
-    users,
-    onEdit: openEdit,
-    onDelete: setDelTarget,
-    onStatusChange: handleStatusChange,
-    onView: setViewTask,
-  };
+  const cp = { users, onEdit: openEdit, onDelete: setDelTarget, onStatusChange: handleStatusChange, onView: setViewTask };
 
   const Footer = ({ onCancel, onSubmit, busy, label }: {
     onCancel: () => void; onSubmit: () => void; busy: boolean; label: string;
@@ -746,7 +686,6 @@ export function Tasks() {
 
   return (
     <div className="space-y-6 pb-12">
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start gap-4">
@@ -760,7 +699,6 @@ export function Tasks() {
             </p>
           </div>
         </div>
-
         <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) setCreateForm(BLANK); }}>
           <DialogTrigger asChild>
             <Button size="lg" className="gap-2 rounded-xl self-start sm:self-auto shadow-sm text-sm font-semibold px-5">
@@ -811,9 +749,8 @@ export function Tasks() {
         </div>
         <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border/40 shrink-0">
           {(['list', 'kanban'] as const).map((m) => (
-            <Button key={m} variant={view === m ? 'default' : 'ghost'}
-              size="sm" onClick={() => setView(m)}
-              className="h-9 gap-2 px-4 rounded-lg text-sm font-medium">
+            <Button key={m} variant={view === m ? 'default' : 'ghost'} size="sm"
+              onClick={() => setView(m)} className="h-9 gap-2 px-4 rounded-lg text-sm font-medium">
               {m === 'list' ? <LayoutList className="h-4 w-4" /> : <Columns3 className="h-4 w-4" />}
               <span className="hidden sm:inline capitalize">{m}</span>
             </Button>
@@ -832,16 +769,12 @@ export function Tasks() {
               { v: 'review',     l: 'Review',      n: rev.length },
               { v: 'completed',  l: 'Completed',   n: done.length },
             ].map(({ v, l, n }) => (
-              <TabsTrigger key={v} value={v}
-                className="rounded-lg text-sm h-9 px-4 font-medium data-[state=active]:shadow-sm gap-2">
+              <TabsTrigger key={v} value={v} className="rounded-lg text-sm h-9 px-4 font-medium data-[state=active]:shadow-sm gap-2">
                 {l}
-                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-border/50 text-xs font-bold">
-                  {n}
-                </span>
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-border/50 text-xs font-bold">{n}</span>
               </TabsTrigger>
             ))}
           </TabsList>
-
           {[
             { v: 'all',        items: filtered },
             { v: 'todo',       items: todo },
@@ -883,11 +816,8 @@ export function Tasks() {
         </div>
       )}
 
-      {/* ── Task Detail Modal ── */}
-      <TaskDetailModal
-        task={viewTask}
-        users={users}
-        open={!!viewTask}
+      {/* Task Detail Modal */}
+      <TaskDetailModal task={viewTask} users={users} open={!!viewTask}
         onClose={() => setViewTask(null)}
         onEdit={(t) => { setViewTask(null); openEdit(t); }}
         onDelete={(t) => { setViewTask(null); setDelTarget(t); }}
