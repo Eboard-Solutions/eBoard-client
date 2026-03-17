@@ -6,27 +6,27 @@ import type {
   CreateTaskData,
   UpdateTaskData,
   TaskFilters,
-  PaginatedResponse,
 } from '@/types/api.types';
+import { ResponseObject } from "@/api/response-object.ts";
 
 function stripEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+      Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== ''),
   ) as Partial<T>;
 }
 
 export const TasksService = {
-  async getAll(filters?: TaskFilters): Promise<PaginatedResponse<Task>> {
-    const response = await apiClient.get(ENDPOINTS.TASKS.BASE, { params: filters });
-    return response.data.data ?? response.data;
+  async getAll(filters?: TaskFilters): Promise<ResponseObject<Task[]>> {
+    const response = await apiClient.get<ResponseObject<Task[]>>(ENDPOINTS.TASKS.BASE, { params: filters });
+    return response.data;
   },
 
-  async getById(id: string): Promise<Task> {
-    const response = await apiClient.get(ENDPOINTS.TASKS.BY_ID(id));
-    return response.data.data ?? response.data;
+  async getById(id: string): Promise<ResponseObject<Task>> {
+    const response = await apiClient.get<ResponseObject<Task>>(ENDPOINTS.TASKS.BY_ID(id));
+    return response.data;
   },
 
-  async create(data: CreateTaskData): Promise<Task> {
+  async create(data: CreateTaskData): Promise<ResponseObject<Task>> {
     // Required by DTO: title, assigneeId, dueDate (number)
     // Optional (backend defaults): status → TODO, priority → MEDIUM
     // Excluded: createdBy → set by backend from JWT
@@ -41,31 +41,33 @@ export const TasksService = {
     if (data.description?.trim()) payload.description = data.description.trim();
     if (data.meetingId)           payload.meetingId   = data.meetingId;
 
-    const response = await apiClient.post(ENDPOINTS.TASKS.CREATE, payload);
-    return response.data.data ?? response.data;
+    const response = await apiClient.post<ResponseObject<Task>>(ENDPOINTS.TASKS.CREATE, payload);
+    return response.data;
   },
 
-  async update(id: string, data: UpdateTaskData): Promise<Task> {
+  async update(id: string, data: UpdateTaskData): Promise<ResponseObject<Task>> {
     const payload = stripEmpty(data as Record<string, unknown>);
     if (payload.dueDate !== undefined) payload.dueDate = Number(payload.dueDate);
-    const response = await apiClient.patch(ENDPOINTS.TASKS.UPDATE(id), payload);
-    return response.data.data ?? response.data;
+    const response = await apiClient.patch<ResponseObject<Task>>(ENDPOINTS.TASKS.UPDATE(id), payload);
+    return response.data;
   },
 
-  async complete(id: string): Promise<Task> {
-    const response = await apiClient.patch(ENDPOINTS.TASKS.UPDATE(id), {
+  async complete(id: string): Promise<ResponseObject<Task>> {
+    const response = await apiClient.patch<ResponseObject<Task>>(ENDPOINTS.TASKS.UPDATE(id), {
       status:      'COMPLETED',
       completedAt: Date.now(),
     });
-    return response.data.data ?? response.data;
+    return response.data;
   },
 
-  async delete(id: string): Promise<void> {
-    await apiClient.delete(ENDPOINTS.TASKS.DELETE(id));
+  async delete(id: string): Promise<ResponseObject<Task>> {
+    const response = await apiClient.delete<ResponseObject<Task>>(ENDPOINTS.TASKS.DELETE(id));
+    return response.data;
   },
 
-  async bulkDelete(ids: string[]): Promise<void> {
-    await apiClient.post(ENDPOINTS.TASKS.BULK_DELETE, { ids });
+  async bulkDelete(ids: string[]): Promise<ResponseObject<Task[]>> {
+    const response = await apiClient.post<ResponseObject<Task[]>>(ENDPOINTS.TASKS.BULK_DELETE, { ids });
+    return response.data;
   },
 };
 

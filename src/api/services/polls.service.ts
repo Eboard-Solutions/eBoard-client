@@ -9,48 +9,50 @@ import type {
   UpdatePollData,
   VoteData,
   PollFilters,
-  PaginatedResponse,
 } from '@/types/api.types';
+import { ResponseObject } from "@/api/response-object.ts";
 
 export const PollsService = {
   // Get all polls with pagination
-  async getAll(filters?: PollFilters): Promise<PaginatedResponse<Poll>> {
-    const response = await apiClient.get(ENDPOINTS.POLLS.BASE, { params: filters });
-    return response.data.data || response.data;
+  async getAll(filters?: PollFilters): Promise<ResponseObject<Poll[]>> {
+    const response = await apiClient.get<ResponseObject<Poll[]>>(ENDPOINTS.POLLS.BASE, { params: filters });
+    return response.data;
   },
 
   // Get poll by ID
-  async getById(id: string): Promise<Poll> {
-    const response = await apiClient.get(ENDPOINTS.POLLS.BY_ID(id));
-    return response.data.data || response.data;
+  async getById(id: string): Promise<ResponseObject<Poll>> {
+    const response = await apiClient.get<ResponseObject<Poll>>(ENDPOINTS.POLLS.BY_ID(id));
+    return response.data;
   },
 
   // Create poll
-  async create(data: CreatePollData): Promise<Poll> {
-    const response = await apiClient.post(ENDPOINTS.POLLS.CREATE, data);
-    return response.data.data || response.data;
+  async create(data: CreatePollData): Promise<ResponseObject<Poll>> {
+    const response = await apiClient.post<ResponseObject<Poll>>(ENDPOINTS.POLLS.CREATE, data);
+    return response.data;
   },
 
   // Update poll
-  async update(id: string, data: UpdatePollData): Promise<Poll> {
-    const response = await apiClient.patch(ENDPOINTS.POLLS.UPDATE(id), data);
-    return response.data.data || response.data;
+  async update(id: string, data: UpdatePollData): Promise<ResponseObject<Poll>> {
+    const response = await apiClient.patch<ResponseObject<Poll>>(ENDPOINTS.POLLS.UPDATE(id), data);
+    return response.data;
   },
 
   // Delete poll
-  async delete(id: string): Promise<void> {
-    await apiClient.delete(ENDPOINTS.POLLS.DELETE(id));
+  async delete(id: string): Promise<ResponseObject<Poll>> {
+    const response = await apiClient.delete<ResponseObject<Poll>>(ENDPOINTS.POLLS.DELETE(id));
+    return response.data;
   },
 
   // Bulk delete polls
-  async bulkDelete(ids: string[]): Promise<void> {
-    await apiClient.post(ENDPOINTS.POLLS.BULK_DELETE, { ids });
+  async bulkDelete(ids: string[]): Promise<ResponseObject<Poll[]>> {
+    const response = await apiClient.post<ResponseObject<Poll[]>>(ENDPOINTS.POLLS.BULK_DELETE, { ids });
+    return response.data;
   },
 
   // Cast a vote
-  async vote(data: VoteData): Promise<Poll> {
-    const response = await apiClient.post(ENDPOINTS.POLLS.VOTE, data);
-    return response.data.data || response.data;
+  async vote(data: VoteData): Promise<ResponseObject<Poll>> {
+    const response = await apiClient.post<ResponseObject<Poll>>(ENDPOINTS.POLLS.VOTE, data);
+    return response.data;
   },
 };
 

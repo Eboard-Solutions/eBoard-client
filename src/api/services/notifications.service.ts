@@ -8,54 +8,56 @@ import type {
   CreateNotificationData,
   UpdateNotificationData,
   NotificationFilters,
-  PaginatedResponse,
 } from '@/types/api.types';
+import { ResponseObject } from "@/api/response-object.ts";
 
 export const NotificationsService = {
   // Get all notifications with pagination
-  async getAll(filters?: NotificationFilters): Promise<PaginatedResponse<Notification>> {
-    const response = await apiClient.get(ENDPOINTS.NOTIFICATIONS.BASE, { params: filters });
-    return response.data.data || response.data;
+  async getAll(filters?: NotificationFilters): Promise<ResponseObject<Notification[]>> {
+    const response = await apiClient.get<ResponseObject<Notification[]>>(ENDPOINTS.NOTIFICATIONS.BASE, { params: filters });
+    return response.data;
   },
 
   // Get notification by ID
-  async getById(id: string): Promise<Notification> {
-    const response = await apiClient.get(ENDPOINTS.NOTIFICATIONS.BY_ID(id));
-    return response.data.data || response.data;
+  async getById(id: string): Promise<ResponseObject<Notification>> {
+    const response = await apiClient.get<ResponseObject<Notification>>(ENDPOINTS.NOTIFICATIONS.BY_ID(id));
+    return response.data;
   },
 
   // Create notification
-  async create(data: CreateNotificationData): Promise<Notification> {
-    const response = await apiClient.post(ENDPOINTS.NOTIFICATIONS.CREATE, data);
-    return response.data.data || response.data;
+  async create(data: CreateNotificationData): Promise<ResponseObject<Notification>> {
+    const response = await apiClient.post<ResponseObject<Notification>>(ENDPOINTS.NOTIFICATIONS.CREATE, data);
+    return response.data;
   },
 
   // Update notification
-  async update(id: string, data: UpdateNotificationData): Promise<Notification> {
-    const response = await apiClient.patch(ENDPOINTS.NOTIFICATIONS.UPDATE(id), data);
-    return response.data.data || response.data;
+  async update(id: string, data: UpdateNotificationData): Promise<ResponseObject<Notification>> {
+    const response = await apiClient.patch<ResponseObject<Notification>>(ENDPOINTS.NOTIFICATIONS.UPDATE(id), data);
+    return response.data;
   },
 
   // Mark as read
-  async markAsRead(id: string): Promise<Notification> {
-    const response = await apiClient.patch(ENDPOINTS.NOTIFICATIONS.UPDATE(id), { isRead: true });
-    return response.data.data || response.data;
+  async markAsRead(id: string): Promise<ResponseObject<Notification>> {
+    const response = await apiClient.patch<ResponseObject<Notification>>(ENDPOINTS.NOTIFICATIONS.UPDATE(id), { isRead: true });
+    return response.data;
   },
 
   // Toggle flag
-  async toggleFlag(id: string, isFlagged: boolean): Promise<Notification> {
-    const response = await apiClient.patch(ENDPOINTS.NOTIFICATIONS.UPDATE(id), { isFlagged });
-    return response.data.data || response.data;
+  async toggleFlag(id: string, isFlagged: boolean): Promise<ResponseObject<Notification>> {
+    const response = await apiClient.patch<ResponseObject<Notification>>(ENDPOINTS.NOTIFICATIONS.UPDATE(id), { isFlagged });
+    return response.data;
   },
 
   // Delete notification
-  async delete(id: string): Promise<void> {
-    await apiClient.delete(ENDPOINTS.NOTIFICATIONS.DELETE(id));
+  async delete(id: string): Promise<ResponseObject<Notification>> {
+    const response = await apiClient.delete<ResponseObject<Notification>>(ENDPOINTS.NOTIFICATIONS.DELETE(id));
+    return response.data;
   },
 
   // Bulk delete notifications
-  async bulkDelete(ids: string[]): Promise<void> {
-    await apiClient.post(ENDPOINTS.NOTIFICATIONS.BULK_DELETE, { ids });
+  async bulkDelete(ids: string[]): Promise<ResponseObject<Notification[]>> {
+    const response = await apiClient.post<ResponseObject<Notification[]>>(ENDPOINTS.NOTIFICATIONS.BULK_DELETE, { ids });
+    return response.data;
   },
 };
 

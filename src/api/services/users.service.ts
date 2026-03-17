@@ -4,14 +4,13 @@
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/config/api.config';
 import type {
-  ApiResponse,
   User,
   UpdateUserData,
   AssignRoleData,
   ChangeRoleData,
   UserPermissions,
-  PaginatedResponse,
 } from '@/types/api.types';
+import { ResponseObject } from "@/api/response-object.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,8 +68,8 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 // means the user never sees a failure on the first request after DB idle.
 
 async function withRetry<T>(
-  fn: () => Promise<T>,
-  retries = 1,
+    fn: () => Promise<T>,
+    retries = 1,
 ): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -95,15 +94,13 @@ export const usersService = {
   /**
    * Get all users in the organisation (OrgAdmin / SuperAdmin)
    */
-  async getOrganisationUsers(): Promise<User[]> {
+  async getOrganisationUsers(): Promise<ResponseObject<User[]>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.get<ApiResponse<User[]>>(
-          ENDPOINTS.USERS.ORGANISATION_USERS,
+        const response = await apiClient.get<ResponseObject<User[]>>(
+            ENDPOINTS.USERS.ORGANISATION_USERS,
         );
-        const data = response.data.data;
-        if (!data) return [];
-        return Array.isArray(data) ? data : (data as any).items ?? [];
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to load members'));
       }
@@ -113,18 +110,14 @@ export const usersService = {
   /**
    * Get all users with optional filters
    */
-  async getUsers(params?: FetchUsersParams): Promise<User[]> {
+  async getUsers(params?: FetchUsersParams): Promise<ResponseObject<User[]>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.get<ApiResponse<User[]>>(
-          ENDPOINTS.USERS.BASE,
-          { params },
+        const response = await apiClient.get<ResponseObject<User[]>>(
+            ENDPOINTS.USERS.BASE,
+            { params },
         );
-        const data = response.data.data;
-        if (!data) return [];
-        return Array.isArray(data)
-          ? data
-          : (data as unknown as PaginatedResponse<User>).items ?? [];
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to load users'));
       }
@@ -134,13 +127,13 @@ export const usersService = {
   /**
    * Get user by ID
    */
-  async getUserById(userId: string): Promise<User> {
+  async getUserById(userId: string): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.get<ApiResponse<User>>(
-          ENDPOINTS.USERS.BY_ID(userId),
+        const response = await apiClient.get<ResponseObject<User>>(
+            ENDPOINTS.USERS.BY_ID(userId),
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to load user'));
       }
@@ -152,9 +145,9 @@ export const usersService = {
    *
    * The backend controller extracts organisationId from the caller's JWT —
    * do NOT include it in the payload. The backend CreateUserDto accepts:
-   *   firstName, lastName, email, role, title?, phoneNumber?, profilePictureUrl?
+   * firstName, lastName, email, role, title?, phoneNumber?, profilePictureUrl?
    */
-  async createUser(data: CreateUserData): Promise<User> {
+  async createUser(data: CreateUserData): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       // Build a clean payload — only defined, non-empty fields
       const payload: Record<string, string> = {
@@ -168,11 +161,11 @@ export const usersService = {
       if (data.profilePictureUrl?.trim()) payload.profilePictureUrl = data.profilePictureUrl.trim();
 
       try {
-        const response = await apiClient.post<ApiResponse<User>>(
-          ENDPOINTS.USERS.BASE,
-          payload,
+        const response = await apiClient.post<ResponseObject<User>>(
+            ENDPOINTS.USERS.BASE,
+            payload,
         );
-        return response.data.data;
+        return response.data;
       } catch (err: any) {
         // Surface the real NestJS error so the toast is useful
         const status = err?.response?.status;
@@ -191,14 +184,14 @@ export const usersService = {
   /**
    * Update user details
    */
-  async updateUser(userId: string, data: UpdateUserData): Promise<User> {
+  async updateUser(userId: string, data: UpdateUserData): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.patch<ApiResponse<User>>(
-          ENDPOINTS.USERS.BY_ID(userId),
-          data,
+        const response = await apiClient.patch<ResponseObject<User>>(
+            ENDPOINTS.USERS.BY_ID(userId),
+            data,
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to update member'));
       }
@@ -208,10 +201,11 @@ export const usersService = {
   /**
    * Delete user
    */
-  async deleteUser(userId: string): Promise<void> {
+  async deleteUser(userId: string): Promise<ResponseObject<void>> {
     return withRetry(async () => {
       try {
-        await apiClient.delete(ENDPOINTS.USERS.BY_ID(userId));
+        const response = await apiClient.delete<ResponseObject<void>>(ENDPOINTS.USERS.BY_ID(userId));
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to remove member'));
       }
@@ -221,14 +215,14 @@ export const usersService = {
   /**
    * Assign role to user
    */
-  async assignRole(userId: string, data: AssignRoleData): Promise<User> {
+  async assignRole(userId: string, data: AssignRoleData): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.post<ApiResponse<User>>(
-          ENDPOINTS.USERS.ASSIGN_ROLE(userId),
-          data,
+        const response = await apiClient.post<ResponseObject<User>>(
+            ENDPOINTS.USERS.ASSIGN_ROLE(userId),
+            data,
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to assign role'));
       }
@@ -238,14 +232,14 @@ export const usersService = {
   /**
    * Change user role
    */
-  async changeRole(userId: string, data: ChangeRoleData): Promise<User> {
+  async changeRole(userId: string, data: ChangeRoleData): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.patch<ApiResponse<User>>(
-          ENDPOINTS.USERS.CHANGE_ROLE(userId),
-          data,
+        const response = await apiClient.patch<ResponseObject<User>>(
+            ENDPOINTS.USERS.CHANGE_ROLE(userId),
+            data,
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to change role'));
       }
@@ -256,14 +250,14 @@ export const usersService = {
    * Toggle user active status.
    * Sends { isActive } object — NOT a raw boolean.
    */
-  async toggleStatus(userId: string, isActive: boolean): Promise<User> {
+  async toggleStatus(userId: string, isActive: boolean): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.patch<ApiResponse<User>>(
-          ENDPOINTS.USERS.TOGGLE_STATUS(userId),
-          { isActive },
+        const response = await apiClient.patch<ResponseObject<User>>(
+            ENDPOINTS.USERS.TOGGLE_STATUS(userId),
+            { isActive },
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to update member status'));
       }
@@ -273,13 +267,13 @@ export const usersService = {
   /**
    * Get user permissions
    */
-  async getPermissions(userId: string): Promise<UserPermissions> {
+  async getPermissions(userId: string): Promise<ResponseObject<UserPermissions>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.get<ApiResponse<UserPermissions>>(
-          ENDPOINTS.USERS.PERMISSIONS(userId),
+        const response = await apiClient.get<ResponseObject<UserPermissions>>(
+            ENDPOINTS.USERS.PERMISSIONS(userId),
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to load permissions'));
       }
@@ -294,14 +288,14 @@ export const usersService = {
     lastName:  string;
     email:     string;
     password:  string;
-  }): Promise<User> {
+  }): Promise<ResponseObject<User>> {
     return withRetry(async () => {
       try {
-        const response = await apiClient.post<ApiResponse<User>>(
-          ENDPOINTS.USERS.SUPER_ADMIN,
-          data,
+        const response = await apiClient.post<ResponseObject<User>>(
+            ENDPOINTS.USERS.SUPER_ADMIN,
+            data,
         );
-        return response.data.data;
+        return response.data;
       } catch (err) {
         throw new Error(extractErrorMessage(err, 'Failed to create super admin'));
       }
