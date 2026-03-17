@@ -42,6 +42,36 @@ import type { DisplayUser } from '@/components/members/types';
 
 type ViewMode = 'grid' | 'list';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Safely unwrap the backend ResponseObject into a plain User array.
+ *
+ * The backend always returns:
+ *   { statusCode, message, data: User[], pageInfo?: {...} }
+ *
+ * Previous code checked for `.items` which never exists — so members
+ * were always an empty array even when the fetch succeeded.
+ */
+function extractUsers(raw: unknown): ApiUser[] {
+  if (!raw) return [];
+
+  // Already a plain array (shouldn't happen with this backend, but safe)
+  if (Array.isArray(raw)) return raw as ApiUser[];
+
+  const obj = raw as Record<string, unknown>;
+
+  // Standard ResponseObject shape: { data: User[] }
+  if (Array.isArray(obj.data)) return obj.data as ApiUser[];
+
+  // Fallback shapes just in case
+  if (Array.isArray(obj.users))   return obj.users   as ApiUser[];
+  if (Array.isArray(obj.members)) return obj.members as ApiUser[];
+  if (Array.isArray(obj.items))   return obj.items   as ApiUser[];
+
+  return [];
+}
+
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, accentClass }: {
@@ -88,18 +118,15 @@ export default function MembersPage() {
     isLoading: orgLoading,
   } = useMyOrganisation(!authLoading && !!user);
 
-  // Definitive org identifiers
   const organisationId: string | null = currentorganisationId ?? myOrg?.organisationId ?? null;
   const orgCode:        string | null = myOrg?.orgCode ?? null;
   const orgName:        string | null = myOrg?.organisationName ?? null;
 
   // ── Permissions ───────────────────────────────────────────────────────────
-  // Resilient: true if role parsed correctly OR if org fetch returned data
   const canManage = isSuperAdmin || isOrgAdmin || (!!myOrg && !!user);
   const canUpdate = canManage;
   const canDelete = canManage;
 
-  // Only show org-setup when all queries done and genuinely no org
   const needsOrgSetup = !!user && !authLoading && !orgLoading && !organisationId && !myOrg;
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -109,10 +136,11 @@ export default function MembersPage() {
   const deleteUser = useDeleteUser();
 
   // ── Transform → DisplayUser ───────────────────────────────────────────────
+  // FIX: use extractUsers() to correctly unwrap { data: User[] } from the
+  // ResponseObject. The old code checked for `.items` which doesn't exist
+  // in the backend response, so members was always an empty array.
   const allMembers = useMemo<DisplayUser[]>(() => {
-    const items: ApiUser[] = Array.isArray(membersRaw)
-      ? membersRaw
-      : (membersRaw as { items?: ApiUser[] } | undefined)?.items ?? [];
+    const items = extractUsers(membersRaw);
 
     return items.map((u): DisplayUser => ({
       id:        u.userId ?? u.id ?? '',
@@ -124,7 +152,7 @@ export default function MembersPage() {
       role:      u.role,
       position:  u.title,
       phone:     u.phoneNumber,
-      isActive:  u.isActive ?? true,
+      isActive:  u.isActive ?? u.status === 'ACTIVE' ?? true,
     }));
   }, [membersRaw]);
 
@@ -145,18 +173,14 @@ export default function MembersPage() {
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     total:  allMembers.length,
-    board:  allMembers.filter(m => m.role === 'BoardMember').length,
-    admins: allMembers.filter(m => m.role === 'Admin' || m.role === 'OrgAdmin').length,
+    board:  allMembers.filter(m => m.role === 'BOARD_MEMBER' || m.role === 'BoardMember').length,
+    admins: allMembers.filter(m => m.role === 'ORG_ADMIN' || m.role === 'OrgAdmin' || m.role === 'Admin').length,
     active: allMembers.filter(m => m.isActive).length,
   }), [allMembers]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  // Add member — payload matches backend CreateUserDto exactly (no password)
   const handleAddSubmit = useCallback((data: AddMemberFormData) => {
-    // The backend CreateUserDto accepts: firstName, lastName, email, role,
-    // title?, phoneNumber?, profilePictureUrl?
-    // organisationId is NOT in the DTO — the backend assigns it from the JWT.
     createUser.mutate(data, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -173,10 +197,7 @@ export default function MembersPage() {
     });
   }, [createUser, queryClient]);
 
-  // Invite — sends orgCode in payload so members know what code to use at login
   const handleInviteSubmit = useCallback((data: InviteFormData) => {
-    // TODO: wire to your invite endpoint e.g. POST /api/v1/auth/invite
-    // Payload: { emails: string[], role: string, orgCode: string, message?: string }
     console.info('[Invite] payload:', data);
     const count = data.emails.length;
     toast.success(
@@ -190,7 +211,6 @@ export default function MembersPage() {
     setShowInviteDialog(false);
   }, [orgCode]);
 
-  // Edit member
   const handleEditSubmit = useCallback((userId: string, data: EditMemberFormData) => {
     updateUser.mutate({ userId, data }, {
       onSuccess: () => {
@@ -202,21 +222,19 @@ export default function MembersPage() {
     });
   }, [updateUser, queryClient]);
 
-  // Toggle active status
-  const handleToggleActive = useCallback((user: DisplayUser) => {
+  const handleToggleActive = useCallback((member: DisplayUser) => {
     updateUser.mutate(
-      { userId: user.id, data: { isActive: !user.isActive } },
+      { userId: member.id, data: { isActive: !member.isActive } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['users'] });
-          toast.success(user.isActive ? 'Member deactivated' : 'Member activated');
+          toast.success(member.isActive ? 'Member deactivated' : 'Member activated');
         },
         onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to update member'),
       },
     );
   }, [updateUser, queryClient]);
 
-  // Delete member
   const handleDeleteConfirm = useCallback(() => {
     if (!deleteTargetId) return;
     deleteUser.mutate(deleteTargetId, {
@@ -372,10 +390,9 @@ export default function MembersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All roles</SelectItem>
-            <SelectItem value="OrgAdmin">Org Admin</SelectItem>
-            <SelectItem value="Admin">Admin</SelectItem>
-            <SelectItem value="BoardMember">Board Member</SelectItem>
-            <SelectItem value="User">User</SelectItem>
+            <SelectItem value="ORG_ADMIN">Org Admin</SelectItem>
+            <SelectItem value="BOARD_MEMBER">Board Member</SelectItem>
+            <SelectItem value="SECRETARY">Secretary</SelectItem>
           </SelectContent>
         </Select>
 
@@ -490,9 +507,8 @@ export default function MembersPage() {
         />
       )}
 
-      {/* ── Dialogs ────────────────────────────────────────────────────────── */}
+      {/* ── Dialogs ── */}
 
-      {/* Add Member — payload matches CreateUserDto (no password) */}
       <Dialog open={showAddDialog} onOpenChange={open => { if (!open) setShowAddDialog(false); }}>
         <DialogContent className="sm:max-w-md">
           <AddMemberDialog
@@ -505,7 +521,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Invite — includes orgCode so members know their login code */}
       <Dialog open={showInviteDialog} onOpenChange={open => { if (!open) setShowInviteDialog(false); }}>
         <DialogContent className="sm:max-w-md">
           <InviteDialog
@@ -517,7 +532,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Member */}
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null); }}>
         <DialogContent className="sm:max-w-md">
           {editTarget && (
@@ -532,7 +546,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
       <AlertDialog open={!!deleteTargetId}
         onOpenChange={open => { if (!open) setDeleteTargetId(null); }}>
         <AlertDialogContent>
