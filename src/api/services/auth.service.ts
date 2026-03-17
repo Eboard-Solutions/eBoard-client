@@ -4,7 +4,6 @@
 import apiClient, { TokenService } from '@/api/client';
 import { ENDPOINTS } from '@/config/api.config';
 import type {
-  ApiResponse,
   LoginCredentials,
   OrgAdminLoginCredentials,
   SuperAdminLoginCredentials,
@@ -18,6 +17,8 @@ import type {
   ActivateAccountData,
   UpdateProfileData,
 } from '@/types/api.types';
+import type {ResponseObject} from "@/api/response-object.ts";
+
 
 // Decode JWT payload (no verification - just parsing)
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -25,10 +26,10 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
+        atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
     );
     return JSON.parse(jsonPayload);
   } catch {
@@ -40,12 +41,12 @@ export const authService = {
    * Login with organization code (regular users/board members)
    */
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
-    const response = await apiClient.post<ApiResponse<LoginResponse>>(
-      ENDPOINTS.AUTH.LOGIN,
-      credentials
+    const response = await apiClient.post<ResponseObject<LoginResponse>>(
+        ENDPOINTS.AUTH.LOGIN,
+        credentials
     );
-    const data = response.data.data;
-    TokenService.setTokens(data.at, data.rt);
+    const data = response.data.data!;
+    TokenService.setTokens(data.accessToken, data.refreshToken);
     TokenService.setUser(data.user);
     return data;
   },
@@ -54,12 +55,12 @@ export const authService = {
    * Login for organization admins (without org code)
    */
   async orgAdminLogin(credentials: OrgAdminLoginCredentials): Promise<LoginResponse> {
-    const response = await apiClient.post<ApiResponse<LoginResponse>>(
-      ENDPOINTS.AUTH.ORG_ADMIN_LOGIN,
-      credentials
+    const response = await apiClient.post<ResponseObject<LoginResponse>>(
+        ENDPOINTS.AUTH.ORG_ADMIN_LOGIN,
+        credentials
     );
-    const data = response.data.data;
-    TokenService.setTokens(data.at, data.rt);
+    const data = response.data.data!;
+    TokenService.setTokens(data.accessToken, data.refreshToken);
     TokenService.setUser(data.user);
     return data;
   },
@@ -70,11 +71,11 @@ export const authService = {
    * We decode the JWT to extract user info.
    */
   async superAdminLogin(credentials: SuperAdminLoginCredentials): Promise<LoginResponse> {
-    const response = await apiClient.post<ApiResponse<{ at: string; rt: string }>>(
-      ENDPOINTS.AUTH.SUPER_ADMIN_LOGIN,
-      credentials
+    const response = await apiClient.post<ResponseObject<{ at: string; rt: string }>>(
+        ENDPOINTS.AUTH.SUPER_ADMIN_LOGIN,
+        credentials
     );
-    const data = response.data.data;
+    const data = response.data.data!;
     TokenService.setTokens(data.at, data.rt);
 
     // Super admin login doesn't return user object - decode from JWT
@@ -91,16 +92,16 @@ export const authService = {
     };
 
     TokenService.setUser(user);
-    return { at: data.at, rt: data.rt, user };
+    return { accessToken: data.at, refreshToken: data.rt, user };
   },
 
   /**
    * Register a new organization admin
    */
   async registerOrgAdmin(data: RegisterOrgAdminData): Promise<unknown> {
-    const response = await apiClient.post<ApiResponse<unknown>>(
-      ENDPOINTS.AUTH.REGISTER_ORG_ADMIN,
-      data
+    const response = await apiClient.post<ResponseObject<unknown>>(
+        ENDPOINTS.AUTH.REGISTER_ORG_ADMIN,
+        data
     );
     return response.data.data;
   },
@@ -120,10 +121,10 @@ export const authService = {
    * Refresh tokens
    */
   async refreshTokens(): Promise<{ at: string; rt: string }> {
-    const response = await apiClient.post<ApiResponse<{ at: string; rt: string }>>(
-      ENDPOINTS.AUTH.REFRESH_TOKENS
+    const response = await apiClient.post<ResponseObject<{ at: string; rt: string }>>(
+        ENDPOINTS.AUTH.REFRESH_TOKENS
     );
-    const data = response.data.data;
+    const data = response.data.data!;
     TokenService.setTokens(data.at, data.rt);
     return data;
   },
@@ -132,21 +133,21 @@ export const authService = {
    * Get current user profile
    */
   async getMe(): Promise<AuthUser> {
-    const response = await apiClient.get<ApiResponse<AuthUser>>(
-      ENDPOINTS.AUTH.ME
+    const response = await apiClient.get<ResponseObject<AuthUser>>(
+        ENDPOINTS.AUTH.ME
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
    * Update current user profile
    */
   async updateMe(data: UpdateProfileData): Promise<AuthUser> {
-    const response = await apiClient.patch<ApiResponse<AuthUser>>(
-      ENDPOINTS.AUTH.ME,
-      data
+    const response = await apiClient.patch<ResponseObject<AuthUser>>(
+        ENDPOINTS.AUTH.ME,
+        data
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -188,11 +189,11 @@ export const authService = {
    * Verify token validity
    */
   async introspect(token: string): Promise<boolean> {
-    const response = await apiClient.post<ApiResponse<{ valid: boolean }>>(
-      ENDPOINTS.AUTH.INTROSPECT,
-      { token }
+    const response = await apiClient.post<ResponseObject<{ valid: boolean }>>(
+        ENDPOINTS.AUTH.INTROSPECT,
+        { token }
     );
-    return response.data.data.valid;
+    return response.data.data!.valid;
   },
 
   /**

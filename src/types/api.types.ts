@@ -64,12 +64,12 @@ export interface AuthUser {
   orgCode: string | null;
 }
 
-export interface AuthTokens {
-  at: string; // access token
-  rt: string; // refresh token
+export interface AuthData {
+  accessToken: string; // access token
+  refreshToken: string; // refresh token
 }
 
-export interface LoginResponse extends AuthTokens {
+export interface LoginResponse extends AuthData {
   user: AuthUser;
 }
 
