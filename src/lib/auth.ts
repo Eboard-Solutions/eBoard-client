@@ -28,23 +28,25 @@ export const authService = {
   // ─── Password ─────────────────────────────────────────────────────────────
 
   forgotPassword: apiAuthService.forgotPassword.bind(apiAuthService),
+  resetPassword: apiAuthService.resetPassword.bind(apiAuthService),
+  activateAccount: apiAuthService.activateAccount.bind(apiAuthService),
 
   // ─── Token / user helpers (synchronous localStorage reads) ───────────────
 
-  getToken:        () => TokenService.getAccessToken(),
+  getToken: () => TokenService.getAccessToken(),
   getRefreshToken: () => TokenService.getRefreshToken(),
 
   /** Returns the stored user object set during login */
   getUser: () => TokenService.getUser<{
-    userId:             string;
-    email:              string;
-    firstName:          string;
-    lastName:           string;
-    role:               string;
-    hasOrganisation:    boolean;
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    hasOrganisation: boolean;
     organisationStatus: string | null;
-    orgCode:            string | null;
-    organisationId?:    string | null;
+    orgCode: string | null;
+    organisationId?: string | null;
   }>(),
 
   getCurrentUser(): { name: string; email: string; role: string } | null {
