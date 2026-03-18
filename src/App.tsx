@@ -10,11 +10,21 @@ import { SuperAdminLayout } from '@/components/layout/SuperAdminLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { TokenService } from '@/api/client';
 
+<<<<<<< HEAD
 // ── Auth Pages ────────────────────────────────────────────────────────────────
 import { SignIn }         from '@/pages/auth/SignIn';
 import { SignUp }         from '@/pages/auth/SignUp';
 import { UserLogin }      from '@/pages/auth/UserLogin';
 import { ForgotPassword } from '@/pages/auth/ForgotPassword';
+=======
+// ── Auth Pages ───────────────────────────────────────────────────────────────
+import { SignIn } from "@/pages/auth/SignIn";
+import { SignUp } from "@/pages/auth/SignUp";
+import { UserLogin } from "@/pages/auth/UserLogin"; // ← possibly unused / duplicate?
+import { ForgotPassword } from "@/pages/auth/ForgotPassword";
+import { ActivateAccount } from "@/pages/auth/ActivateAccount";
+import { ResetPasswordForm } from "@/pages/auth/ResetPasswordForm";
+>>>>>>> fa3ebeb082c5272d84aa7abdb90ec8c8af4a89a9
 
 // ── Main App Pages ─────────────────────────────────────────────────────────────
 import { Dashboard }     from '@/pages/Dashboard';
@@ -198,6 +208,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <Router base="/">
         <Switch>
+<<<<<<< HEAD
 
           {/* ── Public / Auth ───────────────────────────────────────── */}
           <Route path="/auth/signin"          component={SignIn} />
@@ -260,6 +271,183 @@ export default function App() {
           <SuperRoute path="/super-admin/settings">       <SettingsManagement />      </SuperRoute>
 
           {/* ── 404 ─────────────────────────────────────────────────── */}
+=======
+          {/* ── Public / Auth Routes ── */}
+          <Route path="/auth/signin" component={SignIn} />
+          <Route path="/auth/signup" component={SignUp} />
+          <Route path="/auth/user-login" component={UserLogin} />{" "}
+          {/* possibly legacy */}
+          <Route path="/auth/forgot-password" component={ForgotPassword} />
+          <Route path="/auth/activate-account" component={ActivateAccount} />
+          <Route path="/auth/reset-password" component={ResetPasswordForm} />
+          <Route path="/unauthorized" component={UnauthorizedPage} />
+          {/* ── Root → smart redirect ── */}
+          <Route path="/" component={RootRedirect} />
+          {/* ── Main App Routes (user + admin) ── */}
+          <Route path="/dashboard">
+            <ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/meetings">
+            <ProtectedRoute>
+              <AppLayout>
+                <Meetings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/meetings/live/:id">
+            <ProtectedRoute>
+              <AppLayout fullWidth>
+                <LiveMeeting />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/members">
+            <ProtectedRoute>
+              <AppLayout>
+                <Members />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/documents">
+            <ProtectedRoute>
+              <AppLayout>
+                <Documents />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/voting">
+            <ProtectedRoute>
+              <AppLayout>
+                <Voting />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/tasks">
+            <ProtectedRoute>
+              <AppLayout>
+                <Tasks />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/finance">
+            <ProtectedRoute requiredRoles={["admin", "superadmin"]}>
+              <AppLayout>
+                <Finance />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/announcements">
+            <ProtectedRoute>
+              <AppLayout>
+                <Announcements />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/reports">
+            <ProtectedRoute requiredRoles={["admin", "superadmin"]}>
+              <AppLayout>
+                <Reports />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/settings">
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/organisation">
+            <ProtectedRoute>
+              <AppLayout>
+                <OrganisationPage />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+          {/* ── Super Admin Section ── */}
+          <Route path="/super-admin">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <SuperAdminDashboard />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/users">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <UsersManagement />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/organisations">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <OrganisationsManagement />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/create-admin">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <CreateSuperAdminPage />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/meetings">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <MeetingsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/documents">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <DocumentsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/tasks">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <TasksOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/polls">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <PollsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/announcements">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <AnnouncementsOverview />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/finance">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <FinanceOverviewPage />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/super-admin/settings">
+            <ProtectedRoute requiredRoles={["superadmin"]}>
+              <SuperAdminLayout>
+                <SettingsManagement />
+              </SuperAdminLayout>
+            </ProtectedRoute>
+          </Route>
+          {/* ── Catch-all 404 ── */}
+>>>>>>> fa3ebeb082c5272d84aa7abdb90ec8c8af4a89a9
           <Route component={NotFoundPage} />
 
         </Switch>
