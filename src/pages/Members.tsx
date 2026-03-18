@@ -28,6 +28,7 @@ import {
   useCreateUser,
   useUpdateUser,
   useDeleteUser,
+  useToggleUserStatus,
 } from '@/hooks/api/useUsers';
 import type { User as ApiUser } from '@/types/api.types';
 
@@ -132,8 +133,9 @@ export default function MembersPage() {
   // ── Data ──────────────────────────────────────────────────────────────────
   const { data: membersRaw, isLoading: membersLoading } = useOrganisationUsers();
   const createUser = useCreateUser();
-  const updateUser = useUpdateUser();
-  const deleteUser = useDeleteUser();
+  const updateUser      = useUpdateUser();
+  const toggleStatus    = useToggleUserStatus();
+  const deleteUser      = useDeleteUser();
 
   // ── Transform → DisplayUser ───────────────────────────────────────────────
   // FIX: use extractUsers() to correctly unwrap { data: User[] } from the
@@ -222,18 +224,21 @@ export default function MembersPage() {
     });
   }, [updateUser, queryClient]);
 
+  // FIX: updateUser's UpdateUserDto does not include isActive.
+  // The backend exposes a dedicated PATCH /:userId/toggle-status endpoint
+  // that accepts { isActive: boolean }. Use useToggleUserStatus for this.
   const handleToggleActive = useCallback((member: DisplayUser) => {
-    updateUser.mutate(
-      { userId: member.id, data: { isActive: !member.isActive } },
+    toggleStatus.mutate(
+      { userId: member.id, isActive: !member.isActive },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['users'] });
           toast.success(member.isActive ? 'Member deactivated' : 'Member activated');
         },
-        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to update member'),
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to toggle member status'),
       },
     );
-  }, [updateUser, queryClient]);
+  }, [toggleStatus, queryClient]);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!deleteTargetId) return;

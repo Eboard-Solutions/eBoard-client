@@ -34,7 +34,7 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 function validateFile(file: File): void {
   if (!ALLOWED_MIME_TYPES.has(file.type)) {
     throw new Error(
-        'Unsupported file type. Please upload a PDF, Word, Excel, or PowerPoint file.'
+      'Unsupported file type. Please upload a PDF, Word, Excel, or PowerPoint file.'
     );
   }
   if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -43,13 +43,22 @@ function validateFile(file: File): void {
 }
 
 export const documentsService = {
+  /**
+   * FIX: was returning response.data.data (the unwrapped array) which made
+   * the return type lie — the hook declared ResponseObject<Document[]> but
+   * actually received Document[]. The page then called .items on that array
+   * and always got undefined → empty list.
+   *
+   * Now returns the full ResponseObject so the shape matches the declared
+   * type and the page can safely read .data from it.
+   */
   async getDocuments(filters: DocumentFilters = {}): Promise<ResponseObject<Document[]>> {
     try {
       const response = await apiClient.get<ResponseObject<Document[]>>(
-          ENDPOINTS.DOCUMENTS.BASE,
-          { params: filters }
+        ENDPOINTS.DOCUMENTS.BASE,
+        { params: filters }
       );
-      return response.data.data;
+      return response.data; // ← return the full wrapper, not .data.data
     } catch (error) {
       throw normaliseError(error, 'Failed to fetch documents. Please check your connection.');
     }
@@ -59,7 +68,7 @@ export const documentsService = {
     if (!id?.trim()) throw new Error('Document ID is required.');
     try {
       const response = await apiClient.get<ResponseObject<Document>>(
-          ENDPOINTS.DOCUMENTS.BY_ID(id)
+        ENDPOINTS.DOCUMENTS.BY_ID(id)
       );
       return response.data;
     } catch (error) {
@@ -73,17 +82,12 @@ export const documentsService = {
     validateFile(data.file);
 
     try {
-      // Send placeholder file metadata to satisfy @IsNotEmpty() DTO validators.
-      // The backend service.create() ALWAYS overwrites fileName/fileType/fileSize/fileUrl
-      // from the actual multer file after storage upload, so these values are never persisted.
-      // uploadedBy is also overwritten by the service from @GetUser(), but the DTO requires it.
       const documentMetadata: Record<string, unknown> = {
         title: data.title.trim(),
         fileName: data.file.name,
         fileType: data.file.type,
         fileSize: data.file.size,
-        uploadedBy: 'pending', // overwritten server-side from JWT via @GetUser()
-        // accessLevel MUST be one of: 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER'
+        uploadedBy: 'pending',
         accessLevel: data.accessLevel ?? 'VIEWER',
       };
 
@@ -97,9 +101,9 @@ export const documentsService = {
       formData.append('document', JSON.stringify(documentMetadata));
 
       const response = await apiClient.post<ResponseObject<Document>>(
-          ENDPOINTS.DOCUMENTS.CREATE,
-          formData,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
+        ENDPOINTS.DOCUMENTS.CREATE,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
       return response.data;
     } catch (error) {
@@ -118,8 +122,6 @@ export const documentsService = {
 
     try {
       if (data.file) {
-        // File replacement — backend overwrites fileName/fileType/fileSize/fileUrl
-        // from the uploaded file, so we only send user-editable metadata.
         const documentMetadata: Record<string, unknown> = {};
         if (data.title?.trim()) documentMetadata.title = data.title.trim();
         if (data.description?.trim()) documentMetadata.description = data.description.trim();
@@ -132,17 +134,16 @@ export const documentsService = {
         fd.append('document', JSON.stringify(documentMetadata));
 
         const response = await apiClient.patch<ResponseObject<Document>>(
-            ENDPOINTS.DOCUMENTS.UPDATE(id),
-            fd,
-            { headers: { 'Content-Type': 'multipart/form-data' } }
+          ENDPOINTS.DOCUMENTS.UPDATE(id),
+          fd,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
         );
         return response.data;
       } else {
-        // Metadata-only update → plain JSON body, no FormData needed
         const { file: _file, ...rest } = data as any;
         const response = await apiClient.patch<ResponseObject<Document>>(
-            ENDPOINTS.DOCUMENTS.UPDATE(id),
-            rest
+          ENDPOINTS.DOCUMENTS.UPDATE(id),
+          rest
         );
         return response.data;
       }
@@ -154,7 +155,9 @@ export const documentsService = {
   async deleteDocument(id: string): Promise<ResponseObject<Document>> {
     if (!id?.trim()) throw new Error('Document ID is required.');
     try {
-      const response = await apiClient.delete<ResponseObject<Document>>(ENDPOINTS.DOCUMENTS.DELETE(id));
+      const response = await apiClient.delete<ResponseObject<Document>>(
+        ENDPOINTS.DOCUMENTS.DELETE(id)
+      );
       return response.data;
     } catch (error) {
       throw normaliseError(error, 'Failed to delete document. Please try again.');
@@ -166,7 +169,10 @@ export const documentsService = {
       throw new Error('At least one document ID is required for bulk delete.');
     }
     try {
-      const response = await apiClient.post<ResponseObject<Document[]>>(ENDPOINTS.DOCUMENTS.BULK_DELETE, data);
+      const response = await apiClient.post<ResponseObject<Document[]>>(
+        ENDPOINTS.DOCUMENTS.BULK_DELETE,
+        data
+      );
       return response.data;
     } catch (error) {
       throw normaliseError(error, 'Bulk delete failed. Some documents may not have been removed.');

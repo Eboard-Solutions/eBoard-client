@@ -1,6 +1,4 @@
 // src/hooks/api/useAgendas.ts
-// React Query hooks for agenda management
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agendasService, type FetchAgendasParams } from '@/api/services/agendas.service';
 import type {
@@ -12,65 +10,70 @@ import type {
 } from '@/types/api.types';
 
 export const AGENDAS_QUERY_KEYS = {
-  all: ['agendas'] as const,
-  lists: () => [...AGENDAS_QUERY_KEYS.all, 'list'] as const,
-  list: (params?: FetchAgendasParams) => [...AGENDAS_QUERY_KEYS.lists(), params] as const,
-  details: () => [...AGENDAS_QUERY_KEYS.all, 'detail'] as const,
-  detail: (id: string) => [...AGENDAS_QUERY_KEYS.details(), id] as const,
+  all:       ['agendas'] as const,
+  lists:     () => [...AGENDAS_QUERY_KEYS.all, 'list']                     as const,
+  list:      (params?: FetchAgendasParams) => [...AGENDAS_QUERY_KEYS.lists(), params] as const,
+  details:   () => [...AGENDAS_QUERY_KEYS.all, 'detail']                   as const,
+  detail:    (id: string) => [...AGENDAS_QUERY_KEYS.details(), id]         as const,
   byMeeting: (meetingId: string) => [...AGENDAS_QUERY_KEYS.all, 'meeting', meetingId] as const,
-  stats: (id: string) => [...AGENDAS_QUERY_KEYS.all, 'stats', id] as const,
+  stats:     (id: string) => [...AGENDAS_QUERY_KEYS.all, 'stats', id]      as const,
 };
 
-/**
- * Hook to get all agendas with pagination
- */
 export function useAgendas(params?: FetchAgendasParams) {
   return useQuery({
     queryKey: AGENDAS_QUERY_KEYS.list(params),
-    queryFn: () => agendasService.getAgendas(params),
+    queryFn:  () => agendasService.getAgendas(params),
     staleTime: 2 * 60 * 1000,
   });
 }
 
-/**
- * Hook to get agenda by ID
- */
 export function useAgenda(agendaId: string) {
   return useQuery({
     queryKey: AGENDAS_QUERY_KEYS.detail(agendaId),
-    queryFn: () => agendasService.getAgendaById(agendaId),
-    enabled: !!agendaId,
+    queryFn:  () => agendasService.getAgendaById(agendaId),
+    enabled:  !!agendaId,
   });
 }
 
 /**
- * Hook to get agenda by meeting ID
+ * Fetch the agenda for a specific meeting.
+ *
+ * FIX: A 404 here is EXPECTED — it means the meeting has no agenda yet.
+ * Without `retry: false`, React Query retries 3 times on every 404,
+ * flooding the console with identical error logs every time a user
+ * selects a meeting that hasn't had an agenda created yet.
+ *
+ * The agendasService.getAgendaByMeetingId() already catches 404 and
+ * returns null, so the query data will be null (not an error) when
+ * no agenda exists. Components should treat null data as "no agenda yet"
+ * and show the create form — not an error state.
  */
 export function useAgendaByMeeting(meetingId: string) {
   return useQuery({
     queryKey: AGENDAS_QUERY_KEYS.byMeeting(meetingId),
-    queryFn: () => agendasService.getAgendaByMeetingId(meetingId),
-    enabled: !!meetingId,
+    queryFn:  () => agendasService.getAgendaByMeetingId(meetingId),
+    enabled:  !!meetingId,
+    // FIX: do not retry on any error — 404 = no agenda yet (not a real error)
+    retry: (failureCount, error: any) => {
+      const status = error?.response?.status;
+      if (status === 404 || status === 403) return false;
+      return failureCount < 1; // allow one retry for genuine network errors
+    },
+    // Treat null (no agenda) the same as stale data — no need to refetch constantly
+    staleTime: 30 * 1000,
   });
 }
 
-/**
- * Hook to get agenda statistics
- */
 export function useAgendaStats(agendaId: string) {
   return useQuery({
     queryKey: AGENDAS_QUERY_KEYS.stats(agendaId),
-    queryFn: () => agendasService.getAgendaStats(agendaId),
-    enabled: !!agendaId,
+    queryFn:  () => agendasService.getAgendaStats(agendaId),
+    enabled:  !!agendaId,
   });
 }
 
-/**
- * Hook to create a new agenda
- */
 export function useCreateAgenda() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: CreateAgendaData) => agendasService.createAgenda(data),
     onSuccess: (_, variables) => {
@@ -80,12 +83,8 @@ export function useCreateAgenda() {
   });
 }
 
-/**
- * Hook to update agenda
- */
 export function useUpdateAgenda() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ agendaId, data }: { agendaId: string; data: UpdateAgendaData }) =>
       agendasService.updateAgenda(agendaId, data),
@@ -96,12 +95,8 @@ export function useUpdateAgenda() {
   });
 }
 
-/**
- * Hook to delete agenda
- */
 export function useDeleteAgenda() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (agendaId: string) => agendasService.deleteAgenda(agendaId),
     onSuccess: () => {
@@ -110,12 +105,8 @@ export function useDeleteAgenda() {
   });
 }
 
-/**
- * Hook to publish agenda
- */
 export function usePublishAgenda() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (agendaId: string) => agendasService.publishAgenda(agendaId),
     onSuccess: (_, agendaId) => {
@@ -125,14 +116,8 @@ export function usePublishAgenda() {
   });
 }
 
-// ─── Agenda Items Hooks ─────────────────────────────────────
-
-/**
- * Hook to add item to agenda
- */
 export function useAddAgendaItem() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ agendaId, data }: { agendaId: string; data: CreateAgendaItemData }) =>
       agendasService.addItem(agendaId, data),
@@ -142,34 +127,21 @@ export function useAddAgendaItem() {
   });
 }
 
-/**
- * Hook to update agenda item
- */
 export function useUpdateAgendaItem() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({
-      agendaId,
-      itemId,
-      data,
-    }: {
-      agendaId: string;
-      itemId: string;
-      data: UpdateAgendaItemData;
-    }) => agendasService.updateItem(agendaId, itemId, data),
+      agendaId, itemId, data,
+    }: { agendaId: string; itemId: string; data: UpdateAgendaItemData }) =>
+      agendasService.updateItem(agendaId, itemId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: AGENDAS_QUERY_KEYS.detail(variables.agendaId) });
     },
   });
 }
 
-/**
- * Hook to delete agenda item
- */
 export function useDeleteAgendaItem() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ agendaId, itemId }: { agendaId: string; itemId: string }) =>
       agendasService.deleteItem(agendaId, itemId),
@@ -179,12 +151,8 @@ export function useDeleteAgendaItem() {
   });
 }
 
-/**
- * Hook to reorder agenda items
- */
 export function useReorderAgendaItems() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ agendaId, data }: { agendaId: string; data: ReorderAgendaItemsData }) =>
       agendasService.reorderItems(agendaId, data),
@@ -194,12 +162,8 @@ export function useReorderAgendaItems() {
   });
 }
 
-/**
- * Hook to start agenda item
- */
 export function useStartAgendaItem() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ agendaId, itemId }: { agendaId: string; itemId: string }) =>
       agendasService.startItem(agendaId, itemId),
@@ -210,12 +174,8 @@ export function useStartAgendaItem() {
   });
 }
 
-/**
- * Hook to complete agenda item
- */
 export function useCompleteAgendaItem() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ agendaId, itemId }: { agendaId: string; itemId: string }) =>
       agendasService.completeItem(agendaId, itemId),

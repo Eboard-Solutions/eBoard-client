@@ -1,6 +1,4 @@
 // src/hooks/api/useUsers.ts
-// React Query hooks for user management
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersService, type FetchUsersParams } from '@/api/services/users.service';
 import type {
@@ -10,66 +8,56 @@ import type {
   ChangeRoleData,
 } from '@/types/api.types';
 
+// ─── Query Keys ───────────────────────────────────────────────────────────────
+
 export const USERS_QUERY_KEYS = {
-  all: ['users'] as const,
-  lists: () => [...USERS_QUERY_KEYS.all, 'list'] as const,
-  list: (params?: FetchUsersParams) => [...USERS_QUERY_KEYS.lists(), params] as const,
-  organisation: () => [...USERS_QUERY_KEYS.all, 'organisation'] as const,
-  details: () => [...USERS_QUERY_KEYS.all, 'detail'] as const,
-  detail: (id: string) => [...USERS_QUERY_KEYS.details(), id] as const,
-  permissions: (id: string) => [...USERS_QUERY_KEYS.all, 'permissions', id] as const,
+  all:          ['users'] as const,
+  lists:        () => [...USERS_QUERY_KEYS.all, 'list']                        as const,
+  list:         (params?: FetchUsersParams) => [...USERS_QUERY_KEYS.lists(), params] as const,
+  organisation: () => [...USERS_QUERY_KEYS.all, 'organisation']                as const,
+  details:      () => [...USERS_QUERY_KEYS.all, 'detail']                      as const,
+  detail:       (id: string) => [...USERS_QUERY_KEYS.details(), id]            as const,
+  permissions:  (id: string) => [...USERS_QUERY_KEYS.all, 'permissions', id]   as const,
 };
 
-/**
- * Hook to get all users in the organisation
- */
+// ─── Queries ──────────────────────────────────────────────────────────────────
+
 export function useOrganisationUsers() {
   return useQuery({
     queryKey: USERS_QUERY_KEYS.organisation(),
-    queryFn: () => usersService.getOrganisationUsers(),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-}
-
-/**
- * Hook to get users with optional filters
- */
-export function useUsers(params?: FetchUsersParams) {
-  return useQuery({
-    queryKey: USERS_QUERY_KEYS.list(params),
-    queryFn: () => usersService.getUsers(params),
+    queryFn:  () => usersService.getOrganisationUsers(),
     staleTime: 2 * 60 * 1000,
   });
 }
 
-/**
- * Hook to get user by ID
- */
+export function useUsers(params?: FetchUsersParams) {
+  return useQuery({
+    queryKey: USERS_QUERY_KEYS.list(params),
+    queryFn:  () => usersService.getUsers(params),
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
 export function useUser(userId: string) {
   return useQuery({
     queryKey: USERS_QUERY_KEYS.detail(userId),
-    queryFn: () => usersService.getUserById(userId),
-    enabled: !!userId,
+    queryFn:  () => usersService.getUserById(userId),
+    enabled:  !!userId,
   });
 }
 
-/**
- * Hook to get user permissions
- */
 export function useUserPermissions(userId: string) {
   return useQuery({
     queryKey: USERS_QUERY_KEYS.permissions(userId),
-    queryFn: () => usersService.getPermissions(userId),
-    enabled: !!userId,
+    queryFn:  () => usersService.getPermissions(userId),
+    enabled:  !!userId,
   });
 }
 
-/**
- * Hook to create a new user
- */
+// ─── Mutations ────────────────────────────────────────────────────────────────
+
 export function useCreateUser() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: CreateUserData) => usersService.createUser(data),
     onSuccess: () => {
@@ -78,28 +66,21 @@ export function useCreateUser() {
   });
 }
 
-/**
- * Hook to update user
- */
 export function useUpdateUser() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: UpdateUserData }) =>
       usersService.updateUser(userId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(variables.userId) });
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(userId) });
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.lists() });
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.organisation() });
     },
   });
 }
 
-/**
- * Hook to delete user
- */
 export function useDeleteUser() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (userId: string) => usersService.deleteUser(userId),
     onSuccess: () => {
@@ -108,62 +89,69 @@ export function useDeleteUser() {
   });
 }
 
-/**
- * Hook to assign role to user
- */
 export function useAssignRole() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: AssignRoleData }) =>
       usersService.assignRole(userId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(variables.userId) });
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(userId) });
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.organisation() });
     },
   });
 }
 
-/**
- * Hook to change user role
- */
 export function useChangeRole() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: ChangeRoleData }) =>
       usersService.changeRole(userId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(variables.userId) });
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(userId) });
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.lists() });
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.organisation() });
     },
   });
 }
 
 /**
- * Hook to toggle user status
+ * Toggle a member's active/deactivated status.
+ *
+ * FIX: the old Members.tsx called useUpdateUser with { isActive } but
+ * UpdateUserData does not have isActive — the backend returns 400.
+ * The backend has a dedicated endpoint: PATCH /user/:userId/toggle-status
+ * which accepts { isActive: boolean }. This hook calls that endpoint
+ * via usersService.toggleStatus which maps to the correct route.
  */
 export function useToggleUserStatus() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
       usersService.toggleStatus(userId, isActive),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(variables.userId) });
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.detail(userId) });
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.lists() });
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.organisation() });
     },
   });
 }
 
-/**
- * Hook to create a super admin
- */
 export function useCreateSuperAdmin() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (data: { firstName: string; lastName: string; email: string; password?: string; role?: string }) =>
-      usersService.createSuperAdmin({ firstName: data.firstName, lastName: data.lastName, email: data.email, password: data.password ?? '' }),
+    mutationFn: (data: {
+      firstName: string;
+      lastName:  string;
+      email:     string;
+      password?: string;
+      role?:     string;
+    }) =>
+      usersService.createSuperAdmin({
+        firstName: data.firstName,
+        lastName:  data.lastName,
+        email:     data.email,
+        password:  data.password ?? '',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEYS.all });
     },
