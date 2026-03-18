@@ -1,55 +1,49 @@
 // src/components/layout/ProtectedRoute.tsx
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation } from 'wouter';
-import { authService } from '@/api/services';
+import { TokenService } from '@/api/client';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  allowedRoles?: string[];
+  requiredRoles?: string[]; // ✅ renamed to match App.tsx
 }
 
-export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
   const [, setLocation] = useLocation();
+  const [status, setStatus] = useState<'checking' | 'allowed' | 'denied'>('checking');
 
-  const isAuth = authService.isAuthenticated();
-  const user = authService.getUser();
-
-  // Compute auth state synchronously
-  const authState = useMemo(() => {
-    if (!isAuth) {
-      return { valid: false, redirect: '/auth/signin' };
-    }
-
-    if (allowedRoles && allowedRoles.length > 0) {
-      if (!user) {
-        return { valid: false, redirect: '/auth/signin' };
-      }
-
-      const userRole = user.role?.toLowerCase() || '';
-      const hasPermission = allowedRoles.some(
-        (role) => userRole === role.toLowerCase()
-      );
-
-      if (!hasPermission) {
-        return { valid: false, redirect: '/unauthorized' };
-      }
-    }
-
-    return { valid: true, redirect: null };
-  }, [isAuth, user, allowedRoles]);
-
-  // Handle redirect in effect
   useEffect(() => {
-    if (!authState.valid && authState.redirect) {
-      setLocation(authState.redirect);
+    const token = TokenService.getAccessToken();
+    const user = TokenService.getUser<{ role: string }>();
+
+    if (!token) {
+      setLocation('/auth/signin');
+      setStatus('denied');
+      return;
     }
-  }, [authState, setLocation]);
 
-  // Block rendering until auth check passes
-  if (!authState.valid) {
-    return null;
-  }
+    if (requiredRoles && requiredRoles.length > 0) {
+      if (!user) {
+        setLocation('/auth/signin');
+        setStatus('denied');
+        return;
+      }
+      const userRole = user.role?.toLowerCase().replace(/[_\s-]/g, '') ?? '';
+      const hasPermission = requiredRoles.some(
+        (r) => userRole === r.toLowerCase().replace(/[_\s-]/g, '')
+      );
+      if (!hasPermission) {
+        setLocation('/unauthorized');
+        setStatus('denied');
+        return;
+      }
+    }
 
+    setStatus('allowed');
+  }, []); // runs once on mount after localStorage is populated
+
+  if (status === 'checking') return null;
+  if (status === 'denied')   return null;
   return <>{children}</>;
 }

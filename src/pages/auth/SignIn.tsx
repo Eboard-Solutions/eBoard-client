@@ -42,10 +42,30 @@ interface Notification {
   description?: string;
 }
 
-const LOGIN_TABS: { type: LoginType; label: string; icon: React.ReactNode; description: string }[] = [
-  { type: 'user', label: 'User', icon: <User className="h-4 w-4" />, description: 'Board member login with org code' },
-  { type: 'orgAdmin', label: 'Org Admin', icon: <Building2 className="h-4 w-4" />, description: 'Organization administrator' },
-  { type: 'superAdmin', label: 'Super Admin', icon: <Shield className="h-4 w-4" />, description: 'System administrator' },
+const LOGIN_TABS: {
+  type: LoginType;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}[] = [
+  {
+    type: 'user',
+    label: 'User',
+    icon: <User className="h-4 w-4" />,
+    description: 'Board member login with org code',
+  },
+  {
+    type: 'orgAdmin',
+    label: 'Org Admin',
+    icon: <Building2 className="h-4 w-4" />,
+    description: 'Organization administrator',
+  },
+  {
+    type: 'superAdmin',
+    label: 'Super Admin',
+    icon: <Shield className="h-4 w-4" />,
+    description: 'System administrator',
+  },
 ];
 
 export function SignIn() {
@@ -59,9 +79,16 @@ export function SignIn() {
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
 
-  const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
+  const showNotification = (
+    type: 'success' | 'error',
+    message: string,
+    description?: string
+  ) => {
     setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 5000);
+    // Only auto-dismiss error toasts; success redirects immediately
+    if (type === 'error') {
+      setTimeout(() => setNotification(null), 5000);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,12 +99,12 @@ export function SignIn() {
     const trimmedOrgCode = orgCode.trim();
 
     if (!trimmedEmail || !trimmedPassword) {
-      showNotification('error', 'Email and password are required');
+      showNotification('error', 'Validation Error', 'Email and password are required.');
       return;
     }
 
     if (loginType === 'user' && !trimmedOrgCode) {
-      showNotification('error', 'Organization code is required for user login');
+      showNotification('error', 'Validation Error', 'Organization code is required for user login.');
       return;
     }
 
@@ -88,7 +115,6 @@ export function SignIn() {
 
       switch (loginType) {
         case 'user':
-          console.log('🔐 Attempting user login with org code...');
           response = await authService.login({
             email: trimmedEmail,
             password: trimmedPassword,
@@ -97,7 +123,6 @@ export function SignIn() {
           break;
 
         case 'orgAdmin':
-          console.log('🔐 Attempting org-admin login...');
           response = await authService.orgAdminLogin({
             email: trimmedEmail,
             password: trimmedPassword,
@@ -105,7 +130,6 @@ export function SignIn() {
           break;
 
         case 'superAdmin':
-          console.log('🔐 Attempting super-admin login...');
           response = await authService.superAdminLogin({
             email: trimmedEmail,
             password: trimmedPassword,
@@ -114,25 +138,39 @@ export function SignIn() {
       }
 
       const { user } = response;
+      const displayName =
+        user?.firstName || user?.email?.split('@')[0] || 'User';
 
-      console.log('✅ Login successful:', { 
-        role: user?.role, 
-        hasOrganisation: user?.hasOrganisation 
-      });
+      // Show success toast briefly, then redirect immediately.
+      // NO setTimeout — redirecting immediately prevents the ProtectedRoute
+      // from mounting before the token is in localStorage.
+      showNotification(
+        'success',
+        'Login Successful!',
+        `Welcome back, ${displayName}!`
+      );
 
-      const displayName = user?.firstName || user?.email?.split('@')[0] || 'User';
-      showNotification('success', 'Login successful!', `Welcome back, ${displayName}!`);
-
-      // Redirect to dashboard
-      setTimeout(() => {
-        setLocation(ROUTES.dashboard);
-      }, 1200);
+      // ✅ Redirect immediately — token is already in localStorage at this
+      // point because authService.login() calls TokenService.setTokens()
+      // before returning. A setTimeout here creates a race condition where
+      // ProtectedRoute can mount, read an empty token, and bounce back.
+      setLocation(ROUTES.dashboard);
     } catch (err: unknown) {
       console.error('[LOGIN ERROR]', err);
 
-      let msg = 'Login failed. Please try again.';
+      let msg = 'Login failed. Please check your credentials and try again.';
 
-      if (err instanceof Error && err.message) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        // Axios error — extract server message
+        const axiosErr = err as {
+          response?: { data?: { message?: string } };
+          message?: string;
+        };
+        msg =
+          axiosErr.response?.data?.message ||
+          axiosErr.message ||
+          msg;
+      } else if (err instanceof Error && err.message) {
         msg = err.message;
       }
 
@@ -141,10 +179,10 @@ export function SignIn() {
     }
   };
 
-  const currentTab = LOGIN_TABS.find(t => t.type === loginType)!;
+  const currentTab = LOGIN_TABS.find((t) => t.type === loginType)!;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
 
       {/* Notification Toast */}
       {notification && (
@@ -153,18 +191,24 @@ export function SignIn() {
             notification.type === 'success'
               ? 'bg-green-50/95 border-green-200 text-green-900'
               : 'bg-red-50/95 border-red-200 text-red-900'
-          } border rounded-xl shadow-xl backdrop-blur-sm p-4`}
+          } border rounded-xl shadow-xl backdrop-blur-sm p-5`}
         >
           <div className="flex items-start gap-3">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+              <CheckCircle2 className="h-6 w-6 text-green-600 mt-0.5 shrink-0" />
             ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+              <XCircle className="h-6 w-6 text-red-600 mt-0.5 shrink-0" />
             )}
             <div>
-              <p className="font-medium text-sm">{notification.message}</p>
+              {/* ✅ Increased from text-sm font-medium → text-base font-semibold */}
+              <p className="font-semibold text-base leading-snug">
+                {notification.message}
+              </p>
               {notification.description && (
-                <p className="mt-1 text-sm opacity-90">{notification.description}</p>
+                /* ✅ Increased from text-sm → text-sm (kept) but added font-medium */
+                <p className="mt-1 text-sm font-medium opacity-90">
+                  {notification.description}
+                </p>
               )}
             </div>
           </div>
@@ -175,7 +219,7 @@ export function SignIn() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 shadow-2xl mb-6 mx-auto overflow-hidden">
             <img
               src="https://avatars.githubusercontent.com/u/255135070?s=200&v=4"
               alt="E-Board Logo"
@@ -222,10 +266,14 @@ export function SignIn() {
 
           <CardContent className="px-8 pb-8">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Org Code - Only for User login */}
+
+              {/* Org Code — only for User login */}
               {loginType === 'user' && (
                 <div className="space-y-2">
-                  <Label htmlFor="orgCode" className="font-medium text-gray-700 dark:text-gray-300">
+                  <Label
+                    htmlFor="orgCode"
+                    className="font-medium text-gray-700 dark:text-gray-300"
+                  >
                     Organization Code
                   </Label>
                   <div className="relative">
@@ -246,7 +294,10 @@ export function SignIn() {
 
               {/* Email */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="font-medium text-gray-700 dark:text-gray-300">
+                <Label
+                  htmlFor="email"
+                  className="font-medium text-gray-700 dark:text-gray-300"
+                >
                   Email address
                 </Label>
                 <div className="relative">
@@ -255,8 +306,8 @@ export function SignIn() {
                     id="email"
                     type="email"
                     placeholder={
-                      loginType === 'superAdmin' 
-                        ? 'superadmin@example.com' 
+                      loginType === 'superAdmin'
+                        ? 'superadmin@example.com'
                         : loginType === 'orgAdmin'
                         ? 'admin@company.com'
                         : 'user@example.com'
@@ -274,7 +325,10 @@ export function SignIn() {
               {/* Password */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="font-medium text-gray-700 dark:text-gray-300">
+                  <Label
+                    htmlFor="password"
+                    className="font-medium text-gray-700 dark:text-gray-300"
+                  >
                     Password
                   </Label>
                   <Button
@@ -305,21 +359,25 @@ export function SignIn() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
                   </button>
                 </div>
               </div>
 
-              {/* Sign In Button */}
+              {/* Submit */}
               <Button
                 type="submit"
                 disabled={
-                  isLoading || 
-                  !email.trim() || 
-                  !password.trim() || 
+                  isLoading ||
+                  !email.trim() ||
+                  !password.trim() ||
                   (loginType === 'user' && !orgCode.trim())
                 }
-                className="w-full h-12 mt-2 bg-linear-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full h-12 mt-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
@@ -335,7 +393,7 @@ export function SignIn() {
               </Button>
             </form>
 
-            {/* Footer link - only show for non-superadmin */}
+            {/* Footer — hide for super admin */}
             {loginType !== 'superAdmin' && (
               <div className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
                 Don't have an account?{' '}
