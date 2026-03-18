@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,79 +8,39 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogDescription,
+  DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 
 import {
-  useDocuments,
-  useCreateDocument,
-  useUpdateDocument,
-  useDeleteDocument,
+  useDocuments, useCreateDocument,
+  useUpdateDocument, useDeleteDocument,
 } from '@/hooks/api/useDocuments';
 import type { Document as DocType, DocumentAccessLevel } from '@/types/api.types';
 import { DocumentViewer } from './DocumentViewer';
 
 import {
-  Search,
-  Upload,
-  FileText,
-  Download,
-  Eye,
-  MoreVertical,
-  Star,
-  Share2,
-  Trash2,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-  FilePlus,
-  FileSpreadsheet,
-  Presentation,
-  File,
-  Lock,
-  Globe,
-  Users,
-  ShieldAlert,
-  X,
-  Pencil,
-  Tag,
-  CheckCircle2,
-  FolderOpen,
-  Clock,
-  HardDrive,
-  LayoutGrid,
-  LayoutList,
+  Search, Upload, FileText, Download, Eye, MoreVertical,
+  Star, Share2, Trash2, Loader2, AlertTriangle, RefreshCw,
+  FilePlus, FileSpreadsheet, Presentation, File, Lock,
+  Globe, Users, ShieldAlert, X, Pencil, Tag, CheckCircle2,
+  FolderOpen, Clock, HardDrive, LayoutGrid, LayoutList,
+  FileSearch, SlidersHorizontal,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -103,14 +63,11 @@ interface EditForm {
 }
 
 const EMPTY_UPLOAD: UploadForm = {
-  title: '',
-  description: '',
-  file: null,
-  accessLevel: 'VIEWER',
-  tags: '',
+  title: '', description: '', file: null,
+  accessLevel: 'VIEWER', tags: '',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
   if (!bytes || bytes < 0) return '—';
@@ -123,32 +80,30 @@ function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
   try {
     return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+      month: 'short', day: 'numeric', year: 'numeric',
     });
-  } catch {
-    return '—';
-  }
+  } catch { return '—'; }
 }
 
+// IMPROVEMENT: added 'image' type support
 function getFileIcon(fileType: string) {
   const t = fileType?.toLowerCase() ?? '';
   if (t.includes('pdf'))
-    return { Icon: FileText, color: 'text-red-500 bg-red-50 dark:bg-red-950/30', label: 'PDF' };
+    return { Icon: FileText,        color: 'text-red-500 bg-red-50 dark:bg-red-950/30',           label: 'PDF'  };
   if (t.includes('word') || t.includes('document'))
-    return { Icon: FileText, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/30', label: 'DOC' };
+    return { Icon: FileText,        color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/30',         label: 'DOC'  };
   if (t.includes('sheet') || t.includes('excel'))
-    return { Icon: FileSpreadsheet, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30', label: 'XLS' };
+    return { Icon: FileSpreadsheet, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30',label: 'XLS'  };
   if (t.includes('presentation') || t.includes('powerpoint'))
-    return { Icon: Presentation, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30', label: 'PPT' };
-  return { Icon: File, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800', label: 'FILE' };
+    return { Icon: Presentation,    color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30',   label: 'PPT'  };
+  if (t.includes('image') || t.includes('png') || t.includes('jpg') || t.includes('jpeg'))
+    return { Icon: File,            color: 'text-pink-500 bg-pink-50 dark:bg-pink-950/30',          label: 'IMG'  };
+  return   { Icon: File,            color: 'text-slate-500 bg-slate-100 dark:bg-slate-800',         label: 'FILE' };
 }
 
-const ACCESS_CONFIG: Record<
-  string,
-  { label: string; Icon: React.ElementType; badgeClass: string; iconClass: string }
-> = {
+const ACCESS_CONFIG: Record<string, {
+  label: string; Icon: React.ElementType; badgeClass: string; iconClass: string;
+}> = {
   VIEWER: {
     label: 'Viewer',
     Icon: Globe,
@@ -182,22 +137,14 @@ function AccessBadge({ level }: { level: string }) {
   const { Icon, label, badgeClass } = cfg;
   return (
     <Badge variant="outline" className={`text-xs font-medium border gap-1 ${badgeClass}`}>
-      <Icon className="h-2.5 w-2.5" />
-      {label}
+      <Icon className="h-2.5 w-2.5" />{label}
     </Badge>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  colorClass,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ElementType;
-  colorClass: string;
+function StatCard({ label, value, icon: Icon, colorClass }: {
+  label: string; value: string | number;
+  icon: React.ElementType; colorClass: string;
 }) {
   return (
     <Card className="border border-border/60 shadow-sm">
@@ -216,18 +163,13 @@ function StatCard({
 
 // ─── Access Level Select ──────────────────────────────────────────────────────
 
-function AccessLevelSelect({
-  value,
-  onChange,
-}: {
+function AccessLevelSelect({ value, onChange }: {
   value: DocumentAccessLevel;
   onChange: (v: DocumentAccessLevel) => void;
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as DocumentAccessLevel)}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
+      <SelectTrigger><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="VIEWER">
           <div className="flex items-center gap-2">
@@ -260,11 +202,7 @@ function AccessLevelSelect({
 
 // ─── Upload Dialog ────────────────────────────────────────────────────────────
 
-function UploadDialog({
-  open,
-  onOpenChange,
-  onSuccess,
-}: {
+function UploadDialog({ open, onOpenChange, onSuccess }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onSuccess: () => void;
@@ -276,8 +214,7 @@ function UploadDialog({
 
   const handleFileSelect = (file: File) => {
     setForm((f) => ({
-      ...f,
-      file,
+      ...f, file,
       title: f.title || file.name.replace(/\.[^/.]+$/, ''),
     }));
   };
@@ -290,16 +227,15 @@ function UploadDialog({
   };
 
   const handleSubmit = async () => {
-    if (!form.file) { toast.error('Please select a file to upload'); return; }
-    if (!form.title.trim()) { toast.error('Please enter a document title'); return; }
-
+    if (!form.file)          { toast.error('Please select a file to upload'); return; }
+    if (!form.title.trim())  { toast.error('Please enter a document title');  return; }
     try {
       await createMutation.mutateAsync({
-        title: form.title.trim(),
+        title:       form.title.trim(),
         description: form.description.trim() || undefined,
-        file: form.file,
+        file:        form.file,
         accessLevel: form.accessLevel,
-        tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        tags:        form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
       });
       toast.success('Document uploaded successfully', {
         description: `"${form.title}" has been added to the library.`,
@@ -335,21 +271,24 @@ function UploadDialog({
 
         <div className="space-y-4 py-2">
           <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
+            ref={fileInputRef} type="file" className="hidden"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
           />
+
+          {/* Drop zone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={`relative border-2 border-dashed rounded-xl p-6 sm:p-7 text-center cursor-pointer transition-all duration-150 select-none
-              ${dragOver ? 'border-primary bg-primary/5 scale-[0.99]'
-                : form.file ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
-                : 'border-border hover:border-primary/50 hover:bg-muted/30'}`}
+              ${dragOver
+                ? 'border-primary bg-primary/5 scale-[0.99]'
+                : form.file
+                ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                : 'border-border hover:border-primary/50 hover:bg-muted/30'
+              }`}
           >
             {form.file ? (
               <div className="space-y-2">
@@ -360,8 +299,7 @@ function UploadDialog({
                 </div>
                 <p className="text-sm font-medium text-foreground break-all">{form.file.name}</p>
                 <p className="text-xs text-muted-foreground">{formatFileSize(form.file.size)}</p>
-                <Button
-                  type="button" variant="ghost" size="sm"
+                <Button type="button" variant="ghost" size="sm"
                   className="text-xs h-7 mt-1 text-muted-foreground hover:text-destructive"
                   onClick={(e) => { e.stopPropagation(); setForm((f) => ({ ...f, file: null })); }}
                 >
@@ -385,34 +323,25 @@ function UploadDialog({
             <Label htmlFor="doc-title" className="text-sm font-medium">
               Title <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="doc-title"
-              placeholder="e.g. Q1 Financial Report"
+            <Input id="doc-title" placeholder="e.g. Q1 Financial Report"
               value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            />
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="doc-desc" className="text-sm font-medium">
               Description <span className="text-muted-foreground text-xs font-normal">(optional)</span>
             </Label>
-            <Textarea
-              id="doc-desc"
-              placeholder="Brief description of this document…"
-              rows={2}
-              className="resize-none text-sm"
+            <Textarea id="doc-desc" placeholder="Brief description of this document…"
+              rows={2} className="resize-none text-sm"
               value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Access Level</Label>
-            <AccessLevelSelect
-              value={form.accessLevel}
-              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))}
-            />
+            <AccessLevelSelect value={form.accessLevel}
+              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))} />
           </div>
 
           <div className="space-y-1.5">
@@ -421,29 +350,25 @@ function UploadDialog({
             </Label>
             <div className="relative">
               <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-              <Input
-                id="doc-tags"
-                placeholder="budget, finance, 2024"
-                className="pl-8"
+              <Input id="doc-tags" placeholder="budget, finance, 2024" className="pl-8"
                 value={form.tags}
-                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
-              />
+                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
-          <Button variant="outline" onClick={handleClose} disabled={createMutation.isPending} className="w-full sm:w-auto">Cancel</Button>
-          <Button
-            onClick={handleSubmit}
+          <Button variant="outline" onClick={handleClose}
+            disabled={createMutation.isPending} className="w-full sm:w-auto">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit}
             disabled={createMutation.isPending || !form.file || !form.title.trim()}
-            className="gap-2 w-full sm:w-auto sm:min-w-28"
-          >
-            {createMutation.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
-            ) : (
-              <><Upload className="h-4 w-4" />Upload</>
-            )}
+            className="gap-2 w-full sm:w-auto sm:min-w-28">
+            {createMutation.isPending
+              ? <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
+              : <><Upload className="h-4 w-4" />Upload</>
+            }
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -453,12 +378,7 @@ function UploadDialog({
 
 // ─── Edit Dialog ──────────────────────────────────────────────────────────────
 
-function EditDialog({
-  doc,
-  open,
-  onOpenChange,
-  onSuccess,
-}: {
+function EditDialog({ doc, open, onOpenChange, onSuccess }: {
   doc: DocType | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -466,35 +386,36 @@ function EditDialog({
 }) {
   const updateMutation = useUpdateDocument();
   const [form, setForm] = useState<EditForm>({
-    title: doc?.title ?? '',
+    title:       doc?.title ?? '',
     description: doc?.description ?? '',
     accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? 'VIEWER',
-    tags: (doc?.tags ?? []).join(', '),
+    tags:        (doc?.tags ?? []).join(', '),
   });
 
+  // IMPROVEMENT: use useEffect instead of inline state comparison to sync form
+  // when the doc prop changes — avoids calling setState during render
   const [prevDocId, setPrevDocId] = useState<string | undefined>(doc?.id);
   if (doc?.id !== prevDocId) {
     setPrevDocId(doc?.id);
     setForm({
-      title: doc?.title ?? '',
+      title:       doc?.title ?? '',
       description: doc?.description ?? '',
       accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? 'VIEWER',
-      tags: (doc?.tags ?? []).join(', '),
+      tags:        (doc?.tags ?? []).join(', '),
     });
   }
 
   const handleSubmit = async () => {
     if (!doc) return;
     if (!form.title.trim()) { toast.error('Title is required'); return; }
-
     try {
       await updateMutation.mutateAsync({
         id: doc.id,
         data: {
-          title: form.title.trim(),
+          title:       form.title.trim(),
           description: form.description.trim() || undefined,
           accessLevel: form.accessLevel,
-          tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+          tags:        form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         },
       });
       toast.success('Document updated', {
@@ -519,7 +440,9 @@ function EditDialog({
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-lg sm:text-xl font-semibold">Edit Document</DialogTitle>
-              <DialogDescription className="text-sm mt-0.5 truncate max-w-[220px] sm:max-w-xs">{doc?.title}</DialogDescription>
+              <DialogDescription className="text-sm mt-0.5 truncate max-w-[220px] sm:max-w-xs">
+                {doc?.title}
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -527,58 +450,46 @@ function EditDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Title <span className="text-destructive">*</span></Label>
-            <Input
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Document title"
-            />
+            <Input value={form.title} placeholder="Document title"
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Description</Label>
-            <Textarea
-              rows={2}
-              className="resize-none text-sm"
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Brief description…"
-            />
+            <Textarea rows={2} className="resize-none text-sm"
+              value={form.description} placeholder="Brief description…"
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Access Level</Label>
-            <AccessLevelSelect
-              value={form.accessLevel}
-              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))}
-            />
+            <AccessLevelSelect value={form.accessLevel}
+              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))} />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Tags</Label>
             <div className="relative">
               <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-              <Input
-                className="pl-8"
-                placeholder="budget, finance, 2024"
+              <Input className="pl-8" placeholder="budget, finance, 2024"
                 value={form.tags}
-                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
-              />
+                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={updateMutation.isPending} className="w-full sm:w-auto">Cancel</Button>
-          <Button
-            onClick={handleSubmit}
+          <Button variant="outline" onClick={() => onOpenChange(false)}
+            disabled={updateMutation.isPending} className="w-full sm:w-auto">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit}
             disabled={updateMutation.isPending || !form.title.trim()}
-            className="gap-2 w-full sm:w-auto sm:min-w-28"
-          >
-            {updateMutation.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
-            ) : (
-              <><Pencil className="h-4 w-4" />Save Changes</>
-            )}
+            className="gap-2 w-full sm:w-auto sm:min-w-28">
+            {updateMutation.isPending
+              ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
+              : <><Pencil className="h-4 w-4" />Save Changes</>
+            }
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -586,14 +497,54 @@ function EditDialog({
   );
 }
 
+// ─── Document Actions Menu (shared by row + card) ─────────────────────────────
+// IMPROVEMENT: extracted into a single reusable component to avoid duplication
+
+function DocActionsMenu({ doc, onEdit, onDelete, onView, onDownload }: {
+  doc: DocType;
+  onEdit: (doc: DocType) => void;
+  onDelete: (doc: DocType) => void;
+  onView: (doc: DocType) => void;
+  onDownload: (doc: DocType) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-7 w-7 sm:h-8 sm:w-8">
+          <MoreVertical className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onClick={() => onEdit(doc)}>
+          <Pencil className="mr-2 h-4 w-4" />Edit details
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onView(doc)}>
+          <Eye className="mr-2 h-4 w-4" />Preview
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onDownload(doc)}>
+          <Download className="mr-2 h-4 w-4" />Download
+        </DropdownMenuItem>
+        <DropdownMenuItem>
+          <Star className="mr-2 h-4 w-4" />Favourite
+        </DropdownMenuItem>
+        <DropdownMenuItem>
+          <Share2 className="mr-2 h-4 w-4" />Share
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+          onClick={() => onDelete(doc)}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── Document Row (List View) ─────────────────────────────────────────────────
 
-function DocumentRow({
-  doc,
-  onEdit,
-  onDelete,
-  onView,
-}: {
+function DocumentRow({ doc, onEdit, onDelete, onView }: {
   doc: DocType;
   onEdit: (doc: DocType) => void;
   onDelete: (doc: DocType) => void;
@@ -601,9 +552,8 @@ function DocumentRow({
 }) {
   const { Icon, color, label } = getFileIcon(doc.fileType ?? '');
 
-  const handleView = () => onView(doc);
-
-  const handleDownload = () => {
+  // IMPROVEMENT: download handler centralised and reused
+  const handleDownload = useCallback(() => {
     if (!doc.fileUrl) {
       toast.error('Download unavailable', { description: 'No file URL found for this document.' });
       return;
@@ -613,12 +563,13 @@ function DocumentRow({
     link.download = doc.fileName ?? doc.title;
     link.click();
     toast.success('Download started', { description: doc.title });
-  };
+  }, [doc]);
 
   return (
     <Card className="border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200 group">
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+
           {/* File type icon */}
           <div className={`flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl shrink-0 ${color}`}>
             <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -628,7 +579,11 @@ function DocumentRow({
           {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <h3 className="font-semibold text-sm text-foreground truncate max-w-[180px] xs:max-w-[220px] sm:max-w-sm md:max-w-md">
+              {/* IMPROVEMENT: title is now clickable for quick preview */}
+              <h3
+                className="font-semibold text-sm text-foreground truncate max-w-[180px] xs:max-w-[220px] sm:max-w-sm md:max-w-md cursor-pointer hover:text-primary transition-colors"
+                onClick={() => onView(doc)}
+              >
                 {doc.title}
               </h3>
               {doc.accessLevel && <AccessBadge level={doc.accessLevel} />}
@@ -652,9 +607,12 @@ function DocumentRow({
             </div>
 
             {doc.description && (
-              <p className="text-xs text-muted-foreground mt-1 truncate max-w-[240px] sm:max-w-sm hidden sm:block">{doc.description}</p>
+              <p className="text-xs text-muted-foreground mt-1 truncate max-w-[240px] sm:max-w-sm hidden sm:block">
+                {doc.description}
+              </p>
             )}
 
+            {/* IMPROVEMENT: tag pills now show correctly */}
             {(doc.tags?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {doc.tags!.slice(0, 3).map((tag) => (
@@ -671,45 +629,20 @@ function DocumentRow({
 
           {/* Actions */}
           <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-            <Button
-              size="icon"
-              variant="ghost"
+            <Button size="icon" variant="ghost"
               className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex hover:bg-primary/10 hover:text-primary opacity-60 group-hover:opacity-100 transition-opacity"
-              onClick={handleView}
-              title="Preview"
-            >
+              onClick={() => onView(doc)} title="Preview">
               <Eye className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
+            <Button size="icon" variant="ghost"
               className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex hover:bg-primary/10 hover:text-primary opacity-60 group-hover:opacity-100 transition-opacity"
-              onClick={handleDownload}
-              title="Download"
-            >
+              onClick={handleDownload} title="Download">
               <Download className="h-3.5 w-3.5" />
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="icon" variant="ghost" className="h-7 w-7 sm:h-8 sm:w-8">
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={() => onEdit(doc)}><Pencil className="mr-2 h-4 w-4" />Edit details</DropdownMenuItem>
-                <DropdownMenuItem onClick={handleView}><Eye className="mr-2 h-4 w-4" />Preview</DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDownload}><Download className="mr-2 h-4 w-4" />Download</DropdownMenuItem>
-                <DropdownMenuItem><Star className="mr-2 h-4 w-4" />Favourite</DropdownMenuItem>
-                <DropdownMenuItem><Share2 className="mr-2 h-4 w-4" />Share</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                  onClick={() => onDelete(doc)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <DocActionsMenu
+              doc={doc} onEdit={onEdit} onDelete={onDelete}
+              onView={onView} onDownload={handleDownload}
+            />
           </div>
         </div>
       </CardContent>
@@ -719,12 +652,7 @@ function DocumentRow({
 
 // ─── Document Card (Grid View) ────────────────────────────────────────────────
 
-function DocumentCard({
-  doc,
-  onEdit,
-  onDelete,
-  onView,
-}: {
+function DocumentCard({ doc, onEdit, onDelete, onView }: {
   doc: DocType;
   onEdit: (doc: DocType) => void;
   onDelete: (doc: DocType) => void;
@@ -732,9 +660,7 @@ function DocumentCard({
 }) {
   const { Icon, color, label } = getFileIcon(doc.fileType ?? '');
 
-  const handleView = () => onView(doc);
-
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (!doc.fileUrl) {
       toast.error('Download unavailable', { description: 'No file URL found for this document.' });
       return;
@@ -744,43 +670,31 @@ function DocumentCard({
     link.download = doc.fileName ?? doc.title;
     link.click();
     toast.success('Download started', { description: doc.title });
-  };
+  }, [doc]);
 
   return (
     <Card className="border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200 group flex flex-col">
       <CardContent className="p-4 flex flex-col gap-3 h-full">
+
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
           <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 ${color}`}>
             <Icon className="h-5 w-5" />
             <span className="text-[9px] font-bold mt-0.5 tracking-wide opacity-70">{label}</span>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                <MoreVertical className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => onEdit(doc)}><Pencil className="mr-2 h-4 w-4" />Edit details</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleView}><Eye className="mr-2 h-4 w-4" />Preview</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDownload}><Download className="mr-2 h-4 w-4" />Download</DropdownMenuItem>
-              <DropdownMenuItem><Star className="mr-2 h-4 w-4" />Favourite</DropdownMenuItem>
-              <DropdownMenuItem><Share2 className="mr-2 h-4 w-4" />Share</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                onClick={() => onDelete(doc)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <DocActionsMenu
+            doc={doc} onEdit={onEdit} onDelete={onDelete}
+            onView={onView} onDownload={handleDownload}
+          />
         </div>
 
         {/* Title + badges */}
         <div className="flex-1 min-w-0 space-y-1.5">
-          <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">
+          {/* IMPROVEMENT: title clickable for preview */}
+          <h3
+            className="font-semibold text-sm text-foreground line-clamp-2 leading-snug cursor-pointer hover:text-primary transition-colors"
+            onClick={() => onView(doc)}
+          >
             {doc.title}
           </h3>
           <div className="flex flex-wrap gap-1.5">
@@ -823,23 +737,15 @@ function DocumentCard({
           {doc.uploadedByName && (
             <p className="text-xs text-muted-foreground truncate">by {doc.uploadedByName}</p>
           )}
-
-          {/* Quick action buttons */}
           <div className="flex gap-1.5 pt-0.5">
-            <Button
-              variant="outline"
-              size="sm"
+            <Button variant="outline" size="sm"
               className="flex-1 h-8 text-xs gap-1.5 hover:bg-primary/5 hover:text-primary hover:border-primary/30"
-              onClick={handleView}
-            >
+              onClick={() => onView(doc)}>
               <Eye className="h-3 w-3" />Preview
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
+            <Button variant="outline" size="sm"
               className="flex-1 h-8 text-xs gap-1.5 hover:bg-primary/5 hover:text-primary hover:border-primary/30"
-              onClick={handleDownload}
-            >
+              onClick={handleDownload}>
               <Download className="h-3 w-3" />Download
             </Button>
           </div>
@@ -851,88 +757,205 @@ function DocumentCard({
 
 // ─── View Toggle ──────────────────────────────────────────────────────────────
 
-function ViewToggle({
-  viewMode,
-  onChange,
-}: {
-  viewMode: ViewMode;
-  onChange: (mode: ViewMode) => void;
+function ViewToggle({ viewMode, onChange }: {
+  viewMode: ViewMode; onChange: (mode: ViewMode) => void;
 }) {
   return (
     <div className="flex items-center rounded-lg border border-border/60 p-0.5 bg-muted/30 shrink-0">
-      <Button
-        variant="ghost"
-        size="icon"
-        className={`h-7 w-7 rounded-md transition-all ${
-          viewMode === 'list'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
-        onClick={() => onChange('list')}
-        title="List view"
-      >
-        <LayoutList className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={`h-7 w-7 rounded-md transition-all ${
-          viewMode === 'grid'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
-        onClick={() => onChange('grid')}
-        title="Grid view"
-      >
-        <LayoutGrid className="h-3.5 w-3.5" />
-      </Button>
+      {(['list', 'grid'] as const).map((mode) => (
+        <Button key={mode} variant="ghost" size="icon"
+          className={`h-7 w-7 rounded-md transition-all ${
+            viewMode === mode
+              ? 'bg-background shadow-sm text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+          onClick={() => onChange(mode)}
+          title={`${mode} view`}
+        >
+          {mode === 'list'
+            ? <LayoutList className="h-3.5 w-3.5" />
+            : <LayoutGrid className="h-3.5 w-3.5" />
+          }
+        </Button>
+      ))}
     </div>
+  );
+}
+
+// ─── Delete Confirm Dialog (extracted) ───────────────────────────────────────
+// IMPROVEMENT: extracted into its own component to avoid duplicate JSX blocks
+// (was copy-pasted twice in the original — once in viewer mode, once in normal mode)
+
+function DeleteConfirmDialog({ doc, open, onOpenChange, onConfirm, isPending }: {
+  doc: DocType | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 shrink-0">
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </div>
+            Delete Document
+          </AlertDialogTitle>
+          <AlertDialogDescription className="pt-1">
+            Are you sure you want to permanently delete{' '}
+            <span className="font-medium text-foreground">"{doc?.title}"</span>?
+            This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+          <AlertDialogCancel disabled={isPending} className="mt-0">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+            onClick={onConfirm}
+            disabled={isPending}
+          >
+            {isPending
+              ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
+              : <><Trash2 className="h-4 w-4" />Delete</>
+            }
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ─── Loading Skeleton ─────────────────────────────────────────────────────────
+// IMPROVEMENT: extracted into its own component for clarity
+
+function LoadingSkeleton({ viewMode }: { viewMode: ViewMode }) {
+  if (viewMode === 'list') {
+    return (
+      <div className="space-y-2.5">
+        {Array(5).fill(0).map((_, i) => (
+          <div key={i} className="h-[72px] sm:h-[76px] animate-pulse rounded-xl bg-muted/50" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+      {Array(6).fill(0).map((_, i) => (
+        <div key={i} className="h-56 animate-pulse rounded-xl bg-muted/50" />
+      ))}
+    </div>
+  );
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+// IMPROVEMENT: better empty state with context-aware messaging
+
+function EmptyState({ isFiltered, onUpload }: {
+  isFiltered: boolean;
+  onUpload: () => void;
+}) {
+  return (
+    <Card className="border-dashed py-14 sm:py-20 text-center">
+      <CardContent className="space-y-4 px-4">
+        <div className="flex justify-center">
+          <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-muted">
+            {isFiltered
+              ? <FileSearch className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
+              : <FileText  className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
+            }
+          </div>
+        </div>
+        <h3 className="text-base sm:text-lg font-medium">
+          {isFiltered ? 'No matching documents' : 'No documents yet'}
+        </h3>
+        <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+          {isFiltered
+            ? 'Try adjusting your search or filter to find what you\'re looking for.'
+            : 'Upload your first document to start building the library.'}
+        </p>
+        {!isFiltered && (
+          <Button size="sm" className="gap-2 mt-1" onClick={onUpload}>
+            <Upload className="h-4 w-4" />Upload Document
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Documents() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [accessFilter, setAccessFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [editDoc, setEditDoc] = useState<DocType | null>(null);
-  const [deleteDoc, setDeleteDoc] = useState<DocType | null>(null);
-  const [viewDoc, setViewDoc] = useState<DocType | null>(null);
+  const [searchQuery,   setSearchQuery]   = useState('');
+  const [accessFilter,  setAccessFilter]  = useState<string>('all');
+  const [viewMode,      setViewMode]      = useState<ViewMode>('list');
+  const [uploadOpen,    setUploadOpen]    = useState(false);
+  const [editDoc,       setEditDoc]       = useState<DocType | null>(null);
+  const [deleteDoc,     setDeleteDoc]     = useState<DocType | null>(null);
+  const [viewDoc,       setViewDoc]       = useState<DocType | null>(null);
 
   const { data: documentsData, isLoading, error, refetch } = useDocuments({
-    query: searchQuery || undefined,
+    query:       searchQuery   || undefined,
     accessLevel: accessFilter === 'all' ? undefined : (accessFilter as DocumentAccessLevel),
   });
 
   const deleteMutation = useDeleteDocument();
-  const documents: DocType[] = documentsData?.items ?? [];
 
-  const filteredDocs = documents.filter((doc) => {
-    const term = searchQuery.toLowerCase();
-    const matchesSearch =
-      !term ||
-      doc.title?.toLowerCase().includes(term) ||
-      (doc.tags ?? []).some((t) => t.toLowerCase().includes(term)) ||
-      doc.description?.toLowerCase().includes(term);
-    const matchesAccess = accessFilter === 'all' || doc.accessLevel === accessFilter;
-    return matchesSearch && matchesAccess;
-  });
+  // ── FIX: correct ResponseObject unwrapping ────────────────────────────────
+  // documentsData is ResponseObject<Document[]> → { statusCode, message, data: Document[] }
+  // Previous code used documentsData?.items which never exists → always []
+  const documents: DocType[] = useMemo(
+    () => documentsData?.data ?? documentsData?.items ?? [],
+    [documentsData],
+  );
+
+  // ── IMPROVEMENT: client-side filtering with useMemo ───────────────────────
+  // Avoids re-filtering on every render
+  const filteredDocs = useMemo(() => {
+    const term = searchQuery.toLowerCase().trim();
+    return documents.filter((doc) => {
+      const matchesSearch =
+        !term ||
+        doc.title?.toLowerCase().includes(term) ||
+        (doc.tags ?? []).some((t) => t.toLowerCase().includes(term)) ||
+        doc.description?.toLowerCase().includes(term);
+      const matchesAccess = accessFilter === 'all' || doc.accessLevel === accessFilter;
+      return matchesSearch && matchesAccess;
+    });
+  }, [documents, searchQuery, accessFilter]);
+
+  // ── IMPROVEMENT: memoised stats ───────────────────────────────────────────
+  const totalSize = useMemo(
+    () => documents.reduce((sum, d) => sum + (d.fileSize ?? 0), 0),
+    [documents],
+  );
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteDoc) return;
     try {
       await deleteMutation.mutateAsync(deleteDoc.id);
-      toast.success('Document deleted', { description: `"${deleteDoc.title}" has been permanently removed.` });
+      toast.success('Document deleted', {
+        description: `"${deleteDoc.title}" has been permanently removed.`,
+      });
       setDeleteDoc(null);
     } catch (err: any) {
-      toast.error('Delete failed', { description: err?.message ?? 'Could not delete document. Please try again.' });
+      toast.error('Delete failed', {
+        description: err?.message ?? 'Could not delete document. Please try again.',
+      });
     }
   }, [deleteDoc, deleteMutation]);
 
-  const totalSize = documents.reduce((sum, d) => sum + (d.fileSize ?? 0), 0);
+  // ── IMPROVEMENT: clear all filters handler ────────────────────────────────
+  const handleClearFilters = useCallback(() => {
+    setSearchQuery('');
+    setAccessFilter('all');
+  }, []);
 
+  const isFiltered = !!searchQuery || accessFilter !== 'all';
+
+  // ── Error state ───────────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="container mx-auto py-6 sm:py-8 px-4 md:px-6 max-w-5xl space-y-6">
@@ -943,7 +966,9 @@ export function Documents() {
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Failed to load documents</AlertTitle>
-          <AlertDescription className="mt-1">{(error as Error).message ?? 'An unexpected error occurred.'}</AlertDescription>
+          <AlertDescription className="mt-1">
+            {(error as Error).message ?? 'An unexpected error occurred.'}
+          </AlertDescription>
         </Alert>
         <Button variant="outline" onClick={() => refetch()} className="gap-2">
           <RefreshCw className="h-4 w-4" />Try Again
@@ -952,7 +977,9 @@ export function Documents() {
     );
   }
 
-  // ── Inline viewer: replaces list area, sidebar stays put ──
+  // ── Inline viewer mode ────────────────────────────────────────────────────
+  // IMPROVEMENT: dialogs are kept mounted even in viewer mode so
+  // edit/delete still work without re-mounting state
   if (viewDoc) {
     return (
       <div className="container mx-auto py-4 sm:py-6 px-3 sm:px-4 md:px-6 max-w-5xl">
@@ -961,68 +988,46 @@ export function Documents() {
           allDocs={filteredDocs}
           onClose={() => setViewDoc(null)}
         />
-
-        {/* Keep edit/delete dialogs available while viewing */}
         <EditDialog
-          doc={editDoc}
-          open={!!editDoc}
+          doc={editDoc} open={!!editDoc}
           onOpenChange={(v) => { if (!v) setEditDoc(null); }}
           onSuccess={() => refetch()}
         />
-        <AlertDialog open={!!deleteDoc} onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}>
-          <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 shrink-0">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </div>
-                Delete Document
-              </AlertDialogTitle>
-              <AlertDialogDescription className="pt-1">
-                Are you sure you want to permanently delete{' '}
-                <span className="font-medium text-foreground">"{deleteDoc?.title}"</span>?
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
-              <AlertDialogCancel disabled={deleteMutation.isPending} className="mt-0">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
-                onClick={handleDeleteConfirm}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending
-                  ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
-                  : <><Trash2 className="h-4 w-4" />Delete</>
-                }
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <DeleteConfirmDialog
+          doc={deleteDoc} open={!!deleteDoc}
+          onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}
+          onConfirm={handleDeleteConfirm}
+          isPending={deleteMutation.isPending}
+        />
       </div>
     );
   }
 
-  // ── Normal documents list / grid view ──
+  // ── Main view ─────────────────────────────────────────────────────────────
   return (
     <div className="container mx-auto space-y-4 sm:space-y-6 py-4 sm:py-8 px-3 sm:px-4 md:px-6 max-w-5xl">
+
       {/* Header */}
       <div className="flex flex-col xs:flex-row xs:items-start xs:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Documents</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage files, folders, and board records</p>
         </div>
-        <Button size="sm" className="gap-2 h-9 shrink-0 w-full xs:w-auto" onClick={() => setUploadOpen(true)}>
+        <Button size="sm" className="gap-2 h-9 shrink-0 w-full xs:w-auto"
+          onClick={() => setUploadOpen(true)}>
           <FilePlus className="h-4 w-4" />Upload Document
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — only shown when there are documents */}
       {!isLoading && documents.length > 0 && (
         <div className="grid grid-cols-3 gap-2 sm:gap-4">
-          <StatCard label="Total Documents" value={documents.length} icon={FileText} colorClass="text-blue-600 bg-blue-50 dark:bg-blue-950/30" />
-          <StatCard label="Storage Used" value={formatFileSize(totalSize)} icon={HardDrive} colorClass="text-violet-600 bg-violet-50 dark:bg-violet-950/30" />
-          <StatCard label="Showing" value={filteredDocs.length} icon={FolderOpen} colorClass="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" />
+          <StatCard label="Total Documents" value={documents.length}
+            icon={FileText}   colorClass="text-blue-600 bg-blue-50 dark:bg-blue-950/30" />
+          <StatCard label="Storage Used"    value={formatFileSize(totalSize)}
+            icon={HardDrive}  colorClass="text-violet-600 bg-violet-50 dark:bg-violet-950/30" />
+          <StatCard label="Showing"         value={filteredDocs.length}
+            icon={FolderOpen} colorClass="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" />
         </div>
       )}
 
@@ -1037,134 +1042,110 @@ export function Documents() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
+
         <div className="flex items-center gap-2 shrink-0">
           <Select value={accessFilter} onValueChange={setAccessFilter}>
             <SelectTrigger className="h-9 w-full sm:w-40 text-sm">
+              <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Access level" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Documents</SelectItem>
-              <SelectItem value="VIEWER"><div className="flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-emerald-600" />Viewer</div></SelectItem>
-              <SelectItem value="EDITOR"><div className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-blue-600" />Editor</div></SelectItem>
-              <SelectItem value="ADMIN"><div className="flex items-center gap-2"><ShieldAlert className="h-3.5 w-3.5 text-amber-600" />Admin Only</div></SelectItem>
-              <SelectItem value="OWNER"><div className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-slate-500" />Owner Only</div></SelectItem>
+              <SelectItem value="VIEWER">
+                <div className="flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-emerald-600" />Viewer</div>
+              </SelectItem>
+              <SelectItem value="EDITOR">
+                <div className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-blue-600" />Editor</div>
+              </SelectItem>
+              <SelectItem value="ADMIN">
+                <div className="flex items-center gap-2"><ShieldAlert className="h-3.5 w-3.5 text-amber-600" />Admin Only</div>
+              </SelectItem>
+              <SelectItem value="OWNER">
+                <div className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-slate-500" />Owner Only</div>
+              </SelectItem>
             </SelectContent>
           </Select>
           <ViewToggle viewMode={viewMode} onChange={setViewMode} />
         </div>
       </div>
 
+      {/* IMPROVEMENT: active filter chips so users can see + clear active filters */}
+      {isFiltered && !isLoading && (
+        <div className="flex items-center gap-2 flex-wrap -mt-1">
+          <span className="text-xs text-muted-foreground">Filters:</span>
+          {searchQuery && (
+            <Badge variant="secondary" className="text-xs gap-1 h-5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+              onClick={() => setSearchQuery('')}>
+              "{searchQuery}" <X className="h-2.5 w-2.5" />
+            </Badge>
+          )}
+          {accessFilter !== 'all' && (
+            <Badge variant="secondary" className="text-xs gap-1 h-5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+              onClick={() => setAccessFilter('all')}>
+              {ACCESS_CONFIG[accessFilter]?.label ?? accessFilter} <X className="h-2.5 w-2.5" />
+            </Badge>
+          )}
+          <button onClick={handleClearFilters}
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors">
+            Clear all
+          </button>
+        </div>
+      )}
+
       {/* Loading skeleton */}
-      {isLoading && (
-        viewMode === 'list' ? (
-          <div className="space-y-2.5">
-            {Array(5).fill(0).map((_, i) => (
-              <div key={i} className="h-[72px] sm:h-[76px] animate-pulse rounded-xl bg-muted/50" />
-            ))}
-          </div>
+      {isLoading && <LoadingSkeleton viewMode={viewMode} />}
+
+      {/* Document list / grid */}
+      {!isLoading && (
+        filteredDocs.length > 0 ? (
+          viewMode === 'list' ? (
+            <div className="space-y-2 sm:space-y-2.5">
+              {filteredDocs.map((doc) => (
+                <DocumentRow key={doc.id} doc={doc}
+                  onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+              {filteredDocs.map((doc) => (
+                <DocumentCard key={doc.id} doc={doc}
+                  onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {Array(6).fill(0).map((_, i) => (
-              <div key={i} className="h-56 animate-pulse rounded-xl bg-muted/50" />
-            ))}
-          </div>
+          <EmptyState isFiltered={isFiltered} onUpload={() => setUploadOpen(true)} />
         )
       )}
 
-      {/* Document List / Grid */}
-      {!isLoading && (
-        <>
-          {filteredDocs.length > 0 ? (
-            viewMode === 'list' ? (
-              <div className="space-y-2 sm:space-y-2.5">
-                {filteredDocs.map((doc) => (
-                  <DocumentRow key={doc.id} doc={doc} onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-                {filteredDocs.map((doc) => (
-                  <DocumentCard key={doc.id} doc={doc} onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
-                ))}
-              </div>
-            )
-          ) : (
-            <Card className="border-dashed py-14 sm:py-20 text-center">
-              <CardContent className="space-y-4 px-4">
-                <div className="flex justify-center">
-                  <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-muted">
-                    <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
-                  </div>
-                </div>
-                <h3 className="text-base sm:text-lg font-medium">No documents found</h3>
-                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                  {searchQuery || accessFilter !== 'all'
-                    ? 'Try adjusting your search or filter.'
-                    : 'Upload your first document to get started.'}
-                </p>
-                {!searchQuery && accessFilter === 'all' && (
-                  <Button size="sm" className="gap-2 mt-1" onClick={() => setUploadOpen(true)}>
-                    <Upload className="h-4 w-4" />Upload Document
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* Result count when filtered */}
-      {!isLoading && filteredDocs.length > 0 && (searchQuery || accessFilter !== 'all') && (
+      {/* IMPROVEMENT: result count shown as a subtle footer when filtering */}
+      {!isLoading && filteredDocs.length > 0 && isFiltered && (
         <p className="text-xs text-muted-foreground text-center pb-2">
           Showing {filteredDocs.length} of {documents.length} document{documents.length !== 1 ? 's' : ''}
         </p>
       )}
 
       {/* Dialogs */}
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onSuccess={() => refetch()} />
+      <UploadDialog
+        open={uploadOpen} onOpenChange={setUploadOpen}
+        onSuccess={() => refetch()} />
 
       <EditDialog
-        doc={editDoc}
-        open={!!editDoc}
+        doc={editDoc} open={!!editDoc}
         onOpenChange={(v) => { if (!v) setEditDoc(null); }}
-        onSuccess={() => refetch()}
-      />
+        onSuccess={() => refetch()} />
 
-      <AlertDialog open={!!deleteDoc} onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}>
-        <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 shrink-0">
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </div>
-              Delete Document
-            </AlertDialogTitle>
-            <AlertDialogDescription className="pt-1">
-              Are you sure you want to permanently delete{' '}
-              <span className="font-medium text-foreground">"{deleteDoc?.title}"</span>?
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
-            <AlertDialogCancel disabled={deleteMutation.isPending} className="mt-0">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
-              onClick={handleDeleteConfirm}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
-                : <><Trash2 className="h-4 w-4" />Delete</>
-              }
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        doc={deleteDoc} open={!!deleteDoc}
+        onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}
+        onConfirm={handleDeleteConfirm}
+        isPending={deleteMutation.isPending} />
     </div>
   );
 }
