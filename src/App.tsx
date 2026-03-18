@@ -11,8 +11,10 @@ import { authService } from "@/lib/auth";
 // ── Auth Pages ───────────────────────────────────────────────────────────────
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
-import { UserLogin } from "@/pages/auth/UserLogin";     // ← possibly unused / duplicate?
+import { UserLogin } from "@/pages/auth/UserLogin"; // ← possibly unused / duplicate?
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
+import { ActivateAccount } from "@/pages/auth/ActivateAccount";
+import { ResetPasswordForm } from "@/pages/auth/ResetPasswordForm";
 
 // ── Main App Pages ───────────────────────────────────────────────────────────
 import { Dashboard } from "@/pages/Dashboard";
@@ -106,13 +108,14 @@ export default function App() {
           {/* ── Public / Auth Routes ── */}
           <Route path="/auth/signin" component={SignIn} />
           <Route path="/auth/signup" component={SignUp} />
-          <Route path="/auth/user-login" component={UserLogin} /> {/* possibly legacy */}
+          <Route path="/auth/user-login" component={UserLogin} />{" "}
+          {/* possibly legacy */}
           <Route path="/auth/forgot-password" component={ForgotPassword} />
+          <Route path="/auth/activate-account" component={ActivateAccount} />
+          <Route path="/auth/reset-password" component={ResetPasswordForm} />
           <Route path="/unauthorized" component={UnauthorizedPage} />
-
           {/* ── Root → smart redirect ── */}
           <Route path="/" component={RootRedirect} />
-
           {/* ── Main App Routes (user + admin) ── */}
           <Route path="/dashboard">
             <ProtectedRoute>
@@ -121,7 +124,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/meetings">
             <ProtectedRoute>
               <AppLayout>
@@ -129,7 +131,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/meetings/live/:id">
             <ProtectedRoute>
               <AppLayout fullWidth>
@@ -137,7 +138,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/members">
             <ProtectedRoute>
               <AppLayout>
@@ -145,7 +145,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/documents">
             <ProtectedRoute>
               <AppLayout>
@@ -153,7 +152,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/voting">
             <ProtectedRoute>
               <AppLayout>
@@ -161,7 +159,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/tasks">
             <ProtectedRoute>
               <AppLayout>
@@ -169,7 +166,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/finance">
             <ProtectedRoute requiredRoles={["admin", "superadmin"]}>
               <AppLayout>
@@ -177,7 +173,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/announcements">
             <ProtectedRoute>
               <AppLayout>
@@ -185,7 +180,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/reports">
             <ProtectedRoute requiredRoles={["admin", "superadmin"]}>
               <AppLayout>
@@ -193,7 +187,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/settings">
             <ProtectedRoute>
               <AppLayout>
@@ -201,7 +194,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/organisation">
             <ProtectedRoute>
               <AppLayout>
@@ -209,7 +201,6 @@ export default function App() {
               </AppLayout>
             </ProtectedRoute>
           </Route>
-
           {/* ── Super Admin Section ── */}
           <Route path="/super-admin">
             <ProtectedRoute requiredRoles={["superadmin"]}>
@@ -218,7 +209,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/users">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -226,7 +216,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/organisations">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -234,7 +223,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/create-admin">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -242,7 +230,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/meetings">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -250,7 +237,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/documents">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -258,7 +244,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/tasks">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -266,7 +251,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/polls">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -274,7 +258,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/announcements">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -282,7 +265,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/finance">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -290,7 +272,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           <Route path="/super-admin/settings">
             <ProtectedRoute requiredRoles={["superadmin"]}>
               <SuperAdminLayout>
@@ -298,7 +279,6 @@ export default function App() {
               </SuperAdminLayout>
             </ProtectedRoute>
           </Route>
-
           {/* ── Catch-all 404 ── */}
           <Route component={NotFoundPage} />
         </Switch>
