@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect } from 'react'; // ✅ Fix 1: was missing entirely
+import { useEffect } from 'react';
 import React from 'react';
 import { Route, Router, Switch, useLocation } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -10,23 +10,15 @@ import { SuperAdminLayout } from '@/components/layout/SuperAdminLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { TokenService } from '@/api/client';
 
-<<<<<<< HEAD
-// ── Auth Pages ────────────────────────────────────────────────────────────────
+// ── Auth Pages ───────────────────────────────────────────────────────────────
 import { SignIn }         from '@/pages/auth/SignIn';
 import { SignUp }         from '@/pages/auth/SignUp';
-import { UserLogin }      from '@/pages/auth/UserLogin';
+import { UserLogin }      from '@/pages/auth/UserLogin';     // possibly legacy
 import { ForgotPassword } from '@/pages/auth/ForgotPassword';
-=======
-// ── Auth Pages ───────────────────────────────────────────────────────────────
-import { SignIn } from "@/pages/auth/SignIn";
-import { SignUp } from "@/pages/auth/SignUp";
-import { UserLogin } from "@/pages/auth/UserLogin"; // ← possibly unused / duplicate?
-import { ForgotPassword } from "@/pages/auth/ForgotPassword";
-import { ActivateAccount } from "@/pages/auth/ActivateAccount";
-import { ResetPasswordForm } from "@/pages/auth/ResetPasswordForm";
->>>>>>> fa3ebeb082c5272d84aa7abdb90ec8c8af4a89a9
+import { ActivateAccount }    from '@/pages/auth/ActivateAccount';
+import { ResetPasswordForm }  from '@/pages/auth/ResetPasswordForm';
 
-// ── Main App Pages ─────────────────────────────────────────────────────────────
+// ── Main App Pages ───────────────────────────────────────────────────────────
 import { Dashboard }     from '@/pages/Dashboard';
 import Meetings          from '@/pages/Meetings';
 import LiveMeeting       from '@/pages/LiveMeeting';
@@ -40,7 +32,7 @@ import { Reports }       from '@/pages/Reports';
 import { Settings }      from '@/pages/Settings';
 import OrganisationPage  from '@/pages/Organisation';
 
-// ── Board Member Dashboard ─────────────────────────────────────────────────────
+// ── Board Member Dashboard ───────────────────────────────────────────────────
 import {
   BoardMemberDashboard,
   MeetingsPage        as BoardMeetingsPage,
@@ -57,7 +49,7 @@ import {
   ProfilePage         as BoardProfilePage,
 } from '@/features/board-member';
 
-// ── Super Admin Pages ─────────────────────────────────────────────────────────
+// ── Super Admin Pages ────────────────────────────────────────────────────────
 import { SuperAdminDashboard }     from '@/pages/super-admin/SuperAdminDashboard';
 import { UsersManagement }         from '@/pages/super-admin/UsersManagement';
 import { OrganisationsManagement } from '@/pages/super-admin/OrganisationsManagement';
@@ -74,7 +66,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button }            from '@/components/ui/button';
 import { ShieldAlert, Home } from 'lucide-react';
 
-// ─── Utility pages ────────────────────────────────────────────────────────────
+// ─── Utility Pages ───────────────────────────────────────────────────────────
 
 function UnauthorizedPage() {
   const [, setLocation] = useLocation();
@@ -85,10 +77,10 @@ function UnauthorizedPage() {
           <ShieldAlert className="h-16 w-16 mx-auto mb-5 text-destructive" />
           <h1 className="text-2xl font-bold mb-3">Access Denied</h1>
           <p className="text-muted-foreground mb-8">
-            You don&apos;t have permission to access this page.
+            You don't have permission to access this page.
           </p>
           <Button onClick={() => setLocation('/')}>
-            <Home className="mr-2 h-4 w-4" />Back to Dashboard
+            <Home className="mr-2 h-4 w-4" /> Back to Dashboard
           </Button>
         </CardContent>
       </Card>
@@ -102,66 +94,60 @@ function NotFoundPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="text-center">
         <h1 className="text-7xl font-extrabold mb-4 text-indigo-600">404</h1>
-        <p className="text-2xl font-medium mb-6 text-muted-foreground">Page not found</p>
+        <p className="text-2xl font-medium mb-6 text-muted-foreground">
+          Page not found
+        </p>
         <Button onClick={() => setLocation('/dashboard')}>
-          <Home className="mr-2 h-4 w-4" />Go to Dashboard
+          <Home className="mr-2 h-4 w-4" /> Go to Dashboard
         </Button>
       </div>
     </div>
   );
 }
 
-// ─── Root redirect ─────────────────────────────────────────────────────────────
-// Reads the stored user role and sends them to the right home screen.
-// Renders nothing while deciding — no flash of content.
+// ─── Root Redirect (role-based) ─────────────────────────────────────────────
 
 function RootRedirect() {
   const [, setLocation] = useLocation();
 
-  useEffect(() => { // ✅ Fix 1: useEffect now imported above
+  useEffect(() => {
     const token = TokenService.getAccessToken();
-
     if (!token) {
       setLocation('/auth/signin');
       return;
     }
 
     const user = TokenService.getUser<{ role: string }>();
-
     if (!user) {
       setLocation('/auth/signin');
       return;
     }
 
-    // Normalise role string: lowercase, strip spaces/underscores/hyphens
+    // Normalize role
     const role = user.role?.toLowerCase().replace(/[_\s-]/g, '') ?? '';
 
     if (role === 'superadmin')  { setLocation('/super-admin'); return; }
     if (role === 'boardmember') { setLocation('/board');       return; }
 
-    // OrgAdmin, Admin, or any other role → main dashboard
+    // fallback: orgadmin, admin, member, etc.
     setLocation('/dashboard');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
 
-// ─── Route helpers ─────────────────────────────────────────────────────────────
+// ─── Route Helpers ───────────────────────────────────────────────────────────
 
-function AppRoute({
-  path,
-  roles,
-  fullWidth,
-  children,
-}: {
+interface AppRouteProps {
   path: string;
   roles?: string[];
   fullWidth?: boolean;
   children: React.ReactNode;
-}) {
+}
+
+function AppRoute({ path, roles, fullWidth, children }: AppRouteProps) {
   return (
     <Route path={path}>
-      {/* ✅ Fix 2: prop renamed allowedRoles → matches ProtectedRoute interface */}
       <ProtectedRoute allowedRoles={roles}>
         <AppLayout fullWidth={fullWidth}>{children}</AppLayout>
       </ProtectedRoute>
@@ -169,13 +155,7 @@ function AppRoute({
   );
 }
 
-function BoardRoute({
-  path,
-  children,
-}: {
-  path: string;
-  children: React.ReactNode;
-}) {
+function BoardRoute({ path, children }: { path: string; children: React.ReactNode }) {
   return (
     <Route path={path}>
       <ProtectedRoute allowedRoles={['boardmember', 'orgadmin', 'superadmin']}>
@@ -185,13 +165,7 @@ function BoardRoute({
   );
 }
 
-function SuperRoute({
-  path,
-  children,
-}: {
-  path: string;
-  children: React.ReactNode;
-}) {
+function SuperRoute({ path, children }: { path: string; children: React.ReactNode }) {
   return (
     <Route path={path}>
       <ProtectedRoute allowedRoles={['superadmin']}>
@@ -201,26 +175,26 @@ function SuperRoute({
   );
 }
 
-// ─── App ───────────────────────────────────────────────────────────────────────
+// ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router base="/">
         <Switch>
-<<<<<<< HEAD
-
-          {/* ── Public / Auth ───────────────────────────────────────── */}
+          {/* ── Public / Auth ──────────────────────────────────────── */}
           <Route path="/auth/signin"          component={SignIn} />
           <Route path="/auth/signup"          component={SignUp} />
           <Route path="/auth/user-login"      component={UserLogin} />
           <Route path="/auth/forgot-password" component={ForgotPassword} />
+          <Route path="/auth/activate-account"    component={ActivateAccount} />
+          <Route path="/auth/reset-password"      component={ResetPasswordForm} />
           <Route path="/unauthorized"         component={UnauthorizedPage} />
 
-          {/* ── Root: role-based redirect ────────────────────────────── */}
+          {/* ── Root: role-based redirect ──────────────────────────── */}
           <Route path="/" component={RootRedirect} />
 
-          {/* ── Main app (OrgAdmin / Admin) ─────────────────────────── */}
+          {/* ── Main App (most users + org admins) ─────────────────── */}
           <AppRoute path="/dashboard">     <Dashboard />        </AppRoute>
           <AppRoute path="/meetings">      <Meetings />         </AppRoute>
           <AppRoute path="/members">       <Members />          </AppRoute>
@@ -235,14 +209,14 @@ export default function App() {
             <LiveMeeting />
           </AppRoute>
 
-          <AppRoute path="/finance" roles={['admin', 'orgadmin', 'superadmin']}>
+          <AppRoute path="/finance"  roles={['admin', 'orgadmin', 'superadmin']}>
             <Finance />
           </AppRoute>
-          <AppRoute path="/reports" roles={['admin', 'orgadmin', 'superadmin']}>
+          <AppRoute path="/reports"  roles={['admin', 'orgadmin', 'superadmin']}>
             <Reports />
           </AppRoute>
 
-          {/* ── Board Member section ─────────────────────────────────── */}
+          {/* ── Board Member Routes ────────────────────────────────── */}
           <BoardRoute path="/board">               <BoardMemberDashboard />   </BoardRoute>
           <BoardRoute path="/board/meetings">      <BoardMeetingsPage />      </BoardRoute>
           <BoardRoute path="/board/documents">     <BoardDocumentsPage />     </BoardRoute>
@@ -257,7 +231,7 @@ export default function App() {
           <BoardRoute path="/board/archives">      <BoardArchivesPage />      </BoardRoute>
           <BoardRoute path="/board/profile">       <BoardProfilePage />       </BoardRoute>
 
-          {/* ── Super Admin section ──────────────────────────────────── */}
+          {/* ── Super Admin Routes ─────────────────────────────────── */}
           <SuperRoute path="/super-admin">                <SuperAdminDashboard />     </SuperRoute>
           <SuperRoute path="/super-admin/users">          <UsersManagement />         </SuperRoute>
           <SuperRoute path="/super-admin/organisations">  <OrganisationsManagement /> </SuperRoute>
@@ -270,186 +244,8 @@ export default function App() {
           <SuperRoute path="/super-admin/finance">        <FinanceOverviewPage />     </SuperRoute>
           <SuperRoute path="/super-admin/settings">       <SettingsManagement />      </SuperRoute>
 
-          {/* ── 404 ─────────────────────────────────────────────────── */}
-=======
-          {/* ── Public / Auth Routes ── */}
-          <Route path="/auth/signin" component={SignIn} />
-          <Route path="/auth/signup" component={SignUp} />
-          <Route path="/auth/user-login" component={UserLogin} />{" "}
-          {/* possibly legacy */}
-          <Route path="/auth/forgot-password" component={ForgotPassword} />
-          <Route path="/auth/activate-account" component={ActivateAccount} />
-          <Route path="/auth/reset-password" component={ResetPasswordForm} />
-          <Route path="/unauthorized" component={UnauthorizedPage} />
-          {/* ── Root → smart redirect ── */}
-          <Route path="/" component={RootRedirect} />
-          {/* ── Main App Routes (user + admin) ── */}
-          <Route path="/dashboard">
-            <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/meetings">
-            <ProtectedRoute>
-              <AppLayout>
-                <Meetings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/meetings/live/:id">
-            <ProtectedRoute>
-              <AppLayout fullWidth>
-                <LiveMeeting />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/members">
-            <ProtectedRoute>
-              <AppLayout>
-                <Members />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/documents">
-            <ProtectedRoute>
-              <AppLayout>
-                <Documents />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/voting">
-            <ProtectedRoute>
-              <AppLayout>
-                <Voting />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/tasks">
-            <ProtectedRoute>
-              <AppLayout>
-                <Tasks />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/finance">
-            <ProtectedRoute requiredRoles={["admin", "superadmin"]}>
-              <AppLayout>
-                <Finance />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/announcements">
-            <ProtectedRoute>
-              <AppLayout>
-                <Announcements />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/reports">
-            <ProtectedRoute requiredRoles={["admin", "superadmin"]}>
-              <AppLayout>
-                <Reports />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/settings">
-            <ProtectedRoute>
-              <AppLayout>
-                <Settings />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/organisation">
-            <ProtectedRoute>
-              <AppLayout>
-                <OrganisationPage />
-              </AppLayout>
-            </ProtectedRoute>
-          </Route>
-          {/* ── Super Admin Section ── */}
-          <Route path="/super-admin">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <SuperAdminDashboard />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/users">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <UsersManagement />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/organisations">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <OrganisationsManagement />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/create-admin">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <CreateSuperAdminPage />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/meetings">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <MeetingsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/documents">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <DocumentsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/tasks">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <TasksOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/polls">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <PollsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/announcements">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <AnnouncementsOverview />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/finance">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <FinanceOverviewPage />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          <Route path="/super-admin/settings">
-            <ProtectedRoute requiredRoles={["superadmin"]}>
-              <SuperAdminLayout>
-                <SettingsManagement />
-              </SuperAdminLayout>
-            </ProtectedRoute>
-          </Route>
-          {/* ── Catch-all 404 ── */}
->>>>>>> fa3ebeb082c5272d84aa7abdb90ec8c8af4a89a9
+          {/* ── 404 Catch-all ──────────────────────────────────────── */}
           <Route component={NotFoundPage} />
-
         </Switch>
 
         <Toaster richColors position="top-right" closeButton />
