@@ -1,6 +1,4 @@
 // src/hooks/api/useMinutes.ts
-// React Query hooks for Minutes API
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MinutesService from '@/api/services/minutes.service';
 import type {
@@ -12,43 +10,65 @@ import type {
   MinutesFilters,
 } from '@/types/api.types';
 
-// Query keys
 export const minutesKeys = {
-  all: ['minutes'] as const,
-  lists: () => [...minutesKeys.all, 'list'] as const,
-  list: (filters: MinutesFilters) => [...minutesKeys.lists(), filters] as const,
-  details: () => [...minutesKeys.all, 'detail'] as const,
-  detail: (id: string) => [...minutesKeys.details(), id] as const,
+  all:       ['minutes'] as const,
+  lists:     () => [...minutesKeys.all, 'list']                         as const,
+  list:      (filters: MinutesFilters) => [...minutesKeys.lists(), filters] as const,
+  details:   () => [...minutesKeys.all, 'detail']                       as const,
+  detail:    (id: string) => [...minutesKeys.details(), id]             as const,
   byMeeting: (meetingId: string) => [...minutesKeys.all, 'meeting', meetingId] as const,
 };
 
-// Get all minutes
 export function useMinutes(filters?: MinutesFilters) {
   return useQuery({
     queryKey: minutesKeys.list(filters || {}),
-    queryFn: () => MinutesService.getAll(filters),
+    queryFn:  () => MinutesService.getAll(filters),
+    staleTime: 2 * 60 * 1000,
   });
 }
 
-// Get minutes by ID
 export function useMinutesById(minutesId: string) {
   return useQuery({
     queryKey: minutesKeys.detail(minutesId),
-    queryFn: () => MinutesService.getById(minutesId),
-    enabled: !!minutesId,
+    queryFn:  () => MinutesService.getById(minutesId),
+    enabled:  !!minutesId,
   });
 }
 
-// Get minutes by meeting ID
+/**
+ * Fetch minutes for a specific meeting.
+ *
+ * FIX: A 404 here is EXPECTED — it means the meeting has no minutes yet.
+ * Without retry: false, React Query retries 3 times on 404, spamming
+ * the console every time a user selects a meeting with no minutes.
+ *
+ * Components should treat null/undefined data as "no minutes yet"
+ * and show the create form rather than an error state.
+ */
 export function useMinutesByMeeting(meetingId: string) {
   return useQuery({
     queryKey: minutesKeys.byMeeting(meetingId),
-    queryFn: () => MinutesService.getByMeetingId(meetingId),
+    queryFn:  async () => {
+      try {
+        return await MinutesService.getByMeetingId(meetingId);
+      } catch (err: any) {
+        // FIX: 404 means no minutes exist yet — return null instead of throwing
+        // so the component shows "create minutes" rather than an error state
+        if (err?.response?.status === 404) return null;
+        throw err;
+      }
+    },
     enabled: !!meetingId,
+    // FIX: don't retry on 404 or 403 — these are expected, not transient errors
+    retry: (failureCount, error: any) => {
+      const status = error?.response?.status;
+      if (status === 404 || status === 403) return false;
+      return failureCount < 1;
+    },
+    staleTime: 30 * 1000,
   });
 }
 
-// Create minutes mutation
 export function useCreateMinutes() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -59,7 +79,6 @@ export function useCreateMinutes() {
   });
 }
 
-// Update minutes mutation
 export function useUpdateMinutes() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -72,7 +91,6 @@ export function useUpdateMinutes() {
   });
 }
 
-// Delete minutes mutation
 export function useDeleteMinutes() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -83,7 +101,6 @@ export function useDeleteMinutes() {
   });
 }
 
-// Approve minutes mutation
 export function useApproveMinutes() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -96,7 +113,6 @@ export function useApproveMinutes() {
   });
 }
 
-// Publish minutes mutation
 export function usePublishMinutes() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -108,7 +124,6 @@ export function usePublishMinutes() {
   });
 }
 
-// Submit minutes for review mutation
 export function useSubmitMinutesForReview() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -120,7 +135,6 @@ export function useSubmitMinutesForReview() {
   });
 }
 
-// Add minute item mutation
 export function useAddMinuteItem() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -132,11 +146,12 @@ export function useAddMinuteItem() {
   });
 }
 
-// Update minute item mutation
 export function useUpdateMinuteItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ minutesId, itemId, data }: { minutesId: string; itemId: string; data: UpdateMinuteItemData }) =>
+    mutationFn: ({
+      minutesId, itemId, data,
+    }: { minutesId: string; itemId: string; data: UpdateMinuteItemData }) =>
       MinutesService.updateItem(minutesId, itemId, data),
     onSuccess: (_, { minutesId }) => {
       queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
@@ -144,7 +159,6 @@ export function useUpdateMinuteItem() {
   });
 }
 
-// Delete minute item mutation
 export function useDeleteMinuteItem() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -156,7 +170,6 @@ export function useDeleteMinuteItem() {
   });
 }
 
-// Reorder minute items mutation
 export function useReorderMinuteItems() {
   const queryClient = useQueryClient();
   return useMutation({
