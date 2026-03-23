@@ -27,6 +27,7 @@ import { Announcements } from "@/pages/Announcements";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
 import OrganisationPage from "@/pages/Organisation";
+import MinutesPage from "@/pages/Minutes";
 
 // ── Super Admin Pages ────────────────────────────────────────────────────────
 import { SuperAdminDashboard } from "@/pages/super-admin/SuperAdminDashboard";
@@ -206,6 +207,14 @@ export default function App() {
             <ProtectedRoute>
               <AppLayout>
                 <OrganisationPage />
+              </AppLayout>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/minutes">
+            <ProtectedRoute>
+              <AppLayout>
+                <MinutesPage />
               </AppLayout>
             </ProtectedRoute>
           </Route>

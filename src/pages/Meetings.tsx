@@ -98,8 +98,7 @@ function meetingTypeBadge(type?: MeetingType) {
 function priorityBadge(priority?: MeetingPriority) {
   if (!priority) return null;
   const map: Record<MeetingPriority, string> = {
-    urgent:  'bg-red-100 text-red-700',
-    high:    'bg-orange-100 text-orange-700',
+    high:    'bg-red-100 text-red-700',
     medium:  'bg-yellow-100 text-yellow-700',
     low:     'bg-green-100 text-green-700',
   };
@@ -113,7 +112,7 @@ function priorityBadge(priority?: MeetingPriority) {
 function formatIcon(fmt?: MeetingFormat) {
   switch (fmt) {
     case 'online':    return <Wifi      className="h-5 w-5 mx-auto mb-1 text-blue-500" />;
-    case 'in-person': return <Building2 className="h-5 w-5 mx-auto mb-1 text-green-500" />;
+    case 'physical':  return <Building2 className="h-5 w-5 mx-auto mb-1 text-green-500" />;
     case 'hybrid':    return <Layers    className="h-5 w-5 mx-auto mb-1 text-purple-500" />;
     default:          return <Monitor className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />;
   }
@@ -173,12 +172,18 @@ function daysUntil(dateStr?: string): string {
 }
 
 function isUpcoming(m: Meeting): boolean {
-  if (m.status === 'scheduled' || m.status === 'in-progress') return true;
+  if (m.status === 'scheduled' || m.status === 'inProgress') return true;
   if (m.status === 'completed' || m.status === 'cancelled')   return false;
   return new Date(m.date) >= new Date();
 }
 
 // ─── Default form state ──────────────────────────────────────────────────────
+function isValidDateTime(dateStr: string, timeStr: string): boolean {
+  const dateTimeStr = `${dateStr}T${timeStr}:00`;
+  const date = new Date(dateTimeStr + (Intl.DateTimeFormat().resolvedOptions().timeZone ? '' : 'Z'));
+  return !isNaN(date.getTime());
+}
+
 const BLANK_FORM: CreateMeetingData = {
   title:             '',
   description:       '',
@@ -192,6 +197,7 @@ const BLANK_FORM: CreateMeetingData = {
   startTime:         '',
   endTime:           '',
 };
+
 
 export default function Meetings() {
   const [, setLocation] = useLocation();
@@ -309,9 +315,15 @@ export default function Meetings() {
                     id="date"
                     type="date"
                     value={form.date}
+                    min={new Date().toISOString().split('T')[0]}
                     onChange={e => updateField('date', e.target.value)}
+                    className={form.date && !isValidDateTime(form.date, form.startTime || '') ? 'border-red-500' : ''}
                   />
+                  {form.date && form.startTime && !isValidDateTime(form.date, form.startTime) && (
+                    <p className="text-sm text-red-500">Invalid date/time combination</p>
+                  )}
                 </div>
+
                 <div className="space-y-2">
                   <Label>Meeting Type</Label>
                   <Select
@@ -707,8 +719,16 @@ export default function Meetings() {
           </TabsContent>
 
           <TabsContent value="minutes">
-            <MinutesManager />
+            <Button 
+              variant="outline" 
+              className="gap-2 w-full justify-start mb-4"
+              onClick={() => setLocation('/minutes')}
+            >
+              <FileText className="h-4 w-4" /> 
+              Minutes have moved to dedicated page
+            </Button>
           </TabsContent>
+
         </Tabs>
       )}
 

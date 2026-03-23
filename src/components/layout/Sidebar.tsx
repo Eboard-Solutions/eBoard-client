@@ -350,7 +350,8 @@ function SidebarInner({
   const mainNav: NavItem[] = [
     { icon: LayoutDashboard, label: 'Dashboard',  href: '/' },
     { icon: Calendar,        label: 'Meetings',   href: '/meetings',   badgeKey: 'meetings' },
-    { icon: BookOpen,        label: 'Agendas',    href: '/agendas',    badgeKey: 'agendas' },
+{ icon: BookOpen,        label: 'Agendas',    href: '/agendas',    badgeKey: 'agendas' },
+    { icon: FileText,       label: 'Minutes',    href: '/minutes' },
     { icon: Users,           label: 'Members',    href: '/members' },
     { icon: FileText,        label: 'Documents',  href: '/documents' },
     { icon: Vote,            label: 'Voting',     href: '/voting',     badgeKey: 'polls' },
