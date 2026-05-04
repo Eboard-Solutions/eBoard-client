@@ -36,7 +36,7 @@ export const ENDPOINTS = {
   },
 
   ADMIN: {
-    APPROVE_ORG: (id: string) => `/admin/organisations/${id}/approve`,
+    APPROVE_ORG: (organisationId: string) => `/admin/organisations/${organisationId}/approve`,
   },
 
   MEETINGS: {

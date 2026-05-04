@@ -86,8 +86,17 @@ export const OrganisationsService = {
   },
 
   /** Approve pending org (SuperAdmin only) */
-  async approve(id: string): Promise<Organisation> {
-    const response = await apiClient.post(ENDPOINTS.ADMIN.APPROVE_ORG(id));
+  async approve(
+    organisationId: string,
+    approvalData: {
+      status: 'approved' | 'rejected';
+      rejectedReason?: string
+    }
+  ): Promise<Organisation> {
+    const response = await apiClient.patch(ENDPOINTS.ADMIN.APPROVE_ORG(organisationId), {
+      organisationId,
+      ...approvalData,
+    });
     return response.data.data ?? response.data;
   },
 };
