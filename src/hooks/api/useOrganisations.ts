@@ -2,17 +2,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import OrganisationsService from '@/api/services/organisations.service';
 import type { CreateOrganisationData, UpdateOrganisationData } from '@/types/api.types';
+import { ENDPOINTS } from '@/config/api.config';
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const organisationKeys = {
-  all:     ['organisations'] as const,
-  lists:   () => [...organisationKeys.all, 'list']    as const,
-  list:    () => [...organisationKeys.lists()]        as const,
-  mine:    () => [...organisationKeys.all, 'mine']    as const,
+  all: ['organisations'] as const,
+  lists: () => [...organisationKeys.all, 'list'] as const,
+  list: () => [...organisationKeys.lists()] as const,
+  mine: () => [...organisationKeys.all, 'mine'] as const,
   pending: () => [...organisationKeys.all, 'pending'] as const,
-  details: () => [...organisationKeys.all, 'detail']  as const,
-  detail:  (id: string) => [...organisationKeys.details(), id] as const,
+  details: () => [...organisationKeys.all, 'detail'] as const,
+  detail: (id: string) => [...organisationKeys.details(), id] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ export const organisationKeys = {
 export function useOrganisations() {
   return useQuery({
     queryKey: organisationKeys.list(),
-    queryFn:  () => OrganisationsService.getAll(),
+    queryFn: () => OrganisationsService.getAll(),
   });
 }
 
@@ -41,7 +42,7 @@ export function useOrganisations() {
 export function useMyOrganisation(enabled = true) {
   return useQuery({
     queryKey: organisationKeys.mine(),
-    queryFn:  () => OrganisationsService.getMyOrganisation(),
+    queryFn: () => OrganisationsService.getMyOrganisation(),
     enabled,
     // Don't retry on 403 — the user genuinely lacks access
     retry: (failureCount, error: any) => {
@@ -59,8 +60,8 @@ export function useMyOrganisation(enabled = true) {
 export function useOrganisationById(orgId: string | null | undefined) {
   return useQuery({
     queryKey: organisationKeys.detail(orgId ?? ''),
-    queryFn:  () => OrganisationsService.getById(orgId!),
-    enabled:  !!orgId,
+    queryFn: () => OrganisationsService.getById(orgId!),
+    enabled: !!orgId,
     retry: (failureCount, error: any) => {
       if (error?.response?.status === 403) return false;
       return failureCount < 2;
@@ -72,7 +73,7 @@ export function useOrganisationById(orgId: string | null | undefined) {
 export function usePendingOrganisations() {
   return useQuery({
     queryKey: organisationKeys.pending(),
-    queryFn:  () => OrganisationsService.getPending(),
+    queryFn: () => OrganisationsService.getPending(),
   });
 }
 
@@ -138,12 +139,25 @@ export function useDeleteOrganisation() {
 /** Approve a pending organisation (SuperAdmin only) */
 export function useApproveOrganisation() {
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: (organisationId: string) => OrganisationsService.approve(organisationId),
-    onSuccess: (_, organisationId) => {
-      queryClient.invalidateQueries({ queryKey: organisationKeys.detail(organisationId) });
+    mutationFn: ({
+      organisationId,
+      status,
+      rejectedReason,
+    }: {
+      organisationId: string;
+      status: 'approved' | 'rejected';
+      rejectedReason?: string;
+    }) => OrganisationsService.approve(organisationId, {
+      status,
+      rejectedReason,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ENDPOINTS.ORGANISATIONS.PENDING] });
+      queryClient.invalidateQueries({ queryKey: [ENDPOINTS.ORGANISATIONS.BASE] });
       queryClient.invalidateQueries({ queryKey: organisationKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: organisationKeys.pending() });
+
     },
   });
 }
