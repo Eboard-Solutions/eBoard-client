@@ -1,4 +1,5 @@
 // src/components/layout/SidebarContext.tsx
+/* eslint-disable react-refresh/only-export-components */
 // Shared context consumed by AppLayout (for margin offset) and both sidebars.
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
