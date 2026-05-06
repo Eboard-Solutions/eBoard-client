@@ -14,6 +14,7 @@ export function CreateSuperAdminPage() {
     firstName: '',
     lastName: '',
     email: '',
+    password: '',
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -27,7 +28,7 @@ export function CreateSuperAdminPage() {
       {
         onSuccess: () => {
           toast.success('Super Admin created successfully');
-          setForm({ firstName: '', lastName: '', email: '' });
+          setForm({ firstName: '', lastName: '', email: '', password: '' });
         },
         onError: () => toast.error('Failed to create Super Admin'),
       }
@@ -69,6 +70,17 @@ export function CreateSuperAdminPage() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <Input id="email" type="email" placeholder="admin@example.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter a strong password"
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                />
               </div>
               <Button type="submit" className="w-full" disabled={createSuperAdmin.isPending}>
                 <UserPlus className="h-4 w-4 mr-2" />
