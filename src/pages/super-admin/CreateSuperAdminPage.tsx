@@ -48,13 +48,7 @@ export function CreateSuperAdminPage() {
           setForm({ firstName: '', lastName: '', email: '', password: '' });
         },
         onError: (err: unknown) => {
-          const msg =
-            (err && typeof err === 'object' && 'response' in err
-              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ((err as any)?.response?.data?.message as string | undefined)
-              : undefined) ||
-            (err instanceof Error ? err.message : undefined) ||
-            'Failed to create Super Admin';
+          const msg = err instanceof Error ? err.message : 'Failed to create Super Admin';
           toast.error(msg);
         },
       }
