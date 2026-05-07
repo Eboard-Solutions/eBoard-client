@@ -19,8 +19,25 @@ export function CreateSuperAdminPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.firstName || !form.lastName || !form.email) {
-      toast.error('Please fill in all fields');
+    if (!form.firstName || !form.firstName.trim()) {
+      toast.error('First Name is required');
+      return;
+    }
+    if (!form.lastName || !form.lastName.trim()) {
+      toast.error('Last Name is required');
+      return;
+    }
+    if (!form.email || !form.email.trim()) {
+      toast.error('Email is required');
+      return;
+    }
+    if (!form.password || !form.password.trim()) {
+      toast.error('Password is required');
+      return;
+    }
+
+    if (form.password.length < 8) {
+      toast.error('Password must be at least 8 characters');
       return;
     }
     createSuperAdmin.mutate(
@@ -30,7 +47,10 @@ export function CreateSuperAdminPage() {
           toast.success('Super Admin created successfully');
           setForm({ firstName: '', lastName: '', email: '', password: '' });
         },
-        onError: () => toast.error('Failed to create Super Admin'),
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : 'Failed to create Super Admin';
+          toast.error(msg);
+        },
       }
     );
   }
@@ -60,11 +80,11 @@ export function CreateSuperAdminPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" placeholder="John" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
+                  <Input id="firstName" placeholder="Bernard" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" placeholder="Doe" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
+                  <Input id="lastName" placeholder="Shihkule" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -79,6 +99,8 @@ export function CreateSuperAdminPage() {
                   type="password"
                   placeholder="Enter a strong password"
                   value={form.password}
+                  minLength={8}
+                  autoComplete="new-password"
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 />
               </div>
