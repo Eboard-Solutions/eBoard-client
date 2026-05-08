@@ -546,9 +546,9 @@ export interface Document {
   id: string;
   title: string;
   fileName: string;
-  fileUrl: string;
   fileType: string;
   fileSize: number;
+  downloadUrl?: string;
   folderId?: string;
   tags?: string[];
   version: number;
