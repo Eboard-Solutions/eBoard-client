@@ -6,7 +6,7 @@
  * Renders INLINE (no modal) so the dashboard sidebar stays fully visible.
  *
  * How PDF rendering works (why previous attempts showed 404 / blank):
- * ─────────────────────────────────────────────────────────────────────
+ * ─────────────────────────────────────────────────────────────────
  * The file URL is typically an authenticated endpoint on your own backend.
  * When you put that URL inside an <iframe src> or <object data>, the browser
  * makes a brand-new navigation request WITHOUT your app's session cookies
@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import type { Document as DocType } from '@/types/api.types';
+import documentsService from '@/api/services/documents.service';
 
 import {
   ArrowLeft, ZoomIn, ZoomOut, Download, ExternalLink,
@@ -42,7 +43,7 @@ import {
   RefreshCw, X,
 } from 'lucide-react';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────
 
 function fmtSize(b: number): string {
   if (!b || b < 0) return '—';
@@ -82,11 +83,11 @@ function getIcon(fileType: string) {
 const ACC: Record<string, { lbl: string; Icon: React.ElementType; cls: string }> = {
   VIEWER: { lbl: 'Viewer',     Icon: Globe,       cls: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
   EDITOR: { lbl: 'Editor',     Icon: Users,       cls: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800' },
-  ADMIN:  { lbl: 'Admin Only', Icon: ShieldAlert, cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+  ADMIN:  { lbl: 'Admin Only', Icon: ShieldAlert, cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-emerald-800' },
   OWNER:  { lbl: 'Owner Only', Icon: Lock,        cls: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
 };
 
-// ─── Blob-fetch hook ──────────────────────────────────────────────────────────
+// ─── Blob-fetch hook ─────────────────────────────────────────────────────────
 // Fetches the file via the app's authenticated session (credentials: 'include')
 // and returns a memory blob: URL. This bypasses all iframe/object auth issues.
 
@@ -102,7 +103,6 @@ function useBlob(url: string | null | undefined) {
   const load = useCallback(() => {
     if (!url) { setStatus('idle'); return; }
 
-    // Cleanup previous blob
     if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null; }
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -117,9 +117,6 @@ function useBlob(url: string | null | undefined) {
         return res.blob();
       })
       .then(blob => {
-        // Force the correct MIME type so the iframe / embed renders it properly.
-        // Some backends return application/octet-stream even for PDFs — the
-        // browser won't open the PDF viewer if the MIME type is wrong.
         const isPdf = url.toLowerCase().includes('.pdf') ||
                       blob.type === 'application/pdf' ||
                       blob.type === 'application/octet-stream';
@@ -144,7 +141,7 @@ function useBlob(url: string | null | undefined) {
   return { blobUrl, status, errMsg, reload: load };
 }
 
-// ─── Shared UI pieces ─────────────────────────────────────────────────────────
+// ─── Shared UI pieces ────────────────────────────────────────────────────────
 
 function Spinner({ msg = 'Loading document…' }: { msg?: string }) {
   return (
@@ -158,8 +155,8 @@ function Spinner({ msg = 'Loading document…' }: { msg?: string }) {
   );
 }
 
-function ErrState({ title, detail, doc, onRetry }: {
-  title?: string; detail?: string | null; doc: DocType; onRetry: () => void;
+function ErrState({ title, detail, doc, onRetry, downloadUrl }: {
+  title?: string; detail?: string | null; doc: DocType; onRetry: () => void; downloadUrl?: string | null;
 }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-background z-20 px-8 text-center">
@@ -176,8 +173,8 @@ function ErrState({ title, detail, doc, onRetry }: {
         <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={onRetry}>
           <RefreshCw className="h-3.5 w-3.5" />Retry
         </Button>
-        {doc.fileUrl && (
-          <Button size="sm" className="gap-1.5 h-9" onClick={() => window.open(doc.fileUrl!, '_blank', 'noopener,noreferrer')}>
+        {downloadUrl && (
+          <Button size="sm" className="gap-1.5 h-9" onClick={() => window.open(downloadUrl, '_blank', 'noopener,noreferrer')}>
             <ExternalLink className="h-3.5 w-3.5" />Open in browser
           </Button>
         )}
@@ -187,10 +184,6 @@ function ErrState({ title, detail, doc, onRetry }: {
 }
 
 // ─── PDF.js canvas renderer ───────────────────────────────────────────────────
-// We render PDFs ourselves using PDF.js loaded from CDN.
-// This completely avoids iframe/embed/blob-URL browser security restrictions.
-// The file is fetched as an ArrayBuffer (with auth cookies) then passed
-// directly to PDF.js — never navigated to by a frame.
 
 declare global {
   interface Window {
@@ -216,19 +209,18 @@ function loadPdfJs(): Promise<any> {
   });
 }
 
-function PdfViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
+function PdfViewer({ doc, zoom, refreshKey, downloadUrl }: { doc: DocType; zoom: number; refreshKey: number; downloadUrl?: string | null }) {
   const containerRef              = useRef<HTMLDivElement>(null);
   const canvasRefs                = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const [numPages, setNumPages]   = useState(0);
   const [status, setStatus]       = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [errMsg, setErrMsg]       = useState<string | null>(null);
   const [renderKey, setRenderKey] = useState(0);
-  const [canvasReady, setCanvasReady] = useState(0); // incremented when all canvases mount
+  const [canvasReady, setCanvasReady] = useState(0);
   const pdfRef                    = useRef<any>(null);
 
-  // ── Load PDF bytes ──
   useEffect(() => {
-    if (!doc.fileUrl) return;
+    if (!downloadUrl) return;
     let cancelled = false;
     setStatus('loading');
     setErrMsg(null);
@@ -238,7 +230,7 @@ function PdfViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refr
     (async () => {
       try {
         const pdfjsLib = await loadPdfJs();
-        const res = await fetch(doc.fileUrl!, { credentials: 'include', cache: 'force-cache' });
+        const res = await fetch(downloadUrl, { credentials: 'include', cache: 'force-cache' });
         if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
         const arrayBuffer = await res.arrayBuffer();
         if (cancelled) return;
@@ -255,13 +247,11 @@ function PdfViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refr
     })();
 
     return () => { cancelled = true; };
-  }, [doc.fileUrl, refreshKey, renderKey]);
+  }, [downloadUrl, refreshKey, renderKey]);
 
-  // ── Paint pages onto canvases — runs when canvases are mounted OR zoom changes ──
   useEffect(() => {
     if (status !== 'ready' || !pdfRef.current || numPages === 0) return;
     const pdf = pdfRef.current;
-    // Use a higher internal scale for sharpness, then CSS-shrink to display scale
     const PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 2);
     const displayScale = zoom / 100;
 
@@ -279,14 +269,14 @@ function PdfViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refr
         await page.render({ canvasContext: ctx, viewport }).promise;
       } catch { /* skip failed page */ }
     });
-  }, [status, numPages, zoom, canvasReady]); // canvasReady ensures we repaint after DOM mounts
+  }, [status, numPages, zoom, canvasReady]);
 
   const retry = () => setRenderKey(k => k + 1);
 
   return (
     <div className="flex-1 relative overflow-auto bg-[#525659]" ref={containerRef}>
       {status === 'loading' && <Spinner msg="Rendering document…" />}
-      {status === 'error'   && <ErrState doc={doc} detail={errMsg} onRetry={retry} />}
+      {status === 'error'   && <ErrState doc={doc} detail={errMsg} onRetry={retry} downloadUrl={downloadUrl} />}
 
       {status === 'ready' && (
         <div className="flex flex-col items-center gap-4 py-6 px-4 min-h-full">
@@ -303,7 +293,6 @@ function PdfViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refr
                 ref={el => {
                   if (el) {
                     canvasRefs.current.set(pageNum, el);
-                    // When the last canvas mounts, trigger paint
                     if (canvasRefs.current.size === numPages) {
                       setCanvasReady(k => k + 1);
                     }
@@ -321,10 +310,10 @@ function PdfViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refr
   );
 }
 
-// ─── Image renderer ───────────────────────────────────────────────────────────
+// ─── Image renderer ─────────────────────────────────────────────────────────
 
-function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
-  const { blobUrl, status, errMsg, reload } = useBlob(doc.fileUrl);
+function ImageViewer({ doc, zoom, refreshKey, downloadUrl }: { doc: DocType; zoom: number; refreshKey: number; downloadUrl?: string | null }) {
+  const { blobUrl, status, errMsg, reload } = useBlob(downloadUrl);
 
   const prevRefresh = useRef(refreshKey);
   useEffect(() => {
@@ -334,7 +323,7 @@ function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; re
   return (
     <div className="flex-1 relative overflow-auto bg-muted/20 flex items-start justify-center p-8">
       {(status === 'idle' || status === 'fetching') && <Spinner msg="Loading image…" />}
-      {status === 'error' && <ErrState doc={doc} detail={errMsg} onRetry={reload} />}
+      {status === 'error' && <ErrState doc={doc} detail={errMsg} onRetry={reload} downloadUrl={downloadUrl} />}
       {status === 'ready' && blobUrl && (
         <img
           src={blobUrl}
@@ -353,13 +342,13 @@ function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; re
 
 // ─── Office renderer (Google Docs Viewer) ────────────────────────────────────
 
-function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number }) {
+function OfficeViewer({ doc, refreshKey, downloadUrl }: { doc: DocType; refreshKey: number; downloadUrl?: string | null }) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
 
   useEffect(() => setState('loading'), [doc.id, refreshKey, retry]);
 
-  if (!doc.fileUrl) {
+  if (!downloadUrl) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8 bg-muted/10">
         <File className="h-10 w-10 text-muted-foreground/30" />
@@ -368,7 +357,7 @@ function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number })
     );
   }
 
-  const src = `https://docs.google.com/viewer?url=${encodeURIComponent(doc.fileUrl)}&embedded=true`;
+  const src = `https://docs.google.com/viewer?url=${encodeURIComponent(downloadUrl)}&embedded=true`;
 
   return (
     <div className="flex-1 relative overflow-hidden bg-muted/5">
@@ -379,6 +368,7 @@ function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number })
           title="Office preview unavailable"
           detail="Google Docs Viewer requires a publicly accessible URL. If your files are behind authentication, download the file instead."
           onRetry={() => setRetry(r => r + 1)}
+          downloadUrl={downloadUrl}
         />
       )}
       <iframe
@@ -394,9 +384,9 @@ function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number })
   );
 }
 
-// ─── Unsupported ─────────────────────────────────────────────────────────────
+// ─── Unsupported ────────────────────────────────────────────────────────────
 
-function UnsupportedViewer({ doc }: { doc: DocType }) {
+function UnsupportedViewer({ doc, downloadUrl }: { doc: DocType; downloadUrl?: string | null }) {
   const { Icon, clr, bg, lbl } = getIcon(doc.fileType ?? '');
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-5 text-center px-8 bg-muted/10">
@@ -411,11 +401,17 @@ function UnsupportedViewer({ doc }: { doc: DocType }) {
       </div>
       <div className="flex gap-2">
         <Button size="sm" variant="outline" className="gap-1.5 h-9"
-          onClick={() => { const a = document.createElement('a'); a.href = doc.fileUrl!; a.download = doc.fileName ?? doc.title; a.click(); }}>
+          onClick={() => {
+            if (!downloadUrl) { toast.error('No download URL available'); return; }
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = doc.fileName ?? doc.title;
+            a.click();
+          }}>
           <Download className="h-3.5 w-3.5" />Download
         </Button>
-        {doc.fileUrl && (
-          <Button size="sm" className="gap-1.5 h-9" onClick={() => window.open(doc.fileUrl!, '_blank', 'noopener,noreferrer')}>
+        {downloadUrl && (
+          <Button size="sm" className="gap-1.5 h-9" onClick={() => window.open(downloadUrl, '_blank', 'noopener,noreferrer')}>
             <ExternalLink className="h-3.5 w-3.5" />Open in browser
           </Button>
         )}
@@ -424,20 +420,20 @@ function UnsupportedViewer({ doc }: { doc: DocType }) {
   );
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
+// ─── Router ────────────────────────────────────────────────────────────────
 
-function ViewerContent({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
+function ViewerContent({ doc, zoom, refreshKey, downloadUrl }: { doc: DocType; zoom: number; refreshKey: number; downloadUrl?: string | null }) {
   const kind = getKind(doc.fileType ?? '') !== 'unknown'
     ? getKind(doc.fileType ?? '')
-    : getKind(doc.fileUrl ?? '');
+    : getKind(downloadUrl ?? '');
 
-  if (kind === 'pdf')    return <PdfViewer    doc={doc} zoom={zoom} refreshKey={refreshKey} />;
-  if (kind === 'image')  return <ImageViewer  doc={doc} zoom={zoom} refreshKey={refreshKey} />;
-  if (kind === 'office') return <OfficeViewer doc={doc}             refreshKey={refreshKey} />;
-  return <UnsupportedViewer doc={doc} />;
+  if (kind === 'pdf')    return <PdfViewer    doc={doc} zoom={zoom} refreshKey={refreshKey} downloadUrl={downloadUrl} />;
+  if (kind === 'image')  return <ImageViewer  doc={doc} zoom={zoom} refreshKey={refreshKey} downloadUrl={downloadUrl} />;
+  if (kind === 'office') return <OfficeViewer doc={doc}             refreshKey={refreshKey} downloadUrl={downloadUrl} />;
+  return <UnsupportedViewer doc={doc} downloadUrl={downloadUrl} />;
 }
 
-// ─── Info panel ───────────────────────────────────────────────────────────────
+// ─── Info panel ────────────────────────────────────────────────────────────
 
 function InfoPanel({ doc, onClose }: { doc: DocType; onClose: () => void }) {
   const { Icon, clr, bg, lbl } = getIcon(doc.fileType ?? '');
@@ -506,7 +502,7 @@ function InfoPanel({ doc, onClose }: { doc: DocType; onClose: () => void }) {
   );
 }
 
-// ─── Toolbar ──────────────────────────────────────────────────────────────────
+// ─── Toolbar ────────────────────────────────────────────────────────────
 
 interface TBProps {
   doc: DocType; zoom: number; showInfo: boolean; isFullscreen: boolean;
@@ -621,7 +617,7 @@ function Toolbar(p: TBProps) {
   );
 }
 
-// ─── Main Export ──────────────────────────────────────────────────────────────
+// ─── Main Export ────────────────────────────────────────────────────────────
 
 interface DocumentViewerProps {
   doc: DocType;
@@ -635,6 +631,7 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   const [isFullscreen, setIsFullscreen]   = useState(false);
   const [refreshKey, setRefreshKey]       = useState(0);
   const [currentDocId, setCurrentDocId]   = useState(doc.id);
+  const [downloadUrl, setDownloadUrl]     = useState<string | null>(null);
 
   useEffect(() => {
     if (doc.id !== currentDocId) {
@@ -648,6 +645,18 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   const currentDoc = allDocs.find(d => d.id === currentDocId) ?? doc;
   const currentIdx = allDocs.findIndex(d => d.id === currentDocId);
 
+  useEffect(() => {
+    let cancelled = false;
+    documentsService.getDownloadurl(currentDoc.id)
+      .then(url => {
+        if (!cancelled) setDownloadUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setDownloadUrl(null);
+      });
+    return () => { cancelled = true; };
+  }, [currentDoc.id, currentDoc.downloadUrl]);
+
   const navigateTo = useCallback((target: DocType) => {
     setCurrentDocId(target.id);
     setZoom(100);
@@ -656,9 +665,9 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   }, []);
 
   const handleDownload = () => {
-    if (!currentDoc.fileUrl) { toast.error('No file URL available'); return; }
+    if (!downloadUrl) { toast.error('No download URL available'); return; }
     const a = document.createElement('a');
-    a.href = currentDoc.fileUrl;
+    a.href = downloadUrl;
     a.download = currentDoc.fileName ?? currentDoc.title;
     a.click();
     toast.success('Download started', { description: currentDoc.title });
@@ -671,7 +680,7 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
     onZoomReset:        () => setZoom(100),
     onRefresh:          () => setRefreshKey(k => k + 1),
     onDownload:         handleDownload,
-    onOpenExternal:     () => currentDoc.fileUrl && window.open(currentDoc.fileUrl, '_blank', 'noopener,noreferrer'),
+    onOpenExternal:     () => downloadUrl && window.open(downloadUrl, '_blank', 'noopener,noreferrer'),
     onToggleInfo:       () => setShowInfo(v => !v),
     onToggleFullscreen: () => setIsFullscreen(v => !v),
     onClose,
@@ -708,7 +717,7 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
 
       {/* Content + optional info panel */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <ViewerContent doc={currentDoc} zoom={zoom} refreshKey={refreshKey} />
+        <ViewerContent doc={currentDoc} zoom={zoom} refreshKey={refreshKey} downloadUrl={downloadUrl} />
         {showInfo && <InfoPanel doc={currentDoc} onClose={() => setShowInfo(false)} />}
       </div>
 
