@@ -76,6 +76,19 @@ export const documentsService = {
     }
   },
 
+  async getDownloadurl(id: string): Promise<string>{
+    const res = await apiClient.get<ResponseObject<{url: string}>>(
+      ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(id)
+    );
+
+    const downloadUrl = res.data.data?.url;
+    if (!downloadUrl) {
+      throw new Error('Download URL is unavailable.');
+    }
+
+    return downloadUrl;
+  },
+
   async createDocument(data: CreateDocumentData): Promise<ResponseObject<Document>> {
     if (!data.file) throw new Error('A file is required to upload a document.');
     if (!data.title?.trim()) throw new Error('Document title is required.');
