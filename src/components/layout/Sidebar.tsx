@@ -88,27 +88,33 @@ function Tooltip({ label, children }: { label: string; children: React.ReactNode
 }
 
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) return <div className="my-2 mx-3 h-px bg-gray-200/60 dark:bg-gray-800/60" />;
-  return <p className="px-4 pt-5 pb-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-600 select-none">{label}</p>;
+  if (collapsed) return <div className="my-2.5 mx-3 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-gray-800/80" />;
+  return <p className="px-4 pt-5 pb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-gray-400/90 dark:text-gray-500/80 select-none">{label}</p>;
 }
 
 function NavBadge({ count, active, collapsed }: { count: number; active: boolean; collapsed: boolean }) {
   if (!count) return null;
   const d = count > 99 ? '99+' : String(count);
-  if (collapsed) return <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white ring-2 ring-white dark:ring-gray-950 px-0.5 z-10">{d}</span>;
-  return <span className={cn('ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-black', active ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300')}>{d}</span>;
+  if (collapsed) return <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-rose-600 text-[9px] font-black text-white ring-2 ring-white dark:ring-gray-950 px-0.5 z-10 shadow-sm shadow-rose-500/40 tabular-nums">{d}</span>;
+  return <span className={cn('ml-auto flex h-[19px] min-w-[19px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-bold tabular-nums tracking-tight', active ? 'bg-white/25 text-white shadow-inner shadow-black/10' : 'bg-rose-50 text-rose-600 ring-1 ring-rose-200/70 dark:bg-rose-900/30 dark:text-rose-300 dark:ring-rose-900/50')}>{d}</span>;
 }
 
 function NavLink({ item, isActive, collapsed, badgeCount, onNavigate }: { item: NavItem; isActive: boolean; collapsed: boolean; badgeCount: number; onNavigate?: () => void }) {
   const Icon = item.icon;
   const inner = (
-    <div onClick={onNavigate} className={cn('group relative flex items-center rounded-xl cursor-pointer select-none transition-all duration-200', collapsed ? 'justify-center p-2.5 mx-1.5' : 'gap-3 px-3.5 py-2.5 mx-1', isActive ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-500/30' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-[0.98]')}>
-      {isActive && !collapsed && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-white/60" />}
+    <div onClick={onNavigate} className={cn(
+      'group relative flex items-center rounded-xl cursor-pointer select-none transition-all duration-200 ease-out',
+      collapsed ? 'justify-center p-2.5 mx-1.5' : 'gap-3 px-3 py-2 mx-2',
+      isActive
+        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md shadow-indigo-600/25 ring-1 ring-inset ring-white/10'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-[0.98]'
+    )}>
+      {isActive && !collapsed && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded-r-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />}
       <span className="relative flex shrink-0 items-center justify-center">
-        <Icon className={cn('h-[18px] w-[18px] transition-colors', isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-indigo-500')} />
+        <Icon className={cn('h-[18px] w-[18px] transition-all duration-200', isActive ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]' : 'text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 group-hover:scale-110')} strokeWidth={isActive ? 2.25 : 2} />
         {collapsed && <NavBadge count={badgeCount} active={isActive} collapsed />}
       </span>
-      {!collapsed && <><span className="flex-1 truncate text-sm font-medium leading-none">{item.label}</span><NavBadge count={badgeCount} active={isActive} collapsed={false} /></>}
+      {!collapsed && <><span className={cn('flex-1 truncate text-[13.5px] leading-none tracking-tight', isActive ? 'font-semibold' : 'font-medium')}>{item.label}</span><NavBadge count={badgeCount} active={isActive} collapsed={false} /></>}
       {collapsed && <span className="sr-only">{item.label}</span>}
     </div>
   );
@@ -161,10 +167,14 @@ function MainSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNav
       {/* Logo */}
       <div className={cn('flex h-16 shrink-0 items-center border-b border-gray-200/70 dark:border-gray-800/70', collapsed ? 'justify-center px-2' : 'px-4')}>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <span className="text-white font-black text-sm">EB</span>
+          <div className="relative h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 ring-1 ring-white/10">
+            <span className="text-white font-black text-[13px] tracking-tight drop-shadow-sm">EB</span>
+            <span className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
           </div>
-          {!collapsed && <div className="min-w-0"><p className="text-[15px] font-black text-gray-900 dark:text-white tracking-tight">E-Board</p><p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 font-medium tracking-wide uppercase">MIS Portal</p></div>}
+          {!collapsed && <div className="min-w-0">
+            <p className="text-[15.5px] font-black text-gray-900 dark:text-white tracking-tight leading-none">E-Board</p>
+            <p className="text-[9.5px] text-gray-400 dark:text-gray-500 mt-1 font-bold tracking-[0.16em] uppercase">MIS · Portal</p>
+          </div>}
         </div>
       </div>
 
@@ -180,7 +190,7 @@ function MainSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNav
       <div className="border-t border-gray-200/70 dark:border-gray-800/70 py-2">
         {collapsed
           ? <Tooltip label={isDark ? 'Light Mode' : 'Dark Mode'}><button onClick={toggle} className="w-full flex justify-center p-2.5 mx-1.5 rounded-xl text-gray-500 hover:text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}</button></Tooltip>
-          : <button onClick={toggle} className="w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-amber-600 transition-all">{isDark ? <Sun className="h-[18px] w-[18px] text-amber-400 shrink-0" /> : <Moon className="h-[18px] w-[18px] text-gray-500 shrink-0" />}<span>{isDark ? 'Light Mode' : 'Dark Mode'}</span></button>
+          : <button onClick={toggle} className="group w-full flex items-center gap-3 px-3 py-2 mx-2 rounded-xl text-[13.5px] font-medium tracking-tight text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-amber-600 transition-all">{isDark ? <Sun className="h-[18px] w-[18px] text-amber-400 shrink-0 group-hover:rotate-45 transition-transform duration-300" /> : <Moon className="h-[18px] w-[18px] text-gray-500 shrink-0 group-hover:-rotate-12 transition-transform duration-300" />}<span>{isDark ? 'Light Mode' : 'Dark Mode'}</span></button>
         }
         {bottomNav.map(item => <NavLink key={item.href} item={item} isActive={location === item.href} collapsed={collapsed} badgeCount={0} onNavigate={onNavigate} />)}
       </div>
@@ -191,9 +201,9 @@ function MainSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNav
           ? <Tooltip label={`${fullName} · ${roleName}`}><button className="mx-auto block p-0.5"><Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar></button></Tooltip>
           : (
             <div className="relative">
-              <button onClick={() => setUserMenuOpen(o => !o)} className={cn('w-full flex items-center gap-3 rounded-xl px-3 py-2 transition-all duration-200 border', userMenuOpen ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200')}>
-                <div className="relative shrink-0"><Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-950" /></div>
-                <div className="flex-1 text-left min-w-0"><p className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-none">{fullName}</p><p className="text-xs text-gray-500 truncate mt-0.5">{roleName}</p></div>
+              <button onClick={() => setUserMenuOpen(o => !o)} className={cn('w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 border', userMenuOpen ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200/80 dark:border-indigo-800/60 shadow-sm shadow-indigo-500/5' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200/70 dark:hover:border-gray-800')}>
+                <div className="relative shrink-0"><Avatar className="h-9 w-9 ring-2 ring-white dark:ring-gray-900 shadow-sm"><AvatarFallback className="text-[11px] font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white tracking-wide">{initials}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-950" /></div>
+                <div className="flex-1 text-left min-w-0"><p className="text-[13px] font-bold text-gray-900 dark:text-white truncate leading-tight tracking-tight">{fullName}</p><p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5 font-medium">{roleName}</p></div>
                 <ChevronDown className={cn('h-3.5 w-3.5 text-gray-400 transition-transform duration-200 shrink-0', userMenuOpen && 'rotate-180')} />
               </button>
               {userMenuOpen && (
@@ -240,7 +250,7 @@ export function MainSidebar({ className }: { className?: string }) {
           <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
         </button>
         <div className={cn('fixed inset-0 z-40 bg-gray-950/60 backdrop-blur-sm transition-opacity duration-300', mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')} onClick={toggleMobile} />
-        <aside className={cn('fixed inset-y-0 left-0 z-50 w-72 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-2xl transition-transform duration-300', mobileOpen ? 'translate-x-0' : '-translate-x-full', className)}>
+        <aside className={cn('fixed inset-y-0 left-0 z-50 w-72 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/80 dark:border-gray-800/70 antialiased shadow-2xl transition-transform duration-300', mobileOpen ? 'translate-x-0' : '-translate-x-full', className)}>
           <button onClick={toggleMobile} className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close"><X className="h-4 w-4" /></button>
           <MainSidebarInner collapsed={false} onNavigate={toggleMobile} />
         </aside>
@@ -250,14 +260,14 @@ export function MainSidebar({ className }: { className?: string }) {
 
   if (isTablet) {
     return (
-      <aside className={cn('fixed inset-y-0 left-0 z-40 w-[68px] flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-sm', className)}>
+      <aside className={cn('fixed inset-y-0 left-0 z-40 w-[68px] flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/80 dark:border-gray-800/70 antialiased shadow-sm', className)}>
         <MainSidebarInner collapsed />
       </aside>
     );
   }
 
   return (
-    <aside className={cn('fixed inset-y-0 left-0 z-40 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-sm transition-[width] duration-300', collapsed ? 'w-[68px]' : 'w-64', className)}>
+    <aside className={cn('fixed inset-y-0 left-0 z-40 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/80 dark:border-gray-800/70 antialiased shadow-sm transition-[width] duration-300', collapsed ? 'w-[68px]' : 'w-64', className)}>
       <button onClick={() => setCollapsed(!collapsed)} className={cn('absolute -right-3.5 top-[72px] z-50 flex h-7 w-7 items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-md hover:border-indigo-400 text-indigo-500 transition-all hover:scale-110')} aria-label={collapsed ? 'Expand' : 'Collapse'}>
         {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
       </button>
