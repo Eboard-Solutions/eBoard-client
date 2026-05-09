@@ -1,15 +1,17 @@
-// src/pages/Agendas.tsx
+// src/pages/Minutes.tsx
 //
-// Standalone Agendas page. Previously the agenda manager was nested as a
-// sub-tab inside Meetings.tsx — that hid it from the sidebar nav and made
-// the Meetings page own a concern that isn't really about meeting CRUD.
-// Promoting it to a top-level route gives it a stable URL and a sidebar link.
+// Standalone Minutes page. Mirrors Agendas.tsx — same shell, same data
+// dependencies (meetings + members) — but renders the MinutesManager so
+// the user can capture minutes, decisions, and action items per meeting.
+//
+// Both pages share the gradient-tile header pattern used by Members,
+// Organisation and the Dashboard for visual consistency.
 
 import { useMemo } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useMeetings } from '@/hooks/api/useMeetings';
 import { useOrganisationUsers } from '@/hooks/api/useUsers';
-import { AgendaManager } from '@/components/meetings/AgendaManager';
+import { MinutesManager } from '@/components/meetings/MinutesManager';
 import type { Meeting } from '@/types/api.types';
 
 function unwrapArray<T>(raw: unknown): T[] {
@@ -21,7 +23,7 @@ function unwrapArray<T>(raw: unknown): T[] {
   return [];
 }
 
-export default function Agendas() {
+export default function Minutes() {
   const { data: meetingsRaw, isLoading } = useMeetings({ page: 1, limit: 100 });
   const { data: usersRaw }                = useOrganisationUsers();
 
@@ -30,17 +32,16 @@ export default function Agendas() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header — matches the gradient-tile + bold title pattern used across the app */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-4 min-w-0">
           <div className="relative shrink-0 h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-1 ring-white/15">
-            <ClipboardList className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
+            <FileText className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
             <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-[1.7rem] font-black tracking-tight leading-tight">Agendas</h1>
+            <h1 className="text-2xl sm:text-[1.7rem] font-black tracking-tight leading-tight">Minutes</h1>
             <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-              Plan, sequence and publish discussion items for each meeting.
+              Capture, review and publish official records of board meetings.
             </p>
           </div>
         </div>
@@ -48,10 +49,10 @@ export default function Agendas() {
 
       {isLoading && meetings.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/60 py-20 text-center text-sm text-muted-foreground">
-          Loading agendas…
+          Loading minutes…
         </div>
       ) : (
-        <AgendaManager meetings={meetings} members={members as never} />
+        <MinutesManager meetings={meetings} members={members as never} />
       )}
     </div>
   );

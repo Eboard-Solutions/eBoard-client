@@ -25,7 +25,10 @@ export function useDocuments(filters?: DocumentFilters) {
   return useQuery({
     queryKey: DOCUMENTS_QUERY_KEYS.list(filters),
     queryFn: () => documentsService.getDocuments(filters),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 60 * 1000,
+    refetchInterval: 90 * 1000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 

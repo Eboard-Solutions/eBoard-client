@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -197,15 +197,28 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const goPrev  = () => !isFirst && setActiveTab(TABS[tabIdx - 1].id);
 
   // ── Form state ─────────────────────────────────────────────────────────────
+  // ── State (declarations FIRST — never call any setter before its hook
+  // is initialized; doing so triggers a TDZ error in dev. Previously the
+  // sync logic below ran during render and called setItems/setAttendance
+  // before those hooks were declared, which is what produced the
+  // "Cannot access 'setAttendance' before initialization" crash on the
+  // Minutes page.) ──────────────────────────────────────────────────────
   const [title,               setTitle]               = useState('');
   const [summary,             setSummary]             = useState('');
   const [preparedById,        setPreparedById]        = useState('');
   const [approvedById,        setApprovedById]        = useState('');
   const [approvalOfPrevious,  setApprovalOfPrevious]  = useState('');
+  const [items,               setItems]               = useState<LocalItem[]>([]);
+  const [attendance,          setAttendance]          = useState<AttendanceRow[]>(() =>
+    members.map(u => ({ userId: u.userId, present: false })),
+  );
+  const [syncedMinutesId,     setSyncedMinutesId]     = useState<string | null>(null);
+  const [syncedMeetingId,     setSyncedMeetingId]     = useState<string | null>(null);
 
-  // Sync from existing minutes
-  const [syncedMinutesId, setSyncedMinutesId] = useState<string | null>(null);
-  if (existingMinutes && existingMinutes.id !== syncedMinutesId) {
+  // ── Sync from existing minutes (effect, not inline-during-render) ────────
+  // Runs only when the user picks a different existing minutes record.
+  useEffect(() => {
+    if (!existingMinutes || existingMinutes.id === syncedMinutesId) return;
     setSyncedMinutesId(existingMinutes.id);
     setTitle(existingMinutes.title ?? '');
     setSummary(existingMinutes.summary ?? '');
@@ -231,11 +244,13 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
         isDirty:           false,
       })),
     );
-  }
+  }, [existingMinutes, syncedMinutesId]);
 
-  // Sync from selected meeting
-  const [syncedMeetingId, setSyncedMeetingId] = useState<string | null>(null);
-  if (selectedMeeting && selectedMeeting.id !== syncedMeetingId) {
+  // ── Sync from selected meeting (effect) ──────────────────────────────────
+  // Pre-populates the title and attendance roster the first time the user
+  // picks a meeting that doesn't yet have minutes.
+  useEffect(() => {
+    if (!selectedMeeting || selectedMeeting.id === syncedMeetingId) return;
     setSyncedMeetingId(selectedMeeting.id);
     if (!existingMinutes) {
       setTitle(selectedMeeting.title ? `${selectedMeeting.title} — Minutes` : '');
@@ -244,11 +259,9 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
         present: (selectedMeeting.attendees ?? []).some(a => a.userId === u.userId),
       })));
     }
-  }
+  }, [selectedMeeting, syncedMeetingId, existingMinutes, members]);
 
-  // ── Items state ────────────────────────────────────────────────────────────
-  const [items, setItems] = useState<LocalItem[]>([]);
-
+  // ── Item helpers ────────────────────────────────────────────────────────
   function addItem(type: MinuteItemType = 'general') {
     setItems(p => [...p, {
       clientId: `mi-${Date.now()}`, orderIndex: p.length,
@@ -274,9 +287,6 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const actionItems   = items.filter(i => i.type === 'action_item');
 
   // ── Attendance ─────────────────────────────────────────────────────────────
-  const [attendance, setAttendance] = useState<AttendanceRow[]>(() =>
-    members.map(u => ({ userId: u.userId, present: false })),
-  );
 
   const fullAttendance: AttendanceRow[] = members.map(u => {
     const row = attendance.find(a => a.userId === u.userId);
