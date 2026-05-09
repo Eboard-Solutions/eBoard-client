@@ -46,11 +46,20 @@ export function useDocument(id: string) {
 /**
  * Hook to create/upload a new document
  */
+// Variables type for the upload — supports an optional progress callback
+// so the calling dialog can show a real upload progress bar.
+type CreateDocumentVariables = CreateDocumentData & {
+  onProgress?: (percent: number) => void;
+};
+
 export function useCreateDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreateDocumentData) => documentsService.createDocument(data),
+    mutationFn: (vars: CreateDocumentVariables) => {
+      const { onProgress, ...data } = vars;
+      return documentsService.createDocument(data, onProgress);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEYS.all });
     },
