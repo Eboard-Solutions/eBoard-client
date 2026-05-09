@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/api/useTasks';
 import { useOrganisationUsers } from '@/hooks/api/useUsers';
+import { usePermissions } from '@/lib/permissions';
 import { toast } from 'sonner';
 import {
   Plus, Search, CalendarDays, CheckCircle2, Loader2,
@@ -561,6 +562,8 @@ function KanbanColumn({ status, tasks, users, onEdit, onDelete, onStatusChange, 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Tasks() {
+  const { user, isLoading: authLoading } = usePermissions();
+
   const [search, setSearch]         = useState('');
   const [view, setView]             = useState<'list' | 'kanban'>('list');
   const [createOpen, setCreateOpen] = useState(false);
@@ -570,8 +573,9 @@ export function Tasks() {
   const [createForm, setCreateForm] = useState<TaskForm>(BLANK);
   const [editForm, setEditForm]     = useState<TaskForm>(BLANK);
 
-  const { data: tasksData, isLoading, error } = useTasks();
-  const { data: usersData }                   = useOrganisationUsers();
+  // Gate queries: only run when authenticated
+  const { data: tasksData, isLoading, error } = useTasks(undefined, !!user && !authLoading);
+  const { data: usersData }                   = useOrganisationUsers(!!user && !authLoading);
   const createM = useCreateTask();
   const updateM = useUpdateTask();
   const deleteM = useDeleteTask();
@@ -580,25 +584,36 @@ export function Tasks() {
   const rawTasks = extractArray<Task>(tasksData);
   const users    = extractArray<ApiUser>(usersData);
 
-  const tasks: TaskDisplay[] = rawTasks.map((t) => ({
-    id:          t.id,
-    title:       t.title,
-    description: t.description,
-    status:      (t.status?.toUpperCase()   as TaskStatus)   ?? 'TODO',
-    priority:    (t.priority?.toUpperCase() as TaskPriority) ?? 'MEDIUM',
-    dueDate:     typeof t.dueDate === 'number' ? t.dueDate : new Date(t.dueDate ?? Date.now()).getTime(),
-    assigneeId:  t.assigneeId,
-    assignee:    t.assignee as unknown as ApiUser | undefined,
-  }));
+  // Memoize expensive task transformation — only recalculate when rawTasks changes
+  const tasks: TaskDisplay[] = useMemo(() =>
+    rawTasks.map((t) => ({
+      id:          t.id,
+      title:       t.title,
+      description: t.description,
+      status:      (t.status?.toUpperCase()   as TaskStatus)   ?? 'TODO',
+      priority:    (t.priority?.toUpperCase() as TaskPriority) ?? 'MEDIUM',
+      dueDate:     typeof t.dueDate === 'number' ? t.dueDate : new Date(t.dueDate ?? Date.now()).getTime(),
+      assigneeId:  t.assigneeId,
+      assignee:    t.assignee as unknown as ApiUser | undefined,
+    })),
+    [rawTasks]
+  );
 
-  const filtered = tasks.filter((t) =>
-    t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.description?.toLowerCase().includes(search.toLowerCase()));
-  const byS    = (s: TaskStatus) => filtered.filter((t) => t.status === s);
-  const todo   = byS('TODO');
-  const inProg = byS('IN_PROGRESS');
-  const rev    = byS('REVIEW');
-  const done   = byS('COMPLETED');
+  // Memoize filtered results — only recalculate when tasks or search change
+  const filtered = useMemo(
+    () => tasks.filter((t) =>
+      t.title.toLowerCase().includes(search.toLowerCase()) ||
+      t.description?.toLowerCase().includes(search.toLowerCase())
+    ),
+    [tasks, search]
+  );
+
+  // Memoize status-grouped arrays — only recalculate when filtered changes
+  const byS    = useMemo(() => (s: TaskStatus) => filtered.filter((t) => t.status === s), [filtered]);
+  const todo   = useMemo(() => byS('TODO'), [byS]);
+  const inProg = useMemo(() => byS('IN_PROGRESS'), [byS]);
+  const rev    = useMemo(() => byS('REVIEW'), [byS]);
+  const done   = useMemo(() => byS('COMPLETED'), [byS]);
 
   const validate = (f: TaskForm) => {
     if (!f.title.trim()) return 'Task title is required';

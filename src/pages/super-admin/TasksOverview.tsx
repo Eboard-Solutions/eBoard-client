@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTasks } from '@/hooks/api/useTasks';
+import { usePermissions } from '@/lib/permissions';
 import type { Task, TaskStatus, TaskPriority } from '@/types/api.types';
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; icon: React.ElementType }> = {
@@ -29,12 +30,16 @@ const priorityConfig: Record<TaskPriority, { label: string; color: string; icon:
 };
 
 export function TasksOverview() {
-  const { data, isLoading, isError } = useTasks();
-  const tasks: Task[] = isError ? [] : (Array.isArray(data) ? data : (data as any)?.items ?? []);
+  const { user, isLoading: authLoading } = usePermissions();
+  
+  const { data, isLoading, isError } = useTasks(undefined, !!user && !authLoading);
+  // Backend returns ResponseObject { statusCode, message, data: Task[], pageInfo? }
+  const tasks: Task[] = isError ? [] : (Array.isArray(data) ? data : (data as any)?.data ?? []);
 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('all');
 
+  // Memoize filtered results — only recalculate when tasks, tab, or search change
   const filtered = useMemo(() => {
     let result = tasks;
     if (tab !== 'all') result = result.filter(t => t.status === tab);
@@ -48,6 +53,7 @@ export function TasksOverview() {
     return result;
   }, [tasks, tab, search]);
 
+  // Memoize counts — only recalculate when tasks change
   const counts = useMemo(() => ({
     all: tasks.length,
     TODO: tasks.filter(t => t.status === 'TODO').length,
