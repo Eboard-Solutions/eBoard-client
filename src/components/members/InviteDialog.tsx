@@ -134,7 +134,7 @@ export default function InviteDialog({
           <textarea
             value={emailInput}
             onChange={e => { setEmailInput(e.target.value); if (emailError) setEmailError(''); }}
-            placeholder={`john@company.com\njane@company.com\n\nSeparate with commas, semicolons, or new lines.`}
+            placeholder={`Enter email address${canAssignSuperAdmin ? 'es' : ''} to invite, separated by commas, semicolons, or new lines`}
             rows={5}
             className={`w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none leading-relaxed transition-colors ${
               emailError ? 'border-destructive focus-visible:ring-destructive' : 'border-input'
