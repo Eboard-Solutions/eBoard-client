@@ -405,7 +405,7 @@ function ProfileTab({ org, onSave, isSaving, canManage }: {
   ];
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
 
       {/* Hero banner — theme-aware gradient with floating orbs, matches the dashboard system */}
       <Card className="org-fade-up org-ring-grad border border-border/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
@@ -1130,7 +1130,10 @@ export default function OrganisationPage() {
 
   // ── Main render ────────────────────────────────────────────────────────────
   return (
-    <div className="org-root container mx-auto space-y-6 py-8 px-4 md:px-6 max-w-5xl pb-12 antialiased">
+    // Full-bleed: AppLayout's p-6 handles outer padding; no container/max-w cap
+    // so the page expands to fill the area between the sidebar and right edge,
+    // matching the Dashboard / Members layout convention.
+    <div className="org-root space-y-6 pb-12 antialiased">
       {authError && authErrorKind === 'server_error' && (
         <ServerErrorBanner message={authError} onRetry={refreshAuth} />
       )}

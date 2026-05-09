@@ -11,11 +11,22 @@ export const overviewKeys = {
   finance: () => [...overviewKeys.all, 'finance'] as const,
 };
 
+// Real-time refresh policy shared by every dashboard summary query.
+// Polls in the foreground only — pauses while the tab is hidden so we don't
+// waste battery / quota when the user isn't looking at the dashboard.
+const REALTIME = {
+  staleTime: 60 * 1000,
+  refetchInterval: 90 * 1000,            // 90s — analytics aggregates are heavier
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: true,
+} as const;
+
 // Get analytics data
 export function useAnalytics() {
   return useQuery({
     queryKey: overviewKeys.analytics(),
     queryFn: () => OverviewService.getAnalytics(),
+    ...REALTIME,
   });
 }
 
@@ -24,6 +35,7 @@ export function useFinanceOverview() {
   return useQuery({
     queryKey: overviewKeys.finance(),
     queryFn: () => OverviewService.getFinance(),
+    ...REALTIME,
   });
 }
 
@@ -32,5 +44,6 @@ export function useDashboardSummary() {
   return useQuery({
     queryKey: overviewKeys.analytics(),
     queryFn: () => OverviewService.getAnalytics(),
+    ...REALTIME,
   });
 }

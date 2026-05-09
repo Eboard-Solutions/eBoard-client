@@ -29,7 +29,10 @@ export function useMeetings(params?: FetchMeetingsParams) {
   return useQuery({
     queryKey: MEETINGS_QUERY_KEYS.list(params),
     queryFn: () => meetingsService.getMeetings(params),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 60 * 1000,                  // 1 min cache before background refetch
+    refetchInterval: 60 * 1000,            // Real-time: poll every 60s while page open
+    refetchIntervalInBackground: false,    // Pause when tab is hidden — saves bandwidth
+    refetchOnWindowFocus: true,            // Refresh the moment the user returns
   });
 }
 
@@ -40,7 +43,10 @@ export function useMyMeetings(includeDeclined = false) {
   return useQuery({
     queryKey: MEETINGS_QUERY_KEYS.myMeetings(includeDeclined),
     queryFn: () => meetingsService.getMyMeetings(includeDeclined),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 
