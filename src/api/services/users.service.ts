@@ -78,6 +78,11 @@ async function withRetry<T>(
       const status = err?.response?.status;
       // Only retry on 500/503 (server errors), not on 400/401/403/404
       if (status && status < 500) throw err;
+      // Don't retry on timeouts — a slow backend won't get faster on retry,
+      // and the user shouldn't have to wait 2× the timeout to see an error.
+      // Without this guard, ECONNABORTED has no `status` so we'd fall through
+      // and retry, producing the ~60s wait users were reporting.
+      if (err?.code === 'ECONNABORTED') throw err;
       if (attempt === retries) throw err;
       // Brief wait before retry
       await new Promise(r => setTimeout(r, 500));
@@ -96,14 +101,20 @@ export const usersService = {
    */
   async getOrganisationUsers(): Promise<ResponseObject<User[]>> {
     return withRetry(async () => {
-      try {
-        const response = await apiClient.get<ResponseObject<User[]>>(
-            ENDPOINTS.USERS.ORGANISATION_USERS,
-        );
-        return response.data;
-      } catch (err) {
-        throw new Error(extractErrorMessage(err, 'Failed to load members'));
-      }
+      // 20s is generous enough to absorb a backend cold-start (TypeORM init
+      // can take ~22s on first boot from logs we observed) but still fast-
+      // fails on a truly hung request. The global axios timeout is 30s;
+      // setting this per-call avoids waiting that long unnecessarily.
+      //
+      // We let the original AxiosError propagate (no wrapping in `new Error`)
+      // so callers can discriminate `err.code === 'ECONNABORTED'` (timeout)
+      // from `err.response?.status` (HTTP error) and show situation-specific
+      // copy in the UI.
+      const response = await apiClient.get<ResponseObject<User[]>>(
+          ENDPOINTS.USERS.ORGANISATION_USERS,
+          { timeout: 20_000 },
+      );
+      return response.data;
     });
   },
 
@@ -174,16 +185,29 @@ export const usersService = {
         );
         return response.data;
       } catch (err: any) {
-        // Surface the real NestJS error so the toast is useful
+        // Don't wrap into a fresh Error — preserve `err.response?.status` so
+        // Members.tsx can render the right copy ("already a member", "org not
+        // active", etc.) and offer the right next step.
         const status = err?.response?.status;
-        const message = extractErrorMessage(err, 'Failed to add member');
+        const backendMessage = extractErrorMessage(err, '');
 
-        // Common specific cases
-        if (status === 409) throw new Error('A member with this email already exists in your organisation');
-        if (status === 403) throw new Error('Your organisation must be active to add members');
-        if (status === 400) throw new Error(`Validation error: ${message}`);
-
-        throw new Error(message);
+        // Override err.message with friendly copy that's safe to surface
+        // verbatim in toasts. The original AxiosError keeps its other
+        // fields (response, code) intact.
+        if (status === 409) {
+          err.message = backendMessage
+            || 'A member with this email is already in your organisation. Use Invite to resend their activation link.';
+        } else if (status === 403) {
+          err.message = backendMessage
+            || 'Your organisation must be approved before you can add members.';
+        } else if (status === 400) {
+          err.message = backendMessage || 'Some fields are invalid. Please review the form and try again.';
+        } else if (err?.code === 'ECONNABORTED') {
+          err.message = "The server is taking too long. Your request didn't go through — please try again.";
+        } else {
+          err.message = backendMessage || 'Could not add the member. Please try again.';
+        }
+        throw err;
       }
     });
   },
