@@ -44,11 +44,19 @@ export function useMyOrganisation(enabled = true) {
     queryKey: organisationKeys.mine(),
     queryFn: () => OrganisationsService.getMyOrganisation(),
     enabled,
-    // Don't retry on 403 — the user genuinely lacks access
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes — org data doesn't change frequently
+    gcTime: 10 * 60 * 1000,   // Keep in memory for 10 minutes after last use
     retry: (failureCount, error: any) => {
-      if (error?.response?.status === 403) return false;
-      return failureCount < 2;
+      const status = error?.response?.status;
+      // Don't retry on auth/permission errors
+      if (status === 401 || status === 403 || status === 404) return false;
+      // Don't retry on timeouts — a slow backend won't get faster on retry,
+      // and we want the user to see the error fast so they can investigate.
+      if (error?.code === 'ECONNABORTED') return false;
+      // Retry once on transient network/5xx errors
+      return failureCount < 1;
     },
+    retryDelay: 500,
   });
 }
 
