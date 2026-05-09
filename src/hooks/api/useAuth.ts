@@ -22,13 +22,12 @@ export const AUTH_QUERY_KEYS = {
 /**
  * Hook to get the current authenticated user profile
  */
+// hooks/api/useAuth.ts
 export function useCurrentUser() {
   return useQuery({
-    queryKey: AUTH_QUERY_KEYS.me,
-    queryFn: () => authService.getMe(),
-    enabled: authService.isAuthenticated(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: false,
+    queryKey: ['auth', 'me'],   // ← same key everywhere = one shared request
+    queryFn:  () => authService.getMe(),
+    staleTime: 1000 * 60 * 15, // user profile rarely changes — 15 min
   });
 }
 
