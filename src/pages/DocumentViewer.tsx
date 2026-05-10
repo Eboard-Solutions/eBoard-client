@@ -6,7 +6,7 @@
  * Renders INLINE (no modal) so the dashboard sidebar stays fully visible.
  *
  * How PDF rendering works (why previous attempts showed 404 / blank):
- * ─────────────────────────────────────────────────────────────────
+ * ─────────────────────────────────────────────────────────────────────
  * The file URL is typically an authenticated endpoint on your own backend.
  * When you put that URL inside an <iframe src> or <object data>, the browser
  * makes a brand-new navigation request WITHOUT your app's session cookies
@@ -34,7 +34,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import type { Document as DocType } from '@/types/api.types';
-import documentsService from '@/api/services/documents.service';
 
 import {
   ArrowLeft, ZoomIn, ZoomOut, Download, ExternalLink,
@@ -45,7 +44,7 @@ import {
   RefreshCw, X,
 } from 'lucide-react';
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtSize(b: number): string {
   if (!b || b < 0) return '—';
@@ -85,17 +84,17 @@ function getIcon(fileType: string) {
 const ACC: Record<string, { lbl: string; Icon: React.ElementType; cls: string }> = {
   VIEWER: { lbl: 'Viewer',     Icon: Globe,       cls: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
   EDITOR: { lbl: 'Editor',     Icon: Users,       cls: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800' },
-  ADMIN:  { lbl: 'Admin Only', Icon: ShieldAlert, cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-emerald-800' },
+  ADMIN:  { lbl: 'Admin Only', Icon: ShieldAlert, cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
   OWNER:  { lbl: 'Owner Only', Icon: Lock,        cls: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
 };
 
 // ─── Resolve the file URL from the backend ──────────────────────────────────
 // The Document objects returned by /documents/get-all do NOT carry a public
-// `fileUrl`. Files live in Azure Blob Storage and require a signed,
+// `downloadUrl`. Files live in Azure Blob Storage and require a signed,
 // temporary URL minted on demand by GET /documents/:id/download-url.
 //
 // Until that round-trip resolves, every preview attempt fails with
-// `doc.fileUrl is undefined` — which is exactly why no one could view
+// `doc.downloadUrl is undefined` — which is exactly why no one could view
 // any document. This hook does the round-trip once per doc, caches the
 // result, and refetches on demand.
 
@@ -128,7 +127,7 @@ function useDocumentUrl(docId: string | undefined, refreshKey: number, fallbackU
           ?? null;
         if (!url) {
           // Fall back to whatever was on the doc (in case future backend versions
-          // start returning fileUrl directly) — better than failing outright.
+          // start returning downloadUrl directly) — better than failing outright.
           if (fallbackUrl) {
             setState({ url: fallbackUrl, status: 'ready' });
           } else {
@@ -155,73 +154,7 @@ function useDocumentUrl(docId: string | undefined, refreshKey: number, fallbackU
   return { ...state, reload };
 }
 
-// ─── Resolve the file URL from the backend ──────────────────────────────────
-// The Document objects returned by /documents/get-all do NOT carry a public
-// `fileUrl`. Files live in Azure Blob Storage and require a signed,
-// temporary URL minted on demand by GET /documents/:id/download-url.
-//
-// Until that round-trip resolves, every preview attempt fails with
-// `doc.fileUrl is undefined` — which is exactly why no one could view
-// any document. This hook does the round-trip once per doc, caches the
-// result, and refetches on demand.
-
-interface UrlState { url: string | null; status: 'idle' | 'loading' | 'ready' | 'error'; error?: string }
-
-function useDocumentUrl(docId: string | undefined, refreshKey: number, fallbackUrl?: string): UrlState & { reload: () => void } {
-  const [state, setState] = useState<UrlState>(
-    fallbackUrl ? { url: fallbackUrl, status: 'ready' } : { url: null, status: 'idle' },
-  );
-  const [bump, setBump] = useState(0);
-  const reload = useCallback(() => setBump(b => b + 1), []);
-
-  useEffect(() => {
-    if (!docId) { setState({ url: null, status: 'idle' }); return; }
-    let cancelled = false;
-    setState(s => ({ ...s, status: 'loading', error: undefined }));
-
-    apiClient
-      .get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(docId), { timeout: 15_000 })
-      .then(res => {
-        if (cancelled) return;
-        // Backend wraps in ResponseObject — the URL is at .data.data.url
-        // or .data.url depending on whether the global response interceptor
-        // double-unwraps. Walk both shapes.
-        const body = res.data as Record<string, unknown> | undefined;
-        const url =
-          (body?.data as { url?: string } | undefined)?.url
-          ?? ((body as { url?: string } | undefined)?.url)
-          ?? ((body?.data as Record<string, unknown> | undefined)?.data as { url?: string } | undefined)?.url
-          ?? null;
-        if (!url) {
-          // Fall back to whatever was on the doc (in case future backend versions
-          // start returning fileUrl directly) — better than failing outright.
-          if (fallbackUrl) {
-            setState({ url: fallbackUrl, status: 'ready' });
-          } else {
-            setState({ url: null, status: 'error', error: 'Server did not return a download URL.' });
-          }
-          return;
-        }
-        setState({ url, status: 'ready' });
-      })
-      .catch(err => {
-        if (cancelled) return;
-        // Same fallback path as above.
-        if (fallbackUrl) {
-          setState({ url: fallbackUrl, status: 'ready' });
-          return;
-        }
-        const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to fetch download URL.';
-        setState({ url: null, status: 'error', error: msg });
-      });
-
-    return () => { cancelled = true; };
-  }, [docId, refreshKey, bump, fallbackUrl]);
-
-  return { ...state, reload };
-}
-
-// ─── Blob-fetch hook ─────────────────────────────────────────────────────────
+// ─── Blob-fetch hook ──────────────────────────────────────────────────────────
 // Fetches the file via the app's authenticated session (credentials: 'include')
 // and returns a memory blob: URL. This bypasses all iframe/object auth issues.
 
@@ -237,6 +170,7 @@ function useBlob(url: string | null | undefined) {
   const load = useCallback(() => {
     if (!url) { setStatus('idle'); return; }
 
+    // Cleanup previous blob
     if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null; }
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -251,6 +185,9 @@ function useBlob(url: string | null | undefined) {
         return res.blob();
       })
       .then(blob => {
+        // Force the correct MIME type so the iframe / embed renders it properly.
+        // Some backends return application/octet-stream even for PDFs — the
+        // browser won't open the PDF viewer if the MIME type is wrong.
         const isPdf = url.toLowerCase().includes('.pdf') ||
                       blob.type === 'application/pdf' ||
                       blob.type === 'application/octet-stream';
@@ -275,7 +212,7 @@ function useBlob(url: string | null | undefined) {
   return { blobUrl, status, errMsg, reload: load };
 }
 
-// ─── Shared UI pieces ────────────────────────────────────────────────────────
+// ─── Shared UI pieces ─────────────────────────────────────────────────────────
 
 function Spinner({ msg = 'Loading document…' }: { msg?: string }) {
   return (
@@ -289,8 +226,8 @@ function Spinner({ msg = 'Loading document…' }: { msg?: string }) {
   );
 }
 
-function ErrState({ title, detail, doc, onRetry, downloadUrl }: {
-  title?: string; detail?: string | null; doc: DocType; onRetry: () => void; downloadUrl?: string | null;
+function ErrState({ title, detail, doc, onRetry }: {
+  title?: string; detail?: string | null; doc: DocType; onRetry: () => void;
 }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-background z-20 px-8 text-center">
@@ -308,14 +245,14 @@ function ErrState({ title, detail, doc, onRetry, downloadUrl }: {
           <RefreshCw className="h-3.5 w-3.5" />Retry
         </Button>
         <Button size="sm" className="gap-1.5 h-9" onClick={async () => {
-          // Fetch a fresh signed URL on click — `doc.fileUrl` is rarely set.
+          // Fetch a fresh signed URL on click — `doc.downloadUrl` is rarely set.
           try {
             const r = await apiClient.get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(doc.id), { timeout: 15_000 });
             const body = r.data as Record<string, unknown> | undefined;
             const url =
               (body?.data as { url?: string } | undefined)?.url
               ?? ((body as { url?: string } | undefined)?.url)
-              ?? doc.fileUrl
+              ?? doc.downloadUrl
               ?? null;
             if (url) window.open(url, '_blank', 'noopener,noreferrer');
             else toast.error('No download URL available.');
@@ -348,7 +285,7 @@ function ErrState({ title, detail, doc, onRetry, downloadUrl }: {
 
 function PdfViewer({ doc, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
   const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
-    useDocumentUrl(doc.id, refreshKey, doc.fileUrl);
+    useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
   const [iframeError, setIframeError] = useState(false);
 
   // Reset error state whenever we get a new URL.
@@ -382,7 +319,7 @@ function PdfViewer({ doc, refreshKey }: { doc: DocType; zoom: number; refreshKey
   );
 }
 
-// ─── Image renderer ─────────────────────────────────────────────────────────
+// ─── Image renderer ───────────────────────────────────────────────────────────
 
 function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
   // CHANGED: dropped the fetch+blob hook for the same reason as PdfViewer
@@ -390,7 +327,7 @@ function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; re
   // <img src> uses native browser image loading which is exempt from CORS
   // unless we try to read the canvas — we don't, so this works fine.
   const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
-    useDocumentUrl(doc.id, refreshKey, doc.fileUrl);
+    useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -427,11 +364,11 @@ function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; re
 
 // ─── Office renderer (Google Docs Viewer) ────────────────────────────────────
 
-function OfficeViewer({ doc, refreshKey, downloadUrl }: { doc: DocType; refreshKey: number; downloadUrl?: string | null }) {
+function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number }) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
   const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
-    useDocumentUrl(doc.id, refreshKey, doc.fileUrl);
+    useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
 
   useEffect(() => setState('loading'), [doc.id, refreshKey, retry, resolvedUrl]);
 
@@ -451,7 +388,6 @@ function OfficeViewer({ doc, refreshKey, downloadUrl }: { doc: DocType; refreshK
           title="Office preview unavailable"
           detail="Google Docs Viewer requires a publicly accessible URL. If your files are behind authentication, download the file instead."
           onRetry={() => setRetry(r => r + 1)}
-          downloadUrl={downloadUrl}
         />
       )}
       <iframe
@@ -467,14 +403,14 @@ function OfficeViewer({ doc, refreshKey, downloadUrl }: { doc: DocType; refreshK
   );
 }
 
-// ─── Unsupported ────────────────────────────────────────────────────────────
+// ─── Unsupported ─────────────────────────────────────────────────────────────
 
-function UnsupportedViewer({ doc, downloadUrl }: { doc: DocType; downloadUrl?: string | null }) {
+function UnsupportedViewer({ doc }: { doc: DocType }) {
   const { Icon, clr, bg, lbl } = getIcon(doc.fileType ?? '');
-  const { url: resolvedUrl, status: urlStatus } = useDocumentUrl(doc.id, 0, doc.fileUrl);
+  const { url: resolvedUrl, status: urlStatus } = useDocumentUrl(doc.id, 0, doc.downloadUrl);
 
   // Resolve the signed URL just-in-time when the user clicks. Avoids
-  // hard-coding the broken doc.fileUrl reference.
+  // hard-coding the broken doc.downloadUrl reference.
   const fetchAndOpen = async (mode: 'download' | 'open') => {
     let url = resolvedUrl;
     if (!url) {
@@ -523,20 +459,20 @@ function UnsupportedViewer({ doc, downloadUrl }: { doc: DocType; downloadUrl?: s
   );
 }
 
-// ─── Router ────────────────────────────────────────────────────────────────
+// ─── Router ───────────────────────────────────────────────────────────────────
 
-function ViewerContent({ doc, zoom, refreshKey, downloadUrl }: { doc: DocType; zoom: number; refreshKey: number; downloadUrl?: string | null }) {
+function ViewerContent({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
   const kind = getKind(doc.fileType ?? '') !== 'unknown'
     ? getKind(doc.fileType ?? '')
-    : getKind(downloadUrl ?? '');
+    : getKind(doc.downloadUrl ?? '');
 
-  if (kind === 'pdf')    return <PdfViewer    doc={doc} zoom={zoom} refreshKey={refreshKey} downloadUrl={downloadUrl} />;
-  if (kind === 'image')  return <ImageViewer  doc={doc} zoom={zoom} refreshKey={refreshKey} downloadUrl={downloadUrl} />;
-  if (kind === 'office') return <OfficeViewer doc={doc}             refreshKey={refreshKey} downloadUrl={downloadUrl} />;
-  return <UnsupportedViewer doc={doc} downloadUrl={downloadUrl} />;
+  if (kind === 'pdf')    return <PdfViewer    doc={doc} zoom={zoom} refreshKey={refreshKey} />;
+  if (kind === 'image')  return <ImageViewer  doc={doc} zoom={zoom} refreshKey={refreshKey} />;
+  if (kind === 'office') return <OfficeViewer doc={doc}             refreshKey={refreshKey} />;
+  return <UnsupportedViewer doc={doc} />;
 }
 
-// ─── Info panel ────────────────────────────────────────────────────────────
+// ─── Info panel ───────────────────────────────────────────────────────────────
 
 function InfoPanel({ doc, onClose }: { doc: DocType; onClose: () => void }) {
   const { Icon, clr, bg, lbl } = getIcon(doc.fileType ?? '');
@@ -605,7 +541,7 @@ function InfoPanel({ doc, onClose }: { doc: DocType; onClose: () => void }) {
   );
 }
 
-// ─── Toolbar ────────────────────────────────────────────────────────────
+// ─── Toolbar ──────────────────────────────────────────────────────────────────
 
 interface TBProps {
   doc: DocType; zoom: number; showInfo: boolean; isFullscreen: boolean;
@@ -720,7 +656,7 @@ function Toolbar(p: TBProps) {
   );
 }
 
-// ─── Main Export ────────────────────────────────────────────────────────────
+// ─── Main Export ──────────────────────────────────────────────────────────────
 
 interface DocumentViewerProps {
   doc: DocType;
@@ -734,7 +670,6 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   const [isFullscreen, setIsFullscreen]   = useState(false);
   const [refreshKey, setRefreshKey]       = useState(0);
   const [currentDocId, setCurrentDocId]   = useState(doc.id);
-  const [downloadUrl, setDownloadUrl]     = useState<string | null>(null);
 
   useEffect(() => {
     if (doc.id !== currentDocId) {
@@ -748,18 +683,6 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   const currentDoc = allDocs.find(d => d.id === currentDocId) ?? doc;
   const currentIdx = allDocs.findIndex(d => d.id === currentDocId);
 
-  useEffect(() => {
-    let cancelled = false;
-    documentsService.getDownloadurl(currentDoc.id)
-      .then(url => {
-        if (!cancelled) setDownloadUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setDownloadUrl(null);
-      });
-    return () => { cancelled = true; };
-  }, [currentDoc.id, currentDoc.downloadUrl]);
-
   const navigateTo = useCallback((target: DocType) => {
     setCurrentDocId(target.id);
     setZoom(100);
@@ -768,7 +691,7 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   }, []);
 
   const fetchSignedUrl = useCallback(async (): Promise<string | null> => {
-    if (currentDoc.fileUrl) return currentDoc.fileUrl;
+    if (currentDoc.downloadUrl) return currentDoc.downloadUrl;
     try {
       const r = await apiClient.get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(currentDoc.id), { timeout: 15_000 });
       const body = r.data as Record<string, unknown> | undefined;
@@ -845,7 +768,7 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
 
       {/* Content + optional info panel */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <ViewerContent doc={currentDoc} zoom={zoom} refreshKey={refreshKey} downloadUrl={downloadUrl} />
+        <ViewerContent doc={currentDoc} zoom={zoom} refreshKey={refreshKey} />
         {showInfo && <InfoPanel doc={currentDoc} onClose={() => setShowInfo(false)} />}
       </div>
 
