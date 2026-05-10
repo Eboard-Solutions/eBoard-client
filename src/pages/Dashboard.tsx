@@ -315,33 +315,52 @@ function unwrapArray<T>(res: unknown): T[] {
   return [];
 }
 
+// `useMyMeetings` returns MeetingAttendees rows with the joined meeting nested
+// under `m.meeting`. `useMeetings` returns plain Meeting DTOs at the top level.
+// This helper unwraps either shape so the rest of the dashboard can ignore it.
+function meetingOf(m: Record<string, unknown>): Record<string, unknown> {
+  const nested = m.meeting as Record<string, unknown> | undefined;
+  return nested && typeof nested === 'object' ? nested : m;
+}
+
 function isFutureMeeting(m: Record<string, unknown>): boolean {
-  const raw = (m.scheduledDate ?? m.date) as string | undefined;
+  const src = meetingOf(m);
+  const raw = (src.scheduledDate ?? src.date) as string | Date | undefined;
   if (!raw) return false;
-  return new Date(raw) > new Date();
+  const d = new Date(raw as string);
+  if (isNaN(d.getTime())) return false;
+  // Include "today" as upcoming so meetings later today still show.
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return d.getTime() >= today.getTime();
 }
 
 function transformMeeting(m: Record<string, unknown>) {
-  const dateStr   = ((m.scheduledDate ?? m.date) as string) ?? '';
-  const startTime = (m.startTime as string) ?? '';
+  const src = meetingOf(m);
+  const rawDate  = (src.scheduledDate ?? src.date) as string | Date | undefined;
+  const dateStr  = rawDate ? new Date(rawDate as string).toISOString() : '';
+  const startTime = (src.startTime as string) ?? '';
   let startAt = dateStr;
   if (dateStr && startTime) {
     const d = dateStr.split('T')[0];
-    const t = startTime.includes('T') ? startTime.split('T')[1] : startTime;
+    const t = typeof startTime === 'string' && startTime.includes('T')
+      ? startTime.split('T')[1]
+      : startTime;
     startAt = `${d}T${t}`;
   }
   return {
-    id:          (m.meetingId ?? m.id ?? '') as string,
-    title:       (m.title ?? 'Untitled') as string,
+    id:          (src.meetingId ?? src.id ?? m.attendeeId ?? '') as string,
+    title:       (src.title ?? 'Untitled') as string,
     startAt,
-    endAt:       (m.endTime ?? '') as string,
+    endAt:       (src.endTime ?? '') as string,
     timezone:    'local',
-    location:    ((m.location ?? m.onlineMeetingLink) ?? '') as string,
-    isRecurring: (m.meetingFrequency as string) !== 'once',
-    status:      ((m.meetingStatus ?? m.status ?? 'upcoming')) as 'upcoming' | 'completed' | 'cancelled',
-    agenda: [], attendees: (m.attendees ?? []) as unknown[],
-    createdBy: ((m.creator as Record<string, unknown>)?.userId ?? '') as string,
-    createdAt: (m.createdAt ?? '') as string,
+    location:    ((src.location ?? src.onlineMeetingLink) ?? '') as string,
+    isRecurring: (src.meetingFrequency as string) !== 'once'
+              && (src.meetingFrequency as string) !== 'ONCE',
+    status:      ((src.meetingStatus ?? src.status ?? 'upcoming')) as 'upcoming' | 'completed' | 'cancelled',
+    agenda: [],
+    attendees: (src.attendees ?? []) as unknown[],
+    createdBy: ((src.creator as Record<string, unknown>)?.userId ?? '') as string,
+    createdAt: (src.createdAt ?? '') as string,
   };
 }
 

@@ -15,24 +15,39 @@ export function RecentDocumentsWidget({ documents }: RecentDocumentsWidgetProps)
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const formatDate = (raw: string | number | null | undefined) => {
+    if (raw === null || raw === undefined || raw === '') return '—';
+    // `uploadedAt` comes back from the API as either a Unix ms number
+    // (bigint columns are serialized that way) or an ISO string.
+    const ms = typeof raw === 'number' ? raw : Number.isFinite(Number(raw)) && /^\d+$/.test(String(raw)) ? Number(raw) : Date.parse(String(raw));
+    if (!Number.isFinite(ms)) return '—';
+    const date = new Date(ms);
+    if (isNaN(date.getTime())) return '—';
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const getFileIcon = (fileType: string) => {
-    if (fileType.includes('pdf')) return '📄';
-    if (fileType.includes('word') || fileType.includes('document')) return '📝';
-    if (fileType.includes('sheet') || fileType.includes('excel')) return '📊';
-    if (fileType.includes('presentation') || fileType.includes('powerpoint')) return '📽️';
+  const safeFileType = (t?: string) => (t ?? '').toLowerCase();
+
+  const getFileIcon = (fileType?: string) => {
+    const t = safeFileType(fileType);
+    if (t.includes('pdf')) return '📄';
+    if (t.includes('word') || t.includes('document')) return '📝';
+    if (t.includes('sheet') || t.includes('excel')) return '📊';
+    if (t.includes('presentation') || t.includes('powerpoint')) return '📽️';
     return '📎';
+  };
+
+  const formatSizeSafe = (bytes: number | string | null | undefined) => {
+    const n = typeof bytes === 'number' ? bytes : Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    return formatFileSize(n);
   };
 
   return (
@@ -55,7 +70,7 @@ export function RecentDocumentsWidget({ documents }: RecentDocumentsWidgetProps)
               <h4 className="font-medium text-sm truncate">{doc.title}</h4>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs text-muted-foreground">
-                  {formatFileSize(doc.fileSize)}
+                  {formatSizeSafe(doc.fileSize)}
                 </span>
                 <span className="text-xs text-muted-foreground">•</span>
                 <span className="text-xs text-muted-foreground">
