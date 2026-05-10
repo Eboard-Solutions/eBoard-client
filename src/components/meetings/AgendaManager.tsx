@@ -558,28 +558,38 @@ export function AgendaManager({ meetings = [], members = [] }: AgendaManagerProp
         });
       }
 
-      // Save dirty items sequentially
+      // Save dirty items. Updates run in parallel (independent rows on the
+      // backend); new creates run sequentially because each one needs its
+      // returned serverId written back into local state and the backend may
+      // enforce orderIndex uniqueness within an agenda.
       const dirtyItems = items.filter(i => i.isDirty);
-      for (const item of dirtyItems) {
-        const payload: CreateAgendaItemData = {
-          orderIndex:    item.orderIndex,
-          type:          item.type,
-          title:         item.title,
-          description:   item.description   || undefined,
-          duration:      item.duration,
-          presenterId:   item.presenterId   || undefined,
-          presenterName: item.presenterName || undefined,
-          notes:         item.notes         || undefined,
-        };
-        if (item.serverId) {
-          await updateItemMut.mutateAsync({ agendaId: agendaId!, itemId: item.serverId, data: payload });
-        } else {
-          const created = await addItem.mutateAsync({ agendaId: agendaId!, data: payload });
-          const newId = (created as any)?.data?.id ?? (created as any)?.id;
-          setItems(p => p.map(i =>
-            i.clientId === item.clientId ? { ...i, serverId: newId, isDirty: false } : i,
-          ));
-        }
+      const buildPayload = (item: typeof items[number]): CreateAgendaItemData => ({
+        orderIndex:    item.orderIndex,
+        type:          item.type,
+        title:         item.title,
+        description:   item.description   || undefined,
+        duration:      item.duration,
+        presenterId:   item.presenterId   || undefined,
+        presenterName: item.presenterName || undefined,
+        notes:         item.notes         || undefined,
+      });
+
+      const updates = dirtyItems
+        .filter(i => i.serverId)
+        .map(item =>
+          updateItemMut.mutateAsync({
+            agendaId: agendaId!, itemId: item.serverId!, data: buildPayload(item),
+          }),
+        );
+      const creates = dirtyItems.filter(i => !i.serverId);
+
+      await Promise.all(updates);
+      for (const item of creates) {
+        const created = await addItem.mutateAsync({ agendaId: agendaId!, data: buildPayload(item) });
+        const newId = (created as any)?.data?.id ?? (created as any)?.id;
+        setItems(p => p.map(i =>
+          i.clientId === item.clientId ? { ...i, serverId: newId, isDirty: false } : i,
+        ));
       }
 
       setItems(p => p.map(i => ({ ...i, isDirty: false })));

@@ -163,8 +163,28 @@ function dueFmtShort(ts: number) {
   if (d === 1) return { text: 'Due Tomorrow',cls: 'text-amber-600' };
   return { text: new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), cls: 'text-muted-foreground' };
 }
-const toTs  = (s?: string) => { if (!s) return undefined; const t = new Date(s).getTime(); return isNaN(t) ? undefined : t; };
-const toStr = (ts?: number) => ts ? new Date(ts).toISOString().split('T')[0] : '';
+// toTs / toStr must agree on the calendar date the user *typed* in the
+// <input type="date">. Previously toStr used `toISOString()` which is UTC,
+// so a task whose dueDate is local-midnight on the 10th would render as the
+// 9th for any user east of UTC, then re-save shifted by a day on edit.
+// Both helpers now operate in the user's local timezone for round-trip
+// consistency.
+const toTs = (s?: string) => {
+  if (!s) return undefined;
+  // Parse as local midnight on the picked date so it round-trips with toStr.
+  const [y, m, d] = s.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  const t = new Date(y, m - 1, d).getTime();
+  return Number.isNaN(t) ? undefined : t;
+};
+const toStr = (ts?: number) => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
 
@@ -615,12 +635,39 @@ export function Tasks() {
   const rev    = useMemo(() => byS('REVIEW'), [byS]);
   const done   = useMemo(() => byS('COMPLETED'), [byS]);
 
-  const validate = (f: TaskForm) => {
-    if (!f.title.trim()) return 'Task title is required';
-    if (!f.assigneeId)   return 'Please assign the task to a member';
-    if (!f.dueDateStr)   return 'Due date is required';
-    return null;
+  // Surface all missing required fields in a single toast instead of revealing
+  // them one-by-one as the user resubmits.
+  const validate = (f: TaskForm): string | null => {
+    const missing: string[] = [];
+    if (!f.title.trim()) missing.push('title');
+    if (!f.assigneeId)   missing.push('assignee');
+    if (!f.dueDateStr)   missing.push('due date');
+    if (missing.length === 0) return null;
+    if (missing.length === 1) return `Please fill in the ${missing[0]}.`;
+    const last = missing.pop();
+    return `Please fill in the ${missing.join(', ')} and ${last}.`;
   };
+
+  // True when the edit form has not diverged from the task it was opened on.
+  // Used to skip a no-op PATCH (and the resulting cache churn) when the user
+  // hits Save without actually changing anything.
+  const isEditUnchanged = (orig: TaskDisplay | null, f: TaskForm) => {
+    if (!orig) return false;
+    return (
+      f.title.trim() === orig.title &&
+      (f.description.trim() || '') === (orig.description ?? '') &&
+      f.status === orig.status &&
+      f.priority === orig.priority &&
+      f.assigneeId === (orig.assigneeId ?? '') &&
+      f.dueDateStr === toStr(orig.dueDate)
+    );
+  };
+
+  // Pull the server's actual error message instead of swallowing it. A blank
+  // "Failed to update task" toast hid a real validation/auth error for far
+  // too long — surface what the API actually said so issues are diagnosable.
+  const apiMsg = (err: any, fallback: string) =>
+    err?.response?.data?.message ?? err?.message ?? fallback;
 
   async function handleCreate() {
     const e = validate(createForm); if (e) { toast.error(e); return; }
@@ -632,7 +679,7 @@ export function Tasks() {
         assigneeId: createForm.assigneeId, dueDate: toTs(createForm.dueDateStr)!,
       } as CreateTaskData);
       toast.success('Task created'); setCreateOpen(false); setCreateForm(BLANK);
-    } catch { toast.error('Failed to create task'); }
+    } catch (err) { toast.error(apiMsg(err, 'Failed to create task')); }
   }
 
   function openEdit(t: TaskDisplay) {
@@ -643,16 +690,37 @@ export function Tasks() {
 
   async function handleUpdate() {
     if (!editTask) return;
-    const e = validate(editForm); if (e) { toast.error(e); return; }
+    // Guard against double-click submits even though the button is disabled —
+    // belt and braces, in case some other input triggers a re-submit.
+    if (updateM.isPending) return;
+
+    const e = validate(editForm);
+    if (e) { toast.error(e); return; }
+
+    if (isEditUnchanged(editTask, editForm)) {
+      toast.info('No changes to save.');
+      setEditTask(null);
+      return;
+    }
+
+    // Single morphing toast — keeps the user oriented during the request and
+    // collapses to one final success/error line instead of layering toasts.
+    const toastId = toast.loading('Saving changes…');
     try {
       await updateM.mutateAsync({ taskId: editTask.id, data: {
-        title: editForm.title.trim(),
+        title:       editForm.title.trim(),
         description: editForm.description.trim() || undefined,
-        status: editForm.status, priority: editForm.priority,
-        assigneeId: editForm.assigneeId, dueDate: toTs(editForm.dueDateStr)!,
+        status:      editForm.status,
+        priority:    editForm.priority,
+        assigneeId:  editForm.assigneeId,
+        dueDate:     toTs(editForm.dueDateStr)!,
       } as UpdateTaskData });
-      toast.success('Task updated'); setEditTask(null);
-    } catch { toast.error('Failed to update task'); }
+      toast.success('Task updated', { id: toastId });
+      setEditTask(null);
+      setEditForm(BLANK);
+    } catch (err) {
+      toast.error(apiMsg(err, 'Failed to update task'), { id: toastId });
+    }
   }
 
   async function handleStatusChange(t: TaskDisplay, s: TaskStatus) {
@@ -660,7 +728,7 @@ export function Tasks() {
       await updateM.mutateAsync({ taskId: t.id, data: { status: s } });
       if (viewTask?.id === t.id) setViewTask({ ...t, status: s });
       toast.success(`Moved to ${S[s].label}`);
-    } catch { toast.error('Failed to update'); }
+    } catch (err) { toast.error(apiMsg(err, 'Failed to update')); }
   }
 
   async function handleDelete() {
@@ -668,7 +736,7 @@ export function Tasks() {
     try {
       await deleteM.mutateAsync(delTarget.id);
       toast.success('Task deleted'); setDelTarget(null);
-    } catch { toast.error('Failed to delete'); }
+    } catch (err) { toast.error(apiMsg(err, 'Failed to delete')); }
   }
 
   const cp = { users, onEdit: openEdit, onDelete: setDelTarget, onStatusChange: handleStatusChange, onView: setViewTask };
@@ -839,15 +907,34 @@ export function Tasks() {
         onStatusChange={handleStatusChange}
       />
 
-      {/* Edit dialog */}
-      <Dialog open={!!editTask} onOpenChange={(o) => { if (!o) setEditTask(null); }}>
-        <DialogContent className="max-w-lg rounded-2xl">
+      {/* Edit dialog
+          - Closed via the Cancel button or a successful save.
+          - Esc / outside-click closes are blocked while a save is in flight,
+            so the user never wonders "did my change actually persist?". */}
+      <Dialog
+        open={!!editTask}
+        onOpenChange={(o) => {
+          if (updateM.isPending) return;
+          if (!o) { setEditTask(null); setEditForm(BLANK); }
+        }}
+      >
+        <DialogContent
+          className="max-w-lg rounded-2xl"
+          onEscapeKeyDown={(e) => { if (updateM.isPending) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (updateM.isPending) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (updateM.isPending) e.preventDefault(); }}
+        >
           <DialogHeader className="pb-2">
             <DialogTitle className="text-xl">Edit Task</DialogTitle>
             <DialogDescription className="text-sm">Update the details for this task.</DialogDescription>
           </DialogHeader>
           <TaskFormFields form={editForm} onChange={setEditForm} users={users} />
-          <Footer onCancel={() => setEditTask(null)} onSubmit={handleUpdate} busy={updateM.isPending} label="Save Changes" />
+          <Footer
+            onCancel={() => { setEditTask(null); setEditForm(BLANK); }}
+            onSubmit={handleUpdate}
+            busy={updateM.isPending}
+            label="Save Changes"
+          />
         </DialogContent>
       </Dialog>
 
