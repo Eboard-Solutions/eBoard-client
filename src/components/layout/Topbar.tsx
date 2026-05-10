@@ -197,16 +197,14 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-30 h-[58px]',
-        'bg-white/95 dark:bg-gray-950/95',
-        'backdrop-blur-md',
-        'border-b border-gray-200 dark:border-gray-800',
+        'fixed top-0 right-0 z-30 h-[58px] antialiased',
+        'bg-white/85 dark:bg-gray-950/90',
+        'backdrop-blur-xl backdrop-saturate-150',
+        'border-b border-gray-200/80 dark:border-gray-800/70',
         'transition-all duration-300 ease-in-out',
-        // Dynamic left offset matches sidebar width
         sidebarCollapsed ? 'left-[68px]' : 'left-[248px]',
-        // Scroll shadow
         scrolled
-          ? 'shadow-[0_1px_12px_rgba(0,0,0,0.07)] dark:shadow-[0_1px_12px_rgba(0,0,0,0.3)]'
+          ? 'shadow-[0_4px_20px_-8px_rgba(15,23,42,0.10)] dark:shadow-[0_4px_20px_-8px_rgba(0,0,0,0.5)]'
           : 'shadow-none',
       )}
     >
@@ -216,11 +214,11 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
         <div className="flex flex-1 items-center max-w-md">
           <div className={cn(
             'relative flex flex-1 items-center rounded-xl',
-            'border border-gray-200 dark:border-gray-700/80',
-            'bg-gray-50 dark:bg-gray-800/60',
+            'border border-gray-200/90 dark:border-gray-700/80',
+            'bg-gray-50/80 dark:bg-gray-800/50',
             'focus-within:bg-white dark:focus-within:bg-gray-800',
-            'focus-within:border-indigo-300 dark:focus-within:border-indigo-600/60',
-            'focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.1)]',
+            'focus-within:border-indigo-400/70 dark:focus-within:border-indigo-500/60',
+            'focus-within:shadow-[0_0_0_4px_rgba(99,102,241,0.10)]',
             'transition-all duration-200',
           )}>
             <Search className="absolute left-3 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none shrink-0" />
@@ -234,8 +232,8 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
               aria-label="Search"
               className={cn(
                 'w-full h-[34px] bg-transparent pl-9 pr-16',
-                'text-[13px] text-gray-700 dark:text-gray-300',
-                'placeholder:text-gray-400 dark:placeholder:text-gray-600',
+                'text-[13px] font-medium tracking-tight text-gray-700 dark:text-gray-200',
+                'placeholder:text-gray-400 dark:placeholder:text-gray-600 placeholder:font-normal',
                 'outline-none',
               )}
             />
@@ -250,7 +248,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
               </button>
             )}
             {/* ⌘K badge */}
-            <kbd className="absolute right-2.5 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 px-1.5 py-0.5 font-mono text-[9px] text-gray-300 dark:text-gray-500 leading-none">
+            <kbd className="absolute right-2.5 rounded-md border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-900/60 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-gray-400 dark:text-gray-500 leading-none shadow-[0_1px_0_rgba(0,0,0,0.04)]">
               ⌘K
             </kbd>
           </div>
@@ -264,10 +262,10 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
             <DropdownMenuTrigger asChild>
               <Button
                 size="icon"
-                className="h-8 w-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 transition-all"
+                className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/40 hover:scale-[1.04] active:scale-95 transition-all duration-200 ring-1 ring-inset ring-white/10"
                 aria-label="Quick create"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 dark:bg-gray-900 dark:border-gray-700">
@@ -320,20 +318,23 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white px-0.5 ring-2 ring-white dark:ring-gray-950">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
+                  <>
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-rose-600 text-[9px] font-black text-white px-0.5 ring-2 ring-white dark:ring-gray-950 shadow-sm shadow-rose-500/40 tabular-nums z-[1]">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-rose-500 opacity-40 animate-ping" />
+                  </>
                 )}
               </Button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-96 p-0 dark:bg-gray-900 dark:border-gray-700 overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-indigo-50/50 to-transparent dark:from-indigo-950/20">
                 <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Notifications</p>
+                  <p className="text-[13px] font-bold tracking-tight text-gray-900 dark:text-white">Notifications</p>
                   {unreadCount > 0 && (
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    <p className="text-[10.5px] text-gray-500 dark:text-gray-400 mt-0.5 font-medium tabular-nums">
                       {unreadCount} unread
                     </p>
                   )}
@@ -424,9 +425,9 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                 aria-label="User menu"
                 className="relative flex h-8 w-8 items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
               >
-                <Avatar className="h-8 w-8 ring-2 ring-indigo-100 dark:ring-indigo-900/60">
+                <Avatar className="h-8 w-8 ring-2 ring-indigo-100 dark:ring-indigo-900/60 shadow-sm">
                   <AvatarImage src={(user as any)?.avatar} alt={fullName} />
-                  <AvatarFallback className="text-[11px] font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+                  <AvatarFallback className="text-[11px] font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white tracking-wide">
                     {initials || <User className="h-4 w-4" />}
                   </AvatarFallback>
                 </Avatar>

@@ -25,7 +25,10 @@ export function useDocuments(filters?: DocumentFilters) {
   return useQuery({
     queryKey: DOCUMENTS_QUERY_KEYS.list(filters),
     queryFn: () => documentsService.getDocuments(filters),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 60 * 1000,
+    refetchInterval: 90 * 1000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -43,11 +46,20 @@ export function useDocument(id: string) {
 /**
  * Hook to create/upload a new document
  */
+// Variables type for the upload — supports an optional progress callback
+// so the calling dialog can show a real upload progress bar.
+type CreateDocumentVariables = CreateDocumentData & {
+  onProgress?: (percent: number) => void;
+};
+
 export function useCreateDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreateDocumentData) => documentsService.createDocument(data),
+    mutationFn: (vars: CreateDocumentVariables) => {
+      const { onProgress, ...data } = vars;
+      return documentsService.createDocument(data, onProgress);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEYS.all });
     },

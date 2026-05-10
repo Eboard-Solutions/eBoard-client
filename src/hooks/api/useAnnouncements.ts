@@ -25,7 +25,10 @@ export function useAnnouncements(filters?: AnnouncementFilters) {
   return useQuery({
     queryKey: ANNOUNCEMENTS_QUERY_KEYS.list(filters),
     queryFn: () => announcementsService.getAnnouncements(filters),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,            // New announcements stream in
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 

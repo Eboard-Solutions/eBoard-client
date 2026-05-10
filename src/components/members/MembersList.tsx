@@ -1,68 +1,146 @@
+// src/components/members/MembersList.tsx
+//
+// Compact, responsive table view of members.
+// - Shared role/avatar primitives from ./shared (DRY with MembersGrid)
+// - Hides Title and Phone columns on narrow viewports (sm/md respectively)
+// - Action menu trigger always visible on touch (focus-within); revealed on
+//   hover only on devices that support hover precisely
+// - Row component is memoized so toggling search/filter doesn't re-render every row
+
+import { memo, useCallback } from 'react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Edit3, Trash2, Shield, Crown, Users, UserCheck, UserX, MoreHorizontal,
+  Edit3, Trash2, Users, UserCheck, UserX, MoreHorizontal, Mail,
 } from 'lucide-react';
 import type { DisplayUser } from './types';
-
-// ─── Role config ──────────────────────────────────────────────────────────────
-
-const ROLE_CONFIG: Record<string, {
-  label: string; color: string; bg: string; border: string; icon: React.ElementType;
-}> = {
-  SuperAdmin:  { label: 'Super Admin',  color: 'text-violet-700 dark:text-violet-300', bg: 'bg-violet-100 dark:bg-violet-900/30', border: 'border-violet-200 dark:border-violet-700', icon: Crown     },
-  OrgAdmin:    { label: 'Org Admin',    color: 'text-blue-700 dark:text-blue-300',     bg: 'bg-blue-100 dark:bg-blue-900/30',     border: 'border-blue-200 dark:border-blue-700',   icon: Shield    },
-  Admin:       { label: 'Admin',        color: 'text-sky-700 dark:text-sky-300',       bg: 'bg-sky-100 dark:bg-sky-900/30',       border: 'border-sky-200 dark:border-sky-700',     icon: Shield    },
-  BoardMember: { label: 'Board Member', color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-100 dark:bg-emerald-900/30', border: 'border-emerald-200 dark:border-emerald-700', icon: UserCheck },
-  User:        { label: 'User',         color: 'text-slate-600 dark:text-slate-400',   bg: 'bg-slate-100 dark:bg-slate-800',      border: 'border-slate-200 dark:border-slate-700', icon: Users     },
-};
-
-const AVATAR_GRADIENTS = [
-  'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-500',
-  'from-emerald-500 to-teal-500',
-  'from-amber-500 to-orange-500',
-  'from-rose-500 to-pink-500',
-  'from-indigo-500 to-blue-600',
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getRoleConfig(role: string) {
-  return ROLE_CONFIG[role] ?? {
-    label: role, color: 'text-slate-600', bg: 'bg-slate-100',
-    border: 'border-slate-200', icon: Users,
-  };
-}
-
-function getInitials(user: DisplayUser): string {
-  if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-  if (user.name) return user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-  return user.email[0].toUpperCase();
-}
-
-function getGradient(id: string): string {
-  if (!id) return AVATAR_GRADIENTS[0];
-  return AVATAR_GRADIENTS[id.charCodeAt(0) % AVATAR_GRADIENTS.length];
-}
+import { MemberAvatar, RoleBadge, StatusDot } from './shared';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  members: DisplayUser[];
-  canEdit?: boolean;
-  canDelete?: boolean;
-  onEdit?: (member: DisplayUser) => void;
-  onDelete?: (id: string) => void;
+  members:         DisplayUser[];
+  canEdit?:        boolean;
+  canDelete?:      boolean;
+  onEdit?:         (member: DisplayUser) => void;
+  onDelete?:       (id: string) => void;
   onToggleActive?: (member: DisplayUser) => void;
 }
+
+// ─── Row ──────────────────────────────────────────────────────────────────────
+
+interface RowProps {
+  user:           DisplayUser;
+  showActions:    boolean;
+  canEdit:        boolean;
+  canDelete:      boolean;
+  onEdit?:        (member: DisplayUser) => void;
+  onDelete?:      (id: string) => void;
+  onToggleActive?: (member: DisplayUser) => void;
+}
+
+const MemberRow = memo(function MemberRow({
+  user, showActions, canEdit, canDelete, onEdit, onDelete, onToggleActive,
+}: RowProps) {
+  // Stable handlers — only rebound when their dependency changes
+  const handleEdit         = useCallback(() => onEdit?.(user),         [onEdit, user]);
+  const handleToggleActive = useCallback(() => onToggleActive?.(user), [onToggleActive, user]);
+  const handleDelete       = useCallback(() => onDelete?.(user.id),    [onDelete, user.id]);
+
+  return (
+    <TableRow className="group border-b border-border/40 hover:bg-muted/20 focus-within:bg-muted/20 transition-colors">
+      {/* Member */}
+      <TableCell className="pl-4 sm:pl-5 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <MemberAvatar user={user} size="sm" />
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-foreground truncate tracking-tight">{user.name}</p>
+            <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+              <Mail className="h-3 w-3 shrink-0 opacity-60" />
+              {user.email}
+            </p>
+          </div>
+        </div>
+      </TableCell>
+
+      {/* Role */}
+      <TableCell className="py-3">
+        <RoleBadge role={user.role} />
+      </TableCell>
+
+      {/* Title — hidden on small */}
+      <TableCell className="py-3 text-sm text-muted-foreground hidden md:table-cell">
+        {user.position || <span className="text-muted-foreground/50">—</span>}
+      </TableCell>
+
+      {/* Phone — hidden on small/medium */}
+      <TableCell className="py-3 text-sm text-muted-foreground hidden lg:table-cell tabular-nums">
+        {user.phone || <span className="text-muted-foreground/50">—</span>}
+      </TableCell>
+
+      {/* Status */}
+      <TableCell className="py-3">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+          user.isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'
+        }`}>
+          <StatusDot active={user.isActive} size="xs" />
+          {user.isActive ? 'Active' : 'Inactive'}
+        </span>
+      </TableCell>
+
+      {/* Actions */}
+      {showActions && (
+        <TableCell className="pr-4 sm:pr-5 py-3 text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Actions for ${user.name}`}
+                /* Visible always on touch (no `hover:` support) and on
+                   focus-within for keyboard users; otherwise reveal on hover. */
+                className="h-8 w-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {canEdit && onEdit && (
+                <DropdownMenuItem onClick={handleEdit}>
+                  <Edit3 className="h-3.5 w-3.5 mr-2" />Edit details
+                </DropdownMenuItem>
+              )}
+              {canEdit && onToggleActive && (
+                <DropdownMenuItem onClick={handleToggleActive}>
+                  {user.isActive
+                    ? <><UserX      className="h-3.5 w-3.5 mr-2" />Deactivate</>
+                    : <><UserCheck  className="h-3.5 w-3.5 mr-2" />Activate</>}
+                </DropdownMenuItem>
+              )}
+              {canDelete && onDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleDelete}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-2" />Remove
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
+      )}
+    </TableRow>
+  );
+});
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -76,131 +154,65 @@ export default function MembersList({
 }: Props) {
   const showActions = canEdit || canDelete;
 
+  // The page handles loading/empty states for the page-level no-data case,
+  // but defend against an accidental empty array so the bare table doesn't
+  // render headers above nothing.
+  if (members.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-12 text-center">
+        <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+          <Users className="h-6 w-6 text-muted-foreground/40" />
+        </div>
+        <p className="text-sm font-semibold">No members to show</p>
+        <p className="text-xs text-muted-foreground mt-1">Try clearing your filters.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-border/60 overflow-hidden bg-card shadow-sm">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
-            <TableHead className="pl-5 py-3.5 font-semibold text-foreground">Member</TableHead>
-            <TableHead className="py-3.5 font-semibold text-foreground">Role</TableHead>
-            <TableHead className="py-3.5 font-semibold text-foreground">Title</TableHead>
-            <TableHead className="py-3.5 font-semibold text-foreground">Phone</TableHead>
-            <TableHead className="py-3.5 font-semibold text-foreground">Status</TableHead>
-            {showActions && (
-              <TableHead className="pr-5 py-3.5 text-right font-semibold text-foreground w-16">
-                Actions
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
+              <TableHead className="pl-4 sm:pl-5 py-3 font-semibold text-foreground text-xs uppercase tracking-wider">
+                Member
               </TableHead>
-            )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map(user => {
-            const cfg = getRoleConfig(user.role);
-            const Icon = cfg.icon;
-            const gradient = getGradient(user.id);
-            const initials = getInitials(user);
-
-            return (
-              <TableRow
+              <TableHead className="py-3 font-semibold text-foreground text-xs uppercase tracking-wider">
+                Role
+              </TableHead>
+              <TableHead className="py-3 font-semibold text-foreground text-xs uppercase tracking-wider hidden md:table-cell">
+                Title
+              </TableHead>
+              <TableHead className="py-3 font-semibold text-foreground text-xs uppercase tracking-wider hidden lg:table-cell">
+                Phone
+              </TableHead>
+              <TableHead className="py-3 font-semibold text-foreground text-xs uppercase tracking-wider">
+                Status
+              </TableHead>
+              {showActions && (
+                <TableHead className="pr-4 sm:pr-5 py-3 text-right font-semibold text-foreground text-xs uppercase tracking-wider w-16">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.map(user => (
+              <MemberRow
                 key={user.id}
-                className="group border-b border-border/40 hover:bg-muted/20 transition-colors"
-              >
-                {/* Member */}
-                <TableCell className="pl-5 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="relative shrink-0">
-                      <Avatar className="h-9 w-9 ring-1 ring-border/50">
-                        <AvatarImage src={user.avatar} alt={user.name} />
-                        <AvatarFallback className={`bg-gradient-to-br ${gradient} text-white text-xs font-bold`}>
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${
-                        user.isActive ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'
-                      }`} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm text-foreground truncate">{user.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                    </div>
-                  </div>
-                </TableCell>
-
-                {/* Role */}
-                <TableCell className="py-3.5">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
-                    <Icon className="h-2.5 w-2.5" />
-                    {cfg.label}
-                  </span>
-                </TableCell>
-
-                {/* Title */}
-                <TableCell className="py-3.5 text-sm text-muted-foreground">
-                  {user.position ?? '—'}
-                </TableCell>
-
-                {/* Phone */}
-                <TableCell className="py-3.5 text-sm text-muted-foreground">
-                  {user.phone ?? '—'}
-                </TableCell>
-
-                {/* Status */}
-                <TableCell className="py-3.5">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                    user.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
-                  }`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${user.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                    {user.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </TableCell>
-
-                {/* Actions */}
-                {showActions && (
-                  <TableCell className="pr-5 py-3.5 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        {canEdit && onEdit && (
-                          <DropdownMenuItem onClick={() => onEdit(user)}>
-                            <Edit3 className="h-3.5 w-3.5 mr-2" />Edit Details
-                          </DropdownMenuItem>
-                        )}
-                        {canEdit && onToggleActive && (
-                          <DropdownMenuItem onClick={() => onToggleActive(user)}>
-                            {user.isActive
-                              ? <><UserX className="h-3.5 w-3.5 mr-2" />Deactivate</>
-                              : <><UserCheck className="h-3.5 w-3.5 mr-2" />Activate</>
-                            }
-                          </DropdownMenuItem>
-                        )}
-                        {canDelete && onDelete && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => onDelete(user.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />Remove
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                )}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                user={user}
+                showActions={showActions}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onToggleActive={onToggleActive}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -98,6 +99,11 @@ const EMPTY_ATTENDANCE: AttendanceDataPoint[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Reports() {
+  // Defer chart rendering by one tick so ResponsiveContainer
+  // can measure a real DOM size instead of -1 x -1.
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   const { data: financeRaw,   isLoading: financeLoading   } = useFinanceOverview();
   const { data: dashboardRaw, isLoading: dashboardLoading } = useDashboardSummary();
   const { data: tasksRaw,     isLoading: tasksLoading     } = useTasks();
@@ -308,8 +314,9 @@ export function Reports() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-80 min-w-0">
+              {!isMounted ? null :
+              <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={attendanceData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis
@@ -339,7 +346,7 @@ export function Reports() {
                     activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                 </LineChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer>}
             </div>
           </CardContent>
         </Card>
@@ -359,8 +366,9 @@ export function Reports() {
                 No budget category data available
               </div>
             ) : (
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-w-0">
+              {!isMounted ? null :
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={budgetData} barGap={4}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
@@ -383,7 +391,7 @@ export function Reports() {
                     <Bar dataKey="allocated" fill="hsl(var(--primary))"   name="Allocated" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="spent"     fill="hsl(var(--chart-2))"   name="Spent"     radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer>}
               </div>
             )}
           </CardContent>
@@ -403,8 +411,9 @@ export function Reports() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-80 min-w-0">
+              {!isMounted ? null :
+              <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={taskStatusData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis
@@ -426,7 +435,7 @@ export function Reports() {
                   />
                   <Bar dataKey="count" fill="hsl(var(--primary))" name="Tasks" radius={[4, 4, 0, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer>}
             </div>
           </CardContent>
         </Card>

@@ -29,8 +29,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Calendar, Clock, MapPin, Plus, Search, Loader2, Monitor,
-  ClipboardList, FileText, Video, Users, Wifi, Building2,
-  Layers, ChevronRight, MoreVertical, Pencil, Trash2,
+  FileText, Video, Users, Wifi, Building2,
+  Layers, MoreVertical, Pencil, Trash2,
   Globe, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   CalendarDays, X, TrendingUp, Filter,
 } from 'lucide-react';
@@ -38,13 +38,13 @@ import {
 import {
   useMeetings, useCreateMeeting, useUpdateMeeting, useDeleteMeeting,
 } from '@/hooks/api/useMeetings';
-import { useOrganisationUsers } from '@/hooks/api/useUsers';
 import type {
   Meeting, MeetingFormat, MeetingFrequency,
   MeetingType, MeetingPriority, RSVPStatus, CreateMeetingData,
 } from '@/types/api.types';
-import { AgendaManager } from '../components/meetings/AgendaManager';
-import { MinutesManager } from '../components/meetings/MinutesManager';
+// Agendas and Minutes have moved to dedicated top-level pages
+// (/agendas and /minutes) — see App.tsx routes and the sidebar nav.
+// This page now focuses solely on meeting CRUD + upcoming/past listing.
 
 // ─── Timezone list ────────────────────────────────────────────────────────────
 
@@ -678,19 +678,11 @@ export default function Meetings() {
   const [editForm,     setEditForm]     = useState<MeetingForm>({ ...BLANK_FORM });
 
   const { data: page, isLoading, refetch } = useMeetings({ page: 1, limit: 100 });
-  const { data: usersRaw } = useOrganisationUsers();
   const createM = useCreateMeeting();
   const updateM = useUpdateMeeting();
   const deleteM = useDeleteMeeting();
 
   const allMeetings: Meeting[] = page?.items ?? [];
-
-  const members = useMemo(() => {
-    const raw = usersRaw as any;
-    if (Array.isArray(raw)) return raw;
-    if (Array.isArray(raw?.data)) return raw.data;
-    return [];
-  }, [usersRaw]);
 
   const filtered = useMemo(() =>
     allMeetings.filter(m =>
@@ -880,15 +872,13 @@ export default function Meetings() {
         <Tabs defaultValue="upcoming" className="space-y-5">
           <TabsList className="h-auto p-1 bg-muted/40 rounded-xl border border-border/30 gap-1 flex-wrap sm:flex-nowrap">
             {[
-              { v: 'upcoming', label: 'Upcoming', icon: TrendingUp,    count: upcoming.length },
-              { v: 'past',     label: 'Past',     icon: RefreshCw,     count: past.length     },
-              { v: 'agenda',   label: 'Agenda',   icon: ClipboardList, count: null            },
-              { v: 'minutes',  label: 'Minutes',  icon: FileText,      count: null            },
+              { v: 'upcoming', label: 'Upcoming', icon: TrendingUp, count: upcoming.length },
+              { v: 'past',     label: 'Past',     icon: RefreshCw,  count: past.length     },
             ].map(({ v, label, icon: Icon, count }) => (
               <TabsTrigger key={v} value={v}
                 className="flex-1 rounded-lg text-sm h-9 px-3 sm:px-5 font-medium data-[state=active]:shadow-sm gap-1.5">
                 <Icon className="h-3.5 w-3.5" />{label}
-                {count !== null && count > 0 && (
+                {count > 0 && (
                   <Badge variant="secondary" className="ml-1 text-xs h-5 px-1.5">{count}</Badge>
                 )}
               </TabsTrigger>
@@ -915,12 +905,6 @@ export default function Meetings() {
             }
           </TabsContent>
 
-          <TabsContent value="agenda"  className="mt-2 focus-visible:outline-none">
-            <AgendaManager meetings={allMeetings} members={members} />
-          </TabsContent>
-          <TabsContent value="minutes" className="mt-2 focus-visible:outline-none">
-            <MinutesManager meetings={allMeetings} members={members} />
-          </TabsContent>
         </Tabs>
       )}
 

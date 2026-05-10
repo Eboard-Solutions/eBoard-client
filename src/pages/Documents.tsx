@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -250,20 +250,14 @@ function StatCard({
   colorClass: string;
 }) {
   return (
-    <Card className="border border-border/60 shadow-sm">
-      <CardContent className="p-3 sm:p-4 flex items-center gap-3">
-        <div
-          className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${colorClass}`}
-        >
+    <Card className="border border-border/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200">
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/40 dark:ring-white/5 ${colorClass}`}>
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-lg sm:text-xl font-bold text-foreground leading-none truncate">
-            {value}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {label}
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{label}</p>
+          <p className="text-xl font-black tabular-nums tracking-tight text-foreground leading-tight truncate mt-0.5">{value}</p>
         </div>
       </CardContent>
     </Card>
@@ -331,6 +325,8 @@ function UploadDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<UploadForm>(EMPTY_UPLOAD);
   const [dragOver, setDragOver] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);     // 0–100 — live upload bytes
+  const [serverProcessing, setServerProcessing] = useState(false); // bytes done, server still working
   const createMutation = useCreateDocument();
 
   const handleFileSelect = (file: File) => {
@@ -349,43 +345,79 @@ function UploadDialog({
   };
 
   const handleSubmit = async () => {
-    if (!form.file) {
-      toast.error("Please select a file to upload");
-      return;
-    }
-    if (!form.title.trim()) {
-      toast.error("Please enter a document title");
-      return;
-    }
+    if (!form.file)          { toast.error('Please select a file to upload'); return; }
+    if (!form.title.trim())  { toast.error('Please enter a document title');  return; }
+
+    // Live toast: starts as a loading toast, morphs to success/error in place.
+    // Gives the user immediate feedback even on slow uploads.
+    const toastId = toast.loading(`Uploading "${form.title.trim()}"…`, {
+      description: '0% — preparing file',
+    });
+    setUploadPct(0);
+    setServerProcessing(false);
+
     try {
       await createMutation.mutateAsync({
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         file: form.file,
         accessLevel: form.accessLevel,
-        tags: form.tags
-          ? form.tags
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          : [],
+        tags:        form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        onProgress: (pct) => {
+          setUploadPct(pct);
+          if (pct >= 100) {
+            // Bytes are at the server — now Azure + DB do their thing.
+            // Switch the bar to indeterminate-ish "processing" mode and update
+            // the toast description so the user knows we're not stuck.
+            setServerProcessing(true);
+            toast.loading(`Uploading "${form.title.trim()}"…`, {
+              id: toastId,
+              description: 'Saving to storage…',
+            });
+          } else {
+            toast.loading(`Uploading "${form.title.trim()}"…`, {
+              id: toastId,
+              description: `${pct}% — sending file`,
+            });
+          }
+        },
       });
-      toast.success("Document uploaded successfully", {
-        description: `"${form.title}" has been added to the library.`,
+
+      toast.success('Document uploaded', {
+        id: toastId,
+        description: `"${form.title}" is now in the library.`,
       });
       setForm(EMPTY_UPLOAD);
+      setUploadPct(0);
+      setServerProcessing(false);
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      toast.error("Upload failed", {
-        description: err?.message ?? "Something went wrong. Please try again.",
-      });
+      const isTimeout = err?.code === 'ECONNABORTED';
+      const isNetwork = !isTimeout && !err?.response;
+      toast.error(
+        isTimeout ? 'Upload timed out'
+        : isNetwork ? 'Cannot reach the server'
+        : 'Upload failed',
+        {
+          id: toastId,
+          description: isTimeout
+            ? 'The server took too long. Check your connection and try again.'
+            : isNetwork
+            ? 'The server is not responding. Make sure the backend is running.'
+            : err?.message ?? 'Something went wrong. Please try again.',
+          duration: 6000,
+        },
+      );
+      setServerProcessing(false);
     }
   };
 
   const handleClose = () => {
     if (!createMutation.isPending) {
       setForm(EMPTY_UPLOAD);
+      setUploadPct(0);
+      setServerProcessing(false);
       onOpenChange(false);
     }
   };
@@ -545,6 +577,30 @@ function UploadDialog({
           </div>
         </div>
 
+        {/* Inline progress bar — visible during the actual upload + server save.
+            Gives the user a real signal that progress is happening rather than
+            a single indefinite spinner. */}
+        {createMutation.isPending && (
+          <div className="space-y-1.5 -mt-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-foreground">
+                {serverProcessing ? 'Saving to storage…' : 'Uploading file…'}
+              </span>
+              <span className="tabular-nums text-muted-foreground">
+                {serverProcessing ? '100%' : `${uploadPct}%`}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r from-indigo-500 to-blue-600 transition-[width] duration-200 ${
+                  serverProcessing ? 'animate-pulse' : ''
+                }`}
+                style={{ width: `${serverProcessing ? 100 : uploadPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
           <Button
             variant="outline"
@@ -554,23 +610,16 @@ function UploadDialog({
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={
-              createMutation.isPending || !form.file || !form.title.trim()
-            }
-            className="gap-2 w-full sm:w-auto sm:min-w-28"
-          >
+          <Button onClick={handleSubmit}
+            disabled={createMutation.isPending || !form.file || !form.title.trim()}
+            className="gap-2 w-full sm:w-auto sm:min-w-32">
             {createMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Uploading…
+                {serverProcessing ? 'Saving…' : `Uploading ${uploadPct}%`}
               </>
             ) : (
-              <>
-                <Upload className="h-4 w-4" />
-                Upload
-              </>
+              <><Upload className="h-4 w-4" />Upload</>
             )}
           </Button>
         </DialogFooter>
@@ -600,18 +649,18 @@ function EditDialog({
     tags: (doc?.tags ?? []).join(", "),
   });
 
-  // IMPROVEMENT: use useEffect instead of inline state comparison to sync form
-  // when the doc prop changes — avoids calling setState during render
-  const [prevDocId, setPrevDocId] = useState<string | undefined>(doc?.id);
-  if (doc?.id !== prevDocId) {
-    setPrevDocId(doc?.id);
+  // FIX: the previous "set state during render with a sentinel" pattern is the
+  // same anti-pattern that crashed MinutesManager. A real useEffect is safer
+  // and lets React schedule the update properly when the dialog reopens with
+  // a different document.
+  useEffect(() => {
     setForm({
       title: doc?.title ?? "",
       description: doc?.description ?? "",
       accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? "VIEWER",
       tags: (doc?.tags ?? []).join(", "),
     });
-  }
+  }, [doc?.id, doc?.title, doc?.description, doc?.accessLevel, doc?.tags]);
 
   const handleSubmit = async () => {
     if (!doc) return;
@@ -839,7 +888,7 @@ function DocumentRow({
   }, [doc]);
 
   return (
-    <Card className="border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200 group">
+    <Card className="border border-border/60 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200 group">
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-start sm:items-center gap-3 sm:gap-4">
           {/* File type icon */}
@@ -983,7 +1032,7 @@ function DocumentCard({
   }, [doc]);
 
   return (
-    <Card className="border border-border/60 bg-card shadow-sm hover:shadow-md hover:border-border transition-all duration-200 group flex flex-col">
+    <Card className="border border-border/60 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200 group flex flex-col">
       <CardContent className="p-4 flex flex-col gap-3 h-full">
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
@@ -1288,13 +1337,26 @@ export function Documents() {
 
   const deleteMutation = useDeleteDocument();
 
-  // ── FIX: correct ResponseObject unwrapping ────────────────────────────────
-  // documentsData is ResponseObject<Document[]> → { statusCode, message, data: Document[] }
-  // Previous code used documentsData?.items which never exists → always []
-  const documents: DocType[] = useMemo(
-    () => documentsData?.data ?? documentsData?.items ?? [],
-    [documentsData],
-  );
+  // ── FIX: defensive ResponseObject unwrap ─────────────────────────────────
+  // The backend returns one of:
+  //   { statusCode, message, data: Document[], pageInfo }     (normal)
+  //   { data: { statusCode, message, data: Document[] } }     (some controllers double-wrap)
+  //   Document[]                                              (array straight back)
+  // Previously the page only checked .data and .items, so a double-wrapped
+  // payload silently rendered as empty. Walk one extra level when the
+  // outer .data is itself a ResponseObject-shaped object.
+  const documents: DocType[] = useMemo(() => {
+    const raw = documentsData as unknown;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as DocType[];
+    const r = raw as { data?: unknown; items?: unknown };
+    if (Array.isArray(r.data))  return r.data  as DocType[];
+    if (Array.isArray(r.items)) return r.items as DocType[];
+    // Double-wrap: { data: { data: Document[] } }
+    const inner = r.data as { data?: unknown } | undefined;
+    if (inner && Array.isArray(inner.data)) return inner.data as DocType[];
+    return [];
+  }, [documentsData]);
 
   // ── IMPROVEMENT: client-side filtering with useMemo ───────────────────────
   // Avoids re-filtering on every render
@@ -1345,7 +1407,7 @@ export function Documents() {
   // ── Error state ───────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="container mx-auto py-6 sm:py-8 px-4 md:px-6 max-w-5xl space-y-6">
+      <div className="space-y-6 pb-12">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
             Documents
@@ -1374,7 +1436,7 @@ export function Documents() {
   // edit/delete still work without re-mounting state
   if (viewDoc) {
     return (
-      <div className="container mx-auto py-4 sm:py-6 px-3 sm:px-4 md:px-6 max-w-5xl">
+      <div className="pb-12">
         <DocumentViewer
           doc={viewDoc}
           allDocs={filteredDocs}
@@ -1402,25 +1464,30 @@ export function Documents() {
   }
 
   // ── Main view ─────────────────────────────────────────────────────────────
+  // Full-bleed: AppLayout's p-6 handles outer padding, no container/max-w cap
+  // so the page expands to fill the area between the sidebar and right edge,
+  // matching the Members / Organisation / Tasks pages.
   return (
-    <div className="container mx-auto space-y-4 sm:space-y-6 py-4 sm:py-8 px-3 sm:px-4 md:px-6 max-w-5xl">
-      {/* Header */}
-      <div className="flex flex-col xs:flex-row xs:items-start xs:justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Documents
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Manage files, folders, and board records
-          </p>
+    <div className="space-y-6 pb-12 antialiased">
+
+      {/* Header — gradient logo tile + bold title (consistent with the rest of the app) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-start gap-4 min-w-0">
+          <div className="relative shrink-0 h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-1 ring-white/15">
+            <FolderOpen className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
+            <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-[1.7rem] font-black tracking-tight leading-tight">Documents</h1>
+            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+              Manage files, folders and board records — searchable by title, tag and access level.
+            </p>
+          </div>
         </div>
-        <Button
-          size="sm"
-          className="gap-2 h-9 shrink-0 w-full xs:w-auto"
-          onClick={() => setUploadOpen(true)}
-        >
-          <FilePlus className="h-4 w-4" />
-          Upload Document
+        <Button size="sm"
+          className="h-9 gap-2 shrink-0 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/25 ring-1 ring-inset ring-white/10"
+          onClick={() => setUploadOpen(true)}>
+          <FilePlus className="h-4 w-4" />Upload Document
         </Button>
       </div>
 

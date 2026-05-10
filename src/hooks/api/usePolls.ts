@@ -24,6 +24,10 @@ export function usePolls(filters?: PollFilters) {
   return useQuery({
     queryKey: pollKeys.list(filters || {}),
     queryFn: () => PollsService.getAll(filters),
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,            // Real-time vote tally updates
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 

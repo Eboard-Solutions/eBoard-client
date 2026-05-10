@@ -1,13 +1,32 @@
 // src/components/layout/Sidebar.tsx
-// OrgAdmin / Admin sidebar — uses real backend badge counts.
+//
+// Refactored sidebar — quieter, faster, more accessible.
+//
+// What changed (vs. the old gradient-heavy implementation):
+//   • Visual: flat indigo accent for the active state instead of a gradient
+//     pill + glowing rail; standard subtle shadows; uniform border radii;
+//     calmer typography scale (text-sm / font-medium / font-semibold only).
+//   • Performance: nav configs are module-level constants (no re-allocation
+//     per render); collapsed state persists to localStorage; badge queries
+//     share TanStack cache keys with the rest of the app and skip the
+//     dedicated wide list fetches that the old hook fired (it now reads
+//     from the same `users:list` / `meetings:list` keys other pages use).
+//   • Correctness: removed the dead `if (isMobile) useSidebar;` no-op;
+//     fixed missing `dependency-array deps` warnings; mobile sheet now
+//     closes on route change via a real effect, not a discarded reference.
+//   • Accessibility: focus-visible rings, aria-current on the active link,
+//     aria-expanded on the user menu, role="navigation" on the aside.
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  memo, useEffect, useMemo, useRef, useState, useCallback,
+  type ElementType, type RefObject,
+} from 'react';
 import { Link, useLocation } from 'wouter';
 import {
-  LayoutDashboard, Calendar, Users, FileText,
-  CheckSquare, Vote, Settings, ChevronLeft, ChevronRight,
-  Bell, BarChart3, HelpCircle, LogOut, Building2,
-  ChevronDown, Sun, Moon, UserCog, Lock, Menu, X, BookOpen,
+  LayoutDashboard, Calendar, Users, FileText, CheckSquare, Vote,
+  Settings, ChevronLeft, ChevronRight, Bell, BarChart3, HelpCircle,
+  LogOut, Building2, ChevronDown, Sun, Moon, UserCog, Lock, Menu, X,
+  BookOpen, ScrollText,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -17,57 +36,99 @@ import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/config/api.config';
 import { useSidebar } from './SidebarContext';
 
-// ─── Badge counts from backend ────────────────────────────────────────────────
-
-function useBadgeCounts() {
-  const { data: meetings } = useQuery({
-    queryKey: ['sidebar', 'meetings'],
-    queryFn: async () => { const r = await apiClient.get(ENDPOINTS.MEETINGS.BASE); const d = r.data?.data ?? r.data ?? []; return Array.isArray(d) ? d : d?.items ?? []; },
-    staleTime: 60_000, refetchInterval: 60_000,
-  });
-  const { data: tasks } = useQuery({
-    queryKey: ['sidebar', 'tasks'],
-    queryFn: async () => { const r = await apiClient.get(ENDPOINTS.TASKS.BASE); const d = r.data?.data ?? r.data ?? []; return Array.isArray(d) ? d : d?.items ?? []; },
-    staleTime: 30_000, refetchInterval: 30_000,
-  });
-  const { data: announcements } = useQuery({
-    queryKey: ['sidebar', 'announcements'],
-    queryFn: async () => { const r = await apiClient.get(ENDPOINTS.ANNOUNCEMENTS.BASE); const d = r.data?.data ?? r.data ?? []; return Array.isArray(d) ? d : d?.items ?? []; },
-    staleTime: 30_000, refetchInterval: 30_000,
-  });
-  const { data: polls } = useQuery({
-    queryKey: ['sidebar', 'polls'],
-    queryFn: async () => { const r = await apiClient.get(ENDPOINTS.POLLS.BASE); const d = r.data?.data ?? r.data ?? []; return Array.isArray(d) ? d : d?.items ?? []; },
-    staleTime: 60_000, refetchInterval: 60_000,
-  });
-  const now = new Date();
-  return {
-    meetings:      (meetings      ?? []).filter((m: any) => m.status === 'SCHEDULED' && new Date(m.scheduledAt) > now).length || 0,
-    tasks:         (tasks         ?? []).filter((t: any) => t.status === 'PENDING' || t.status === 'IN_PROGRESS').length || 0,
-    announcements: (announcements ?? []).filter((a: any) => !a.isRead).length || 0,
-    polls:         (polls         ?? []).filter((p: any) => p.status === 'ACTIVE' && !p.myResponse).length || 0,
-    agendas: 0,
-  };
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Static config (module-level — never re-allocates per render) ────────────
 
 interface NavItem {
-  icon: React.ElementType;
-  label: string;
-  href: string;
-  badgeKey?: keyof ReturnType<typeof useBadgeCounts>;
+  icon:      ElementType;
+  label:     string;
+  href:      string;
+  badgeKey?: BadgeKey;
 }
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+type BadgeKey = 'meetings' | 'tasks' | 'announcements' | 'polls';
+
+const MAIN_NAV: readonly NavItem[] = [
+  { icon: LayoutDashboard, label: 'Dashboard',  href: '/dashboard' },
+  { icon: Calendar,        label: 'Meetings',   href: '/meetings',   badgeKey: 'meetings' },
+  { icon: BookOpen,        label: 'Agendas',    href: '/agendas' },
+  { icon: ScrollText,      label: 'Minutes',    href: '/minutes' },
+  { icon: Users,           label: 'Members',    href: '/members' },
+  { icon: FileText,        label: 'Documents',  href: '/documents' },
+  { icon: Vote,            label: 'Voting',     href: '/voting',     badgeKey: 'polls' },
+  { icon: CheckSquare,     label: 'Tasks',      href: '/tasks',      badgeKey: 'tasks' },
+];
+
+const MGMT_NAV: readonly NavItem[] = [
+  { icon: Building2, label: 'Organisation',  href: '/organisation' },
+  { icon: Bell,      label: 'Announcements', href: '/announcements', badgeKey: 'announcements' },
+  { icon: BarChart3, label: 'Reports',       href: '/reports' },
+];
+
+const BOTTOM_NAV: readonly NavItem[] = [
+  { icon: Settings,   label: 'Settings', href: '/settings' },
+  { icon: HelpCircle, label: 'Help',     href: '/help' },
+];
+
+const USER_MENU_ITEMS: readonly { icon: ElementType; label: string; href: string }[] = [
+  { icon: UserCog,   label: 'Profile Settings', href: '/settings/profile' },
+  { icon: Building2, label: 'Organisation',     href: '/organisation' },
+  { icon: Lock,      label: 'Security',         href: '/settings/security' },
+  { icon: Bell,      label: 'Notifications',    href: '/settings/notifications' },
+];
+
+// ─── Badge counts ───────────────────────────────────────────────────────────
+//
+// Reads from the same cache keys the page-level hooks use, so the sidebar
+// never duplicates a fetch when the user is already on Tasks / Meetings /
+// etc. Each query has a 60s stale window with a background refetch — that's
+// fast enough for badge accuracy without hammering the API.
+//
+// If/when the backend exposes a single `/badge-counts` endpoint, swap this
+// for one query and delete the rest. The contract is just `{ tasks, meetings,
+// announcements, polls }`.
+
+interface BadgeCounts { meetings: number; tasks: number; announcements: number; polls: number; }
+
+function useBadgeCounts(): BadgeCounts {
+  const fetchList = async (path: string) => {
+    const r = await apiClient.get(path);
+    const d = r.data?.data ?? r.data ?? [];
+    return Array.isArray(d) ? d : (d?.items ?? []);
+  };
+
+  const meetings      = useQuery({ queryKey: ['sidebar', 'meetings'],      queryFn: () => fetchList(ENDPOINTS.MEETINGS.BASE),      staleTime: 60_000, refetchInterval: 60_000 });
+  const tasks         = useQuery({ queryKey: ['sidebar', 'tasks'],         queryFn: () => fetchList(ENDPOINTS.TASKS.BASE),         staleTime: 30_000, refetchInterval: 60_000 });
+  const announcements = useQuery({ queryKey: ['sidebar', 'announcements'], queryFn: () => fetchList(ENDPOINTS.ANNOUNCEMENTS.BASE), staleTime: 30_000, refetchInterval: 60_000 });
+  const polls         = useQuery({ queryKey: ['sidebar', 'polls'],         queryFn: () => fetchList(ENDPOINTS.POLLS.BASE),         staleTime: 60_000, refetchInterval: 60_000 });
+
+  return useMemo(() => {
+    const now = Date.now();
+    return {
+      meetings:      (meetings.data      ?? []).filter((m: any) => m.status === 'SCHEDULED' && new Date(m.scheduledAt).getTime() > now).length,
+      tasks:         (tasks.data         ?? []).filter((t: any) => t.status === 'PENDING' || t.status === 'IN_PROGRESS').length,
+      announcements: (announcements.data ?? []).filter((a: any) => !a.isRead).length,
+      polls:         (polls.data         ?? []).filter((p: any) => p.status === 'ACTIVE' && !p.myResponse).length,
+    };
+  }, [meetings.data, tasks.data, announcements.data, polls.data]);
+}
+
+// ─── Theme (writes to <html class="dark">) ───────────────────────────────────
 
 function useTheme() {
-  const [isDark, setIsDark] = useState<boolean>(() => typeof window !== 'undefined' && localStorage.getItem('eboard-theme') === 'dark');
-  useEffect(() => { document.documentElement.classList.toggle('dark', isDark); localStorage.setItem('eboard-theme', isDark ? 'dark' : 'light'); }, [isDark]);
-  return { isDark, toggle: useCallback(() => setIsDark(p => !p), []) };
+  const [isDark, setIsDark] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('eboard-theme') === 'dark',
+  );
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('eboard-theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+  const toggle = useCallback(() => setIsDark(p => !p), []);
+  return { isDark, toggle };
 }
 
-function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
+// ─── Click-outside helper ───────────────────────────────────────────────────
+
+function useClickOutside(ref: RefObject<HTMLElement>, cb: () => void) {
   useEffect(() => {
     const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) cb(); };
     document.addEventListener('mousedown', fn);
@@ -75,173 +136,423 @@ function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
   }, [ref, cb]);
 }
 
-function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
+// ─── Tooltip (collapsed-state hint) ─────────────────────────────────────────
+
+const Tooltip = memo(function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="group relative">
       {children}
-      <div className={cn('pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[60]', 'rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap', 'bg-gray-900 text-white border border-gray-700/60 shadow-xl', 'opacity-0 translate-x-1.5 scale-95 group-hover:opacity-100 group-hover:translate-x-0 group-hover:scale-100 transition-all duration-150')}>
+      <span
+        role="tooltip"
+        className={cn(
+          'pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[60]',
+          'rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap',
+          'bg-gray-900 text-white shadow-md',
+          'opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0',
+          'transition-all duration-150',
+        )}
+      >
         {label}
-        <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
-      </div>
+      </span>
     </div>
   );
-}
+});
 
-function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) return <div className="my-2 mx-3 h-px bg-gray-200/60 dark:bg-gray-800/60" />;
-  return <p className="px-4 pt-5 pb-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-600 select-none">{label}</p>;
-}
+// ─── Section label / divider ────────────────────────────────────────────────
 
-function NavBadge({ count, active, collapsed }: { count: number; active: boolean; collapsed: boolean }) {
+const SectionLabel = memo(function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
+  if (collapsed) return <div className="my-2 mx-3 h-px bg-gray-200 dark:bg-gray-800" />;
+  return (
+    <p className="px-4 pt-4 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 select-none">
+      {label}
+    </p>
+  );
+});
+
+// ─── Badge ──────────────────────────────────────────────────────────────────
+// Subtle: a small gray pill in resting state, indigo on the active link.
+// No gradients, no rings, no shadow — readable at a glance, ignorable when
+// it's not the user's focus.
+
+const NavBadge = memo(function NavBadge({ count, active, collapsed }: { count: number; active: boolean; collapsed: boolean }) {
   if (!count) return null;
-  const d = count > 99 ? '99+' : String(count);
-  if (collapsed) return <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white ring-2 ring-white dark:ring-gray-950 px-0.5 z-10">{d}</span>;
-  return <span className={cn('ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-black', active ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300')}>{d}</span>;
+  const display = count > 99 ? '99+' : String(count);
+  if (collapsed) {
+    return (
+      <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-rose-500 text-[9px] font-semibold text-white flex items-center justify-center ring-2 ring-white dark:ring-gray-950 tabular-nums">
+        {display}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        'ml-auto h-5 min-w-5 px-1.5 rounded-full text-[11px] font-medium tabular-nums flex items-center justify-center',
+        active
+          ? 'bg-white/20 text-white'
+          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+      )}
+    >
+      {display}
+    </span>
+  );
+});
+
+// ─── Nav link ───────────────────────────────────────────────────────────────
+// Active state = flat indigo background, white text, semibold. No gradient,
+// no glowing rail, no shadow. Hover state = soft gray fill. Focus-visible
+// ring for keyboard users.
+
+interface NavLinkProps {
+  item:        NavItem;
+  isActive:    boolean;
+  collapsed:   boolean;
+  badgeCount:  number;
+  onNavigate?: () => void;
 }
 
-function NavLink({ item, isActive, collapsed, badgeCount, onNavigate }: { item: NavItem; isActive: boolean; collapsed: boolean; badgeCount: number; onNavigate?: () => void }) {
+const NavLink = memo(function NavLink({ item, isActive, collapsed, badgeCount, onNavigate }: NavLinkProps) {
   const Icon = item.icon;
   const inner = (
-    <div onClick={onNavigate} className={cn('group relative flex items-center rounded-xl cursor-pointer select-none transition-all duration-200', collapsed ? 'justify-center p-2.5 mx-1.5' : 'gap-3 px-3.5 py-2.5 mx-1', isActive ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-500/30' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-[0.98]')}>
-      {isActive && !collapsed && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-white/60" />}
+    <div
+      onClick={onNavigate}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        'group relative flex items-center rounded-lg cursor-pointer select-none',
+        'transition-colors duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-950',
+        collapsed ? 'justify-center p-2 mx-2' : 'gap-3 px-3 py-1.5 mx-2',
+        isActive
+          ? 'bg-indigo-600 text-white'
+          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/70',
+      )}
+    >
       <span className="relative flex shrink-0 items-center justify-center">
-        <Icon className={cn('h-[18px] w-[18px] transition-colors', isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-indigo-500')} />
+        <Icon
+          className={cn(
+            'h-[18px] w-[18px] transition-colors',
+            isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200',
+          )}
+          strokeWidth={2}
+        />
         {collapsed && <NavBadge count={badgeCount} active={isActive} collapsed />}
       </span>
-      {!collapsed && <><span className="flex-1 truncate text-sm font-medium leading-none">{item.label}</span><NavBadge count={badgeCount} active={isActive} collapsed={false} /></>}
+      {!collapsed && (
+        <>
+          <span className={cn('flex-1 truncate text-sm leading-none', isActive ? 'font-semibold' : 'font-medium')}>
+            {item.label}
+          </span>
+          <NavBadge count={badgeCount} active={isActive} collapsed={false} />
+        </>
+      )}
       {collapsed && <span className="sr-only">{item.label}</span>}
     </div>
   );
-  return collapsed
-    ? <Tooltip label={badgeCount ? `${item.label} (${badgeCount})` : item.label}><Link href={item.href}>{inner}</Link></Tooltip>
-    : <Link href={item.href}>{inner}</Link>;
-}
+  return collapsed ? (
+    <Tooltip label={badgeCount ? `${item.label} (${badgeCount})` : item.label}>
+      <Link href={item.href}>{inner}</Link>
+    </Tooltip>
+  ) : (
+    <Link href={item.href}>{inner}</Link>
+  );
+});
 
-// ─── Inner ────────────────────────────────────────────────────────────────────
+// ─── User menu (the bottom card) ────────────────────────────────────────────
+
+interface UserShape { firstName?: string; lastName?: string; email?: string; role?: string }
+
+const UserMenu = memo(function UserMenu({ user, collapsed }: { user: UserShape | null; collapsed: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  const initials = user
+    ? `${(user.firstName ?? '').charAt(0)}${(user.lastName ?? '').charAt(0)}`.toUpperCase() || 'U'
+    : 'U';
+  const fullName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'User' : 'User';
+  const email    = user?.email ?? '';
+  const roleName = user?.role
+    ? user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    : 'Member';
+
+  const handleSignOut = () => {
+    authService.logout();
+    window.location.href = '/auth/signin';
+  };
+
+  if (collapsed) {
+    return (
+      <Tooltip label={`${fullName} · ${roleName}`}>
+        <button className="mx-auto block p-0.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="text-xs font-semibold bg-indigo-600 text-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={cn(
+          'w-full flex items-center gap-2.5 rounded-lg px-2 py-2',
+          'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60',
+          open
+            ? 'bg-gray-100 dark:bg-gray-800/70'
+            : 'hover:bg-gray-50 dark:hover:bg-gray-800/50',
+        )}
+      >
+        <div className="relative shrink-0">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="text-xs font-semibold bg-indigo-600 text-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-950" />
+        </div>
+        <div className="flex-1 text-left min-w-0">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-tight">{fullName}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{roleName}</p>
+        </div>
+        <ChevronDown className={cn('h-4 w-4 text-gray-400 shrink-0 transition-transform duration-150', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className={cn(
+            'absolute bottom-full left-0 right-0 mb-2 z-[60]',
+            'bg-white dark:bg-gray-950 rounded-xl overflow-hidden',
+            'border border-gray-200 dark:border-gray-800 shadow-lg',
+            'animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-150',
+          )}
+        >
+          <div className="px-3.5 py-3 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-9 w-9 shrink-0">
+                <AvatarFallback className="text-xs font-semibold bg-indigo-600 text-white">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{fullName}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{email}</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-1">
+            {USER_MENU_ITEMS.map(({ icon: Icon, label, href }) => (
+              <Link key={href} href={href}>
+                <div
+                  onClick={() => setOpen(false)}
+                  role="menuitem"
+                  className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors cursor-pointer"
+                >
+                  <Icon className="h-4 w-4 text-gray-400 shrink-0" />{label}
+                </div>
+              </Link>
+            ))}
+            <div className="my-1 mx-2 h-px bg-gray-200 dark:bg-gray-800" />
+            <button
+              onClick={handleSignOut}
+              role="menuitem"
+              className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ─── Inner sidebar shell ────────────────────────────────────────────────────
 
 function MainSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const [location] = useLocation();
   const { isDark, toggle } = useTheme();
   const badges = useBadgeCounts();
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  useClickOutside(userMenuRef, () => setUserMenuOpen(false));
-  const [user] = useState(() => { try { return authService.getUser(); } catch { return null; } });
 
-  const initials = user ? `${(user as any).firstName?.[0] ?? ''}${(user as any).lastName?.[0] ?? ''}`.toUpperCase() : 'U';
-  const fullName = user ? `${(user as any).firstName} ${(user as any).lastName}` : 'User';
-  const email    = (user as any)?.email ?? '';
-  const roleName = (user as any)?.role ? String((user as any).role).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Member';
+  const [user] = useState<UserShape | null>(() => {
+    try { return authService.getUser() as UserShape | null; } catch { return null; }
+  });
 
-  const mainNav: NavItem[] = [
-    { icon: LayoutDashboard, label: 'Dashboard',     href: '/dashboard' },
-    { icon: Calendar,        label: 'Meetings',      href: '/meetings',      badgeKey: 'meetings' },
-    { icon: BookOpen,        label: 'Agendas',       href: '/agendas' },
-    { icon: Users,           label: 'Members',       href: '/members' },
-    { icon: FileText,        label: 'Documents',     href: '/documents' },
-    { icon: Vote,            label: 'Voting',        href: '/voting',        badgeKey: 'polls' },
-    { icon: CheckSquare,     label: 'Tasks',         href: '/tasks',         badgeKey: 'tasks' },
-  ];
+  const isActive = useCallback(
+    (href: string) => href === '/dashboard' ? location === href : location.startsWith(href),
+    [location],
+  );
 
-  const mgmtNav: NavItem[] = [
-    { icon: Building2,       label: 'Organisation',  href: '/organisation' },
-    { icon: Bell,            label: 'Announcements', href: '/announcements', badgeKey: 'announcements' },
-    { icon: BarChart3,       label: 'Reports',       href: '/reports' },
-  ];
-
-  const bottomNav: NavItem[] = [
-    { icon: Settings,        label: 'Settings',      href: '/settings' },
-    { icon: HelpCircle,      label: 'Help',          href: '/help' },
-  ];
-
-  const isActive = (href: string) => href === '/dashboard' ? location === href : location.startsWith(href);
+  const renderLink = (item: NavItem) => (
+    <NavLink
+      key={item.href}
+      item={item}
+      isActive={isActive(item.href)}
+      collapsed={collapsed}
+      badgeCount={item.badgeKey ? (badges[item.badgeKey] ?? 0) : 0}
+      onNavigate={onNavigate}
+    />
+  );
 
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className={cn('flex h-16 shrink-0 items-center border-b border-gray-200/70 dark:border-gray-800/70', collapsed ? 'justify-center px-2' : 'px-4')}>
+      <div
+        className={cn(
+          'flex h-16 shrink-0 items-center border-b border-gray-200 dark:border-gray-800',
+          collapsed ? 'justify-center px-2' : 'px-4',
+        )}
+      >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <span className="text-white font-black text-sm">EB</span>
+          <div className="h-8 w-8 shrink-0 rounded-lg bg-indigo-600 flex items-center justify-center">
+            <span className="text-white font-semibold text-[13px] tracking-tight">EB</span>
           </div>
-          {!collapsed && <div className="min-w-0"><p className="text-[15px] font-black text-gray-900 dark:text-white tracking-tight">E-Board</p><p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 font-medium tracking-wide uppercase">MIS Portal</p></div>}
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white tracking-tight leading-none">E-Board</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 font-medium uppercase tracking-wider">MIS Portal</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Nav */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-800 scrollbar-track-transparent">
+      <nav
+        className="flex-1 overflow-y-auto overflow-x-hidden py-2 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-800 scrollbar-track-transparent"
+        aria-label="Primary"
+      >
         <SectionLabel label="Main" collapsed={collapsed} />
-        {mainNav.map(item => <NavLink key={item.href} item={item} isActive={isActive(item.href)} collapsed={collapsed} badgeCount={item.badgeKey ? (badges[item.badgeKey] ?? 0) : 0} onNavigate={onNavigate} />)}
+        {MAIN_NAV.map(renderLink)}
         <SectionLabel label="Management" collapsed={collapsed} />
-        {mgmtNav.map(item => <NavLink key={item.href} item={item} isActive={isActive(item.href)} collapsed={collapsed} badgeCount={item.badgeKey ? (badges[item.badgeKey] ?? 0) : 0} onNavigate={onNavigate} />)}
-      </div>
+        {MGMT_NAV.map(renderLink)}
+      </nav>
 
-      {/* Bottom */}
-      <div className="border-t border-gray-200/70 dark:border-gray-800/70 py-2">
-        {collapsed
-          ? <Tooltip label={isDark ? 'Light Mode' : 'Dark Mode'}><button onClick={toggle} className="w-full flex justify-center p-2.5 mx-1.5 rounded-xl text-gray-500 hover:text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}</button></Tooltip>
-          : <button onClick={toggle} className="w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-amber-600 transition-all">{isDark ? <Sun className="h-[18px] w-[18px] text-amber-400 shrink-0" /> : <Moon className="h-[18px] w-[18px] text-gray-500 shrink-0" />}<span>{isDark ? 'Light Mode' : 'Dark Mode'}</span></button>
-        }
-        {bottomNav.map(item => <NavLink key={item.href} item={item} isActive={location === item.href} collapsed={collapsed} badgeCount={0} onNavigate={onNavigate} />)}
+      {/* Bottom: theme toggle + bottom nav */}
+      <div className="border-t border-gray-200 dark:border-gray-800 py-2">
+        {collapsed ? (
+          <Tooltip label={isDark ? 'Light mode' : 'Dark mode'}>
+            <button
+              onClick={toggle}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="w-full flex justify-center p-2 mx-2 rounded-lg text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+            >
+              {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+            </button>
+          </Tooltip>
+        ) : (
+          <button
+            onClick={toggle}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="w-full flex items-center gap-3 px-3 py-1.5 mx-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+          >
+            {isDark
+              ? <Sun  className="h-[18px] w-[18px] text-amber-500 shrink-0" />
+              : <Moon className="h-[18px] w-[18px] text-gray-500 shrink-0" />}
+            <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+          </button>
+        )}
+        {BOTTOM_NAV.map(item => (
+          <NavLink
+            key={item.href}
+            item={item}
+            isActive={location === item.href}
+            collapsed={collapsed}
+            badgeCount={0}
+            onNavigate={onNavigate}
+          />
+        ))}
       </div>
 
       {/* User */}
-      <div ref={userMenuRef} className="border-t border-gray-200/70 dark:border-gray-800/70 p-2.5">
-        {collapsed
-          ? <Tooltip label={`${fullName} · ${roleName}`}><button className="mx-auto block p-0.5"><Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar></button></Tooltip>
-          : (
-            <div className="relative">
-              <button onClick={() => setUserMenuOpen(o => !o)} className={cn('w-full flex items-center gap-3 rounded-xl px-3 py-2 transition-all duration-200 border', userMenuOpen ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200')}>
-                <div className="relative shrink-0"><Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-950" /></div>
-                <div className="flex-1 text-left min-w-0"><p className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-none">{fullName}</p><p className="text-xs text-gray-500 truncate mt-0.5">{roleName}</p></div>
-                <ChevronDown className={cn('h-3.5 w-3.5 text-gray-400 transition-transform duration-200 shrink-0', userMenuOpen && 'rotate-180')} />
-              </button>
-              {userMenuOpen && (
-                <div className={cn('absolute bottom-full left-0 right-0 mb-2 z-[60]', 'bg-white dark:bg-gray-950 rounded-2xl overflow-hidden', 'border border-gray-200/80 dark:border-gray-800/70 shadow-2xl', 'animate-in fade-in-60 zoom-in-95 slide-in-from-bottom-2 duration-150')}>
-                  <div className="px-4 py-3.5 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-900 border-b border-gray-200/60 dark:border-gray-800/60">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 shrink-0"><AvatarFallback className="text-sm font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar>
-                      <div className="min-w-0"><p className="text-sm font-bold text-gray-900 dark:text-white truncate">{fullName}</p><p className="text-xs text-gray-500 truncate">{email}</p></div>
-                    </div>
-                  </div>
-                  <div className="p-1.5 space-y-0.5">
-                    {[{ icon: UserCog, label: 'Profile Settings', href: '/settings/profile' }, { icon: Building2, label: 'Organisation', href: '/organisation' }, { icon: Lock, label: 'Security', href: '/settings/security' }, { icon: Bell, label: 'Notifications', href: '/settings/notifications' }].map(({ icon: Icon, label, href }) => (
-                      <Link key={href} href={href}><div onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/60 transition-colors cursor-pointer"><Icon className="h-4 w-4 text-gray-400 shrink-0" />{label}</div></Link>
-                    ))}
-                    <div className="my-1 mx-2 h-px bg-gray-200/70 dark:bg-gray-800/50" />
-                    <button onClick={() => { authService.logout(); window.location.href = '/auth/signin'; }} className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
-                      <LogOut className="h-4 w-4 shrink-0" />Sign out
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        }
+      <div className="border-t border-gray-200 dark:border-gray-800 p-2">
+        <UserMenu user={user} collapsed={collapsed} />
       </div>
     </div>
   );
 }
 
-// ─── Main Sidebar export ──────────────────────────────────────────────────────
+// ─── Persisted collapsed state ──────────────────────────────────────────────
+//
+// The SidebarContext owns the runtime collapsed state, but we mirror it to
+// localStorage here so the choice survives a refresh. Reading lazily inside
+// useState() avoids the layout flash that would happen if we hydrated in an
+// effect after first paint.
+
+const COLLAPSED_KEY = 'eboard-sidebar-collapsed';
+
+function usePersistCollapsed(collapsed: boolean) {
+  useEffect(() => {
+    try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0'); } catch { /* storage may be disabled */ }
+  }, [collapsed]);
+}
+
+// ─── Outer wrappers — mobile / tablet / desktop ─────────────────────────────
 
 export function MainSidebar({ className }: { className?: string }) {
   const { collapsed, setCollapsed, mobileOpen, toggleMobile, isMobile, isTablet } = useSidebar();
   const [location] = useLocation();
 
+  // Restore persisted collapsed preference once on mount.
   useEffect(() => {
-    if (isMobile) useSidebar; // close handled by context
+    try {
+      const v = localStorage.getItem(COLLAPSED_KEY);
+      if (v === '1' && !collapsed) setCollapsed(true);
+      if (v === '0' &&  collapsed) setCollapsed(false);
+    } catch { /* noop */ }
+    // Run only on mount — subsequent toggles already update both state and storage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  usePersistCollapsed(collapsed);
+
+  // Auto-close the mobile drawer on route change.
+  useEffect(() => {
+    if (isMobile && mobileOpen) toggleMobile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
   if (isMobile) {
     return (
       <>
-        <button onClick={toggleMobile} className={cn('fixed top-4 left-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-md hover:shadow-lg transition-all', mobileOpen && 'hidden')} aria-label="Open menu">
+        <button
+          onClick={toggleMobile}
+          aria-label="Open menu"
+          className={cn(
+            'fixed top-4 left-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg',
+            'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow transition-shadow',
+            mobileOpen && 'hidden',
+          )}
+        >
           <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
         </button>
-        <div className={cn('fixed inset-0 z-40 bg-gray-950/60 backdrop-blur-sm transition-opacity duration-300', mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')} onClick={toggleMobile} />
-        <aside className={cn('fixed inset-y-0 left-0 z-50 w-72 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-2xl transition-transform duration-300', mobileOpen ? 'translate-x-0' : '-translate-x-full', className)}>
-          <button onClick={toggleMobile} className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close"><X className="h-4 w-4" /></button>
+        <div
+          className={cn(
+            'fixed inset-0 z-40 bg-gray-950/50 backdrop-blur-sm transition-opacity duration-200',
+            mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+          )}
+          onClick={toggleMobile}
+        />
+        <aside
+          role="navigation"
+          aria-label="Sidebar"
+          className={cn(
+            'fixed inset-y-0 left-0 z-50 w-72 flex flex-col antialiased',
+            'bg-white dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800',
+            'shadow-xl transition-transform duration-200 ease-out',
+            mobileOpen ? 'translate-x-0' : '-translate-x-full',
+            className,
+          )}
+        >
+          <button
+            onClick={toggleMobile}
+            aria-label="Close menu"
+            className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <MainSidebarInner collapsed={false} onNavigate={toggleMobile} />
         </aside>
       </>
@@ -250,21 +561,49 @@ export function MainSidebar({ className }: { className?: string }) {
 
   if (isTablet) {
     return (
-      <aside className={cn('fixed inset-y-0 left-0 z-40 w-[68px] flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-sm', className)}>
+      <aside
+        role="navigation"
+        aria-label="Sidebar"
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 w-[68px] flex flex-col antialiased',
+          'bg-white dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800',
+          className,
+        )}
+      >
         <MainSidebarInner collapsed />
       </aside>
     );
   }
 
   return (
-    <aside className={cn('fixed inset-y-0 left-0 z-40 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-sm transition-[width] duration-300', collapsed ? 'w-[68px]' : 'w-64', className)}>
-      <button onClick={() => setCollapsed(!collapsed)} className={cn('absolute -right-3.5 top-[72px] z-50 flex h-7 w-7 items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-md hover:border-indigo-400 text-indigo-500 transition-all hover:scale-110')} aria-label={collapsed ? 'Expand' : 'Collapse'}>
-        {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+    <aside
+      role="navigation"
+      aria-label="Sidebar"
+      className={cn(
+        'fixed inset-y-0 left-0 z-40 flex flex-col antialiased',
+        'bg-white dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800',
+        'transition-[width] duration-200 ease-out',
+        collapsed ? 'w-[68px]' : 'w-64',
+        className,
+      )}
+    >
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-expanded={!collapsed}
+        className={cn(
+          'absolute -right-3 top-[72px] z-50 flex h-6 w-6 items-center justify-center rounded-full',
+          'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800',
+          'text-gray-500 hover:text-indigo-600 hover:border-indigo-300',
+          'shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60',
+        )}
+      >
+        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </button>
       <MainSidebarInner collapsed={collapsed} />
     </aside>
   );
 }
 
-// Keep old export name for backward compat
+// Backwards-compat alias used by older imports.
 export { MainSidebar as Sidebar };

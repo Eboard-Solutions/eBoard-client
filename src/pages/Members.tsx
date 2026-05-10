@@ -75,15 +75,36 @@ function extractUsers(raw: unknown): ApiUser[] {
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, accentClass }: {
+function StatCard({ label, value, sub, accentClass, icon: Icon }: {
   label: string; value: number; sub?: string; accentClass: string;
+  icon?: React.ElementType;
 }) {
   return (
+    <div className="group relative rounded-2xl border border-border/60 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200 overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 rounded-full ${accentClass} opacity-10 group-hover:opacity-15 transition-opacity translate-x-6 -translate-y-6 pointer-events-none`} />
+      <div className="relative flex items-start justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-black tabular-nums tracking-tight leading-none">{value}</p>
+          {sub && <p className="text-xs text-muted-foreground mt-1.5 font-medium">{sub}</p>}
+        </div>
+        {Icon && (
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/40 dark:ring-white/5 ${accentClass.replace('bg-', 'bg-').replace('-500', '-100 dark:bg-').concat('-500/20')} text-foreground/70`}>
+            <Icon className="h-4 w-4" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCardSkeleton() {
+  return (
     <div className="relative rounded-2xl border border-border/60 bg-card p-5 shadow-sm overflow-hidden">
-      <div className={`absolute top-0 right-0 w-20 h-20 rounded-full ${accentClass} opacity-10 translate-x-6 -translate-y-6 pointer-events-none`} />
-      <p className="text-3xl font-bold tracking-tight">{value}</p>
-      <p className="text-sm font-medium text-foreground mt-0.5">{label}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+      <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-muted/60 opacity-60 translate-x-6 -translate-y-6 pointer-events-none" />
+      <div className="h-3 w-20 rounded bg-muted/60 animate-pulse" />
+      <div className="mt-2 h-8 w-16 rounded-lg bg-muted/70 animate-pulse" />
+      <div className="mt-2 h-3 w-24 rounded bg-muted/60 animate-pulse" />
     </div>
   );
 }
@@ -113,25 +134,31 @@ export default function MembersPage() {
   const [editTarget,       setEditTarget]       = useState<DisplayUser | null>(null);
   const [deleteTargetId,   setDeleteTargetId]   = useState<string | null>(null);
 
-  // ── Fetch org for orgCode, name, and as fallback for canManage ────────────
+  // ── Fetch org for orgCode and name only ───────────────────────────────────
   const {
     data: myOrg,
     isLoading: orgLoading,
-  } = useMyOrganisation(!authLoading && !!user);
+  } = useMyOrganisation(!authLoading && !!user && isOrgAdmin);
 
   const organisationId: string | null = currentorganisationId ?? myOrg?.organisationId ?? null;
   const orgCode:        string | null = myOrg?.orgCode ?? null;
   const orgName:        string | null = myOrg?.organisationName ?? null;
 
   // ── Permissions ───────────────────────────────────────────────────────────
-  const canManage = isSuperAdmin || isOrgAdmin || (!!myOrg && !!user);
+  const canManage = isSuperAdmin || isOrgAdmin;
   const canUpdate = canManage;
   const canDelete = canManage;
 
   const needsOrgSetup = !!user && !authLoading && !orgLoading && !organisationId && !myOrg;
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const { data: membersRaw, isLoading: membersLoading } = useOrganisationUsers();
+  const {
+    data: membersRaw,
+    isLoading: membersLoading,
+    error: membersError,
+    refetch: refetchMembers,
+    isFetching: membersFetching,
+  } = useOrganisationUsers(canManage && !!user && !authLoading);
   const createUser = useCreateUser();
   const updateUser      = useUpdateUser();
   const toggleStatus    = useToggleUserStatus();
@@ -183,18 +210,35 @@ export default function MembersPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleAddSubmit = useCallback((data: AddMemberFormData) => {
+    // OPTIMISTIC UX: close the dialog and show success the moment the
+    // request leaves — the network round-trip happens in the background.
+    // The mutation resolves seconds later; if it errors, we re-open the
+    // dialog and surface the reason. This is the single biggest perceived
+    // latency win: the user no longer sits looking at a spinning button.
+    setShowAddDialog(false);
+    const pendingToast = toast.loading('Adding member…');
+
     createUser.mutate(data, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
-        toast.success(
-          'Member added successfully.',
-          { description: 'Use Invite to send them their login credentials.' },
-        );
-        setShowAddDialog(false);
+        toast.success('Member added', {
+          id: pendingToast,
+          description: 'They will receive their activation email shortly. Use Invite to resend if needed.',
+        });
       },
       onError: (err) => {
-        const msg = err instanceof Error ? err.message : 'Failed to add member';
-        toast.error('Could not add member', { description: msg });
+        // The service attached situation-specific copy to err.message
+        // (409 → "already a member", 403 → "org not active", timeout, etc.).
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        const message = err instanceof Error ? err.message : 'Failed to add member';
+
+        if (status === 409) {
+          toast.info('Already a member', { id: pendingToast, description: message, duration: 6000 });
+        } else {
+          toast.error('Could not add member', { id: pendingToast, description: message });
+          // Re-open the dialog so the admin doesn't lose their context.
+          setShowAddDialog(true);
+        }
       },
     });
   }, [createUser, queryClient]);
@@ -214,13 +258,17 @@ export default function MembersPage() {
   }, [orgCode]);
 
   const handleEditSubmit = useCallback((userId: string, data: EditMemberFormData) => {
+    // Close immediately, show optimistic loading toast — feels instant.
+    setEditTarget(null);
+    const pendingToast = toast.loading('Saving changes…');
     updateUser.mutate({ userId, data }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
-        toast.success('Member updated');
-        setEditTarget(null);
+        toast.success('Member updated', { id: pendingToast });
       },
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to update member'),
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to update member', { id: pendingToast });
+      },
     });
   }, [updateUser, queryClient]);
 
@@ -228,32 +276,44 @@ export default function MembersPage() {
   // The backend exposes a dedicated PATCH /:userId/toggle-status endpoint
   // that accepts { isActive: boolean }. Use useToggleUserStatus for this.
   const handleToggleActive = useCallback((member: DisplayUser) => {
+    const verb = member.isActive ? 'Deactivating' : 'Activating';
+    const past = member.isActive ? 'deactivated' : 'activated';
+    const pendingToast = toast.loading(`${verb} ${member.name.split(' ')[0]}…`);
     toggleStatus.mutate(
       { userId: member.id, isActive: !member.isActive },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['users'] });
-          toast.success(member.isActive ? 'Member deactivated' : 'Member activated');
+          toast.success(`Member ${past}`, { id: pendingToast });
         },
-        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to toggle member status'),
+        onError: (err) => toast.error(
+          err instanceof Error ? err.message : 'Failed to update status',
+          { id: pendingToast },
+        ),
       },
     );
   }, [toggleStatus, queryClient]);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!deleteTargetId) return;
-    deleteUser.mutate(deleteTargetId, {
+    // Close the dialog immediately so the user gets visual confirmation.
+    const id = deleteTargetId;
+    setDeleteTargetId(null);
+    const pendingToast = toast.loading('Removing member…');
+    deleteUser.mutate(id, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
-        toast.success('Member removed');
-        setDeleteTargetId(null);
+        toast.success('Member removed', { id: pendingToast });
       },
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to remove member'),
+      onError: (err) => toast.error(
+        err instanceof Error ? err.message : 'Failed to remove member',
+        { id: pendingToast },
+      ),
     });
   }, [deleteTargetId, deleteUser, queryClient]);
 
   // ── Loading ───────────────────────────────────────────────────────────────
-  if (authLoading || (!myOrg && orgLoading && !!user)) {
+  if (authLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -288,7 +348,10 @@ export default function MembersPage() {
   // ── Org setup required ────────────────────────────────────────────────────
   if (needsOrgSetup) {
     return (
-      <div className="container mx-auto py-8 px-4 md:px-6 max-w-7xl space-y-6">
+      // Match the dashboard: no container/max-width — let the AppLayout's
+      // p-6 wrapper do the work, so the page expands to fill the available
+      // space next to the sidebar instead of leaving whitespace on wide screens.
+      <div className="space-y-6 pb-10">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Members</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage members for your organisation</p>
@@ -326,6 +389,79 @@ export default function MembersPage() {
     );
   }
 
+  if (!canManage && user) {
+    return (
+      <div className="pb-10">
+        <div className="rounded-2xl border border-border/60 bg-card p-8 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" />
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">Members</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your account does not have permission to view the member directory.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Only show a full-page error when we have NO data to display.
+  // If a previous successful fetch is still in cache (placeholderData), the
+  // page renders normally and a toast / inline notice can surface the issue.
+  if (membersError && !membersRaw) {
+    const err    = membersError as { code?: string; response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = err?.response?.status;
+    const isTimeout = err?.code === 'ECONNABORTED';
+    const isNetwork = !isTimeout && !status;            // axios "Network Error" (no response)
+
+    // Friendly, situation-specific copy. "Timeout" / "ECONNABORTED" leaks
+    // are no longer visible to end users — they'd only ever see this when
+    // there's truly nothing to show.
+    const { title, body } = (() => {
+      if (isTimeout) return {
+        title: "The server is taking too long to respond",
+        body:  "We couldn't load the member directory in time. Please try again — your data is safe.",
+      };
+      if (isNetwork) return {
+        title: "Couldn't reach the server",
+        body:  "Check your internet connection and try again.",
+      };
+      if (status === 404) return {
+        title: "No members found",
+        body:  "Your organisation doesn't have any members yet.",
+      };
+      if (status === 403) return {
+        title: "You don't have permission to view members",
+        body:  "Ask an admin to grant you access to the directory.",
+      };
+      if (status && status >= 500) return {
+        title: "Something went wrong on the server",
+        body:  err?.response?.data?.message ?? "Please try again in a moment.",
+      };
+      return {
+        title: "Unable to load members",
+        body:  err?.response?.data?.message ?? err?.message ?? "An unexpected error occurred.",
+      };
+    })();
+
+    return (
+      <div className="pb-10">
+        <div className="rounded-2xl border border-border/60 bg-card p-10 text-center shadow-sm">
+          <div className="mx-auto h-14 w-14 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+            <AlertTriangle className="h-7 w-7 text-amber-500" />
+          </div>
+          <h1 className="mt-4 text-xl font-bold tracking-tight">{title}</h1>
+          <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">{body}</p>
+          <div className="mt-5 flex gap-2 justify-center">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => refetchMembers()}
+              disabled={membersFetching}>
+              <RefreshCcw className={`h-3.5 w-3.5 ${membersFetching ? 'animate-spin' : ''}`} />
+              {membersFetching ? 'Retrying…' : 'Try again'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Subtitle ──────────────────────────────────────────────────────────────
   const subtitle = isSuperAdmin
     ? 'Full administrative control across all organisations'
@@ -335,13 +471,22 @@ export default function MembersPage() {
 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
-    <div className="container mx-auto space-y-6 py-8 px-4 md:px-6 max-w-7xl">
+    // Full-bleed inside the AppLayout's p-6 — same pattern as the Dashboard
+    // and Organisation pages. No container/max-w-7xl cap, so the grid uses
+    // every pixel between the sidebar and the right edge.
+    <div className="space-y-6 pb-10">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Members</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+        <div className="flex items-start gap-4 min-w-0">
+          <div className="relative shrink-0 h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-1 ring-white/15">
+            <Users className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
+            <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-[1.7rem] font-black tracking-tight leading-tight">Members</h1>
+            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{subtitle}</p>
+          </div>
         </div>
 
         {canManage && (
@@ -350,7 +495,8 @@ export default function MembersPage() {
               onClick={() => setShowInviteDialog(true)}>
               <Send className="h-3.5 w-3.5" />Invite
             </Button>
-            <Button size="sm" className="h-9 gap-2 shadow-sm"
+            <Button size="sm"
+              className="h-9 gap-2 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/25 ring-1 ring-inset ring-white/10"
               onClick={() => setShowAddDialog(true)}>
               <UserPlus className="h-3.5 w-3.5" />Add Member
             </Button>
@@ -359,16 +505,23 @@ export default function MembersPage() {
       </div>
 
       {/* Stats */}
-      {!membersLoading && allMembers.length > 0 && (
+      {membersLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard label="Total Members" value={stats.total}  accentClass="bg-blue-500"    sub={`${stats.active} active`} />
-          <StatCard label="Board Members" value={stats.board}  accentClass="bg-emerald-500" />
-          <StatCard label="Admins"        value={stats.admins} accentClass="bg-violet-500"  />
-          <StatCard label="Active"        value={stats.active} accentClass="bg-amber-500"
-            sub={stats.total - stats.active > 0 ? `${stats.total - stats.active} inactive` : undefined}
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+      ) : allMembers.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard label="Total Members" value={stats.total}  icon={Users}        accentClass="bg-blue-500"    sub={`${stats.active} active`} />
+          <StatCard label="Board Members" value={stats.board}  icon={UserPlus}     accentClass="bg-emerald-500" />
+          <StatCard label="Admins"        value={stats.admins} icon={Building2}    accentClass="bg-violet-500"  />
+          <StatCard label="Active"        value={stats.active} icon={Send}         accentClass="bg-amber-500"
+            sub={stats.total - stats.active > 0 ? `${stats.total - stats.active} inactive` : 'all members active'}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -427,6 +580,12 @@ export default function MembersPage() {
       {!membersLoading && (search || roleFilter !== 'all') && (
         <p className="text-xs text-muted-foreground -mt-2">
           {members.length} of {allMembers.length} members
+        </p>
+      )}
+
+      {membersLoading && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Loading member data…
         </p>
       )}
 

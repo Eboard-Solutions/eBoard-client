@@ -19,10 +19,17 @@ export const taskKeys = {
 };
 
 // Get all tasks
-export function useTasks(filters?: TaskFilters) {
+export function useTasks(filters?: TaskFilters, enabled: boolean = true) {
   return useQuery({
     queryKey: taskKeys.list(filters || {}),
     queryFn: () => TasksService.getAll(filters),
+    staleTime: 60 * 1000,                 // 1 min — keep dashboard counts fresh
+    gcTime: 10 * 60 * 1000,
+    retry: 2,
+    enabled,
+    refetchInterval: 60 * 1000,           // Real-time poll while page is open
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 
