@@ -1,7 +1,10 @@
 // src/config/api.config.ts
 export const API_CONFIG = {
   BASE_URL: `${import.meta.env.VITE_API_URL}/api/v1`,
-  TIMEOUT: 30000,
+  // 60s — most calls return in < 500ms, but the cache layer / cold dev DB
+  // can occasionally push past 30s. A higher ceiling avoids hard-failing
+  // legitimately slow requests; quick failures still surface via 4xx/5xx.
+  TIMEOUT: 60000,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000,
 } as const;
