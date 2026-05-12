@@ -72,6 +72,10 @@ export const ENDPOINTS = {
     },
   },
 
+  CALENDAR:{
+    BASE: '/calendar/events',
+  },
+
   MINUTES: {
     BASE: '/minutes',
     BY_ID: (id: string) => `/minutes/${id}`,
@@ -104,10 +108,6 @@ export const ENDPOINTS = {
     UPDATE: (id: string) => `/documents/update/${id}`,
     DELETE: (id: string) => `/documents/delete/${id}`,
     BULK_DELETE: '/documents/bulk-delete',
-    // The backend doesn't expose a static fileUrl on Document responses —
-    // files live in Azure Blob Storage and need a signed temporary URL.
-    // Always call this endpoint to obtain a viewable URL just-in-time.
-    DOWNLOAD_URL: (id: string) => `/documents/${id}/download-url`,
   },
 
   NOTIFICATIONS: {
