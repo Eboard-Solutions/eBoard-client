@@ -1,51 +1,97 @@
-'use client';
+"use client";
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { toast } from 'sonner';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { toast } from "sonner";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogDescription,
-  DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Textarea } from '@/components/ui/textarea';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
-  useDocuments, useCreateDocument,
-  useUpdateDocument, useDeleteDocument,
-} from '@/hooks/api/useDocuments';
-import type { Document as DocType, DocumentAccessLevel } from '@/types/api.types';
-import { DocumentViewer } from './DocumentViewer';
+  useDocuments,
+  useCreateDocument,
+  useUpdateDocument,
+  useDeleteDocument,
+} from "@/hooks/api/useDocuments";
+import type {
+  Document as DocType,
+  DocumentAccessLevel,
+} from "@/types/api.types";
+import { DocumentViewer } from "./DocumentViewer";
 
 import {
-  Search, Upload, FileText, Download, Eye, MoreVertical,
-  Star, Share2, Trash2, Loader2, AlertTriangle, RefreshCw,
-  FilePlus, FileSpreadsheet, Presentation, File, Lock,
-  Globe, Users, ShieldAlert, X, Pencil, Tag, CheckCircle2,
-  FolderOpen, Clock, HardDrive, LayoutGrid, LayoutList,
-  FileSearch, SlidersHorizontal,
-} from 'lucide-react';
+  Search,
+  Upload,
+  FileText,
+  Download,
+  Eye,
+  MoreVertical,
+  Star,
+  Share2,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+  FilePlus,
+  FileSpreadsheet,
+  Presentation,
+  File,
+  Lock,
+  Globe,
+  Users,
+  ShieldAlert,
+  X,
+  Pencil,
+  Tag,
+  CheckCircle2,
+  FolderOpen,
+  Clock,
+  HardDrive,
+  LayoutGrid,
+  LayoutList,
+  FileSearch,
+  SlidersHorizontal,
+} from "lucide-react";
+import { documentsService } from "@/api/services";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ViewMode = 'list' | 'grid';
+type ViewMode = "list" | "grid";
 
 interface UploadForm {
   title: string;
@@ -63,70 +109,116 @@ interface EditForm {
 }
 
 const EMPTY_UPLOAD: UploadForm = {
-  title: '', description: '', file: null,
-  accessLevel: 'VIEWER', tags: '',
+  title: "",
+  description: "",
+  file: null,
+  accessLevel: "VIEWER",
+  tags: "",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
-  if (!bytes || bytes < 0) return '—';
+  if (!bytes || bytes < 0) return "—";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDate(dateStr: string): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return "—";
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
-  } catch { return '—'; }
+  } catch {
+    return "—";
+  }
 }
 
 // IMPROVEMENT: added 'image' type support
 function getFileIcon(fileType: string) {
-  const t = fileType?.toLowerCase() ?? '';
-  if (t.includes('pdf'))
-    return { Icon: FileText,        color: 'text-red-500 bg-red-50 dark:bg-red-950/30',           label: 'PDF'  };
-  if (t.includes('word') || t.includes('document'))
-    return { Icon: FileText,        color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/30',         label: 'DOC'  };
-  if (t.includes('sheet') || t.includes('excel'))
-    return { Icon: FileSpreadsheet, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30',label: 'XLS'  };
-  if (t.includes('presentation') || t.includes('powerpoint'))
-    return { Icon: Presentation,    color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30',   label: 'PPT'  };
-  if (t.includes('image') || t.includes('png') || t.includes('jpg') || t.includes('jpeg'))
-    return { Icon: File,            color: 'text-pink-500 bg-pink-50 dark:bg-pink-950/30',          label: 'IMG'  };
-  return   { Icon: File,            color: 'text-slate-500 bg-slate-100 dark:bg-slate-800',         label: 'FILE' };
+  const t = fileType?.toLowerCase() ?? "";
+  if (t.includes("pdf"))
+    return {
+      Icon: FileText,
+      color: "text-red-500 bg-red-50 dark:bg-red-950/30",
+      label: "PDF",
+    };
+  if (t.includes("word") || t.includes("document"))
+    return {
+      Icon: FileText,
+      color: "text-blue-500 bg-blue-50 dark:bg-blue-950/30",
+      label: "DOC",
+    };
+  if (t.includes("sheet") || t.includes("excel"))
+    return {
+      Icon: FileSpreadsheet,
+      color: "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30",
+      label: "XLS",
+    };
+  if (t.includes("presentation") || t.includes("powerpoint"))
+    return {
+      Icon: Presentation,
+      color: "text-orange-500 bg-orange-50 dark:bg-orange-950/30",
+      label: "PPT",
+    };
+  if (
+    t.includes("image") ||
+    t.includes("png") ||
+    t.includes("jpg") ||
+    t.includes("jpeg")
+  )
+    return {
+      Icon: File,
+      color: "text-pink-500 bg-pink-50 dark:bg-pink-950/30",
+      label: "IMG",
+    };
+  return {
+    Icon: File,
+    color: "text-slate-500 bg-slate-100 dark:bg-slate-800",
+    label: "FILE",
+  };
 }
 
-const ACCESS_CONFIG: Record<string, {
-  label: string; Icon: React.ElementType; badgeClass: string; iconClass: string;
-}> = {
+const ACCESS_CONFIG: Record<
+  string,
+  {
+    label: string;
+    Icon: React.ElementType;
+    badgeClass: string;
+    iconClass: string;
+  }
+> = {
   VIEWER: {
-    label: 'Viewer',
+    label: "Viewer",
     Icon: Globe,
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
-    iconClass: 'text-emerald-600',
+    badgeClass:
+      "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800",
+    iconClass: "text-emerald-600",
   },
   EDITOR: {
-    label: 'Editor',
+    label: "Editor",
     Icon: Users,
-    badgeClass: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800',
-    iconClass: 'text-blue-600',
+    badgeClass:
+      "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800",
+    iconClass: "text-blue-600",
   },
   ADMIN: {
-    label: 'Admin Only',
+    label: "Admin Only",
     Icon: ShieldAlert,
-    badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800',
-    iconClass: 'text-amber-600',
+    badgeClass:
+      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
+    iconClass: "text-amber-600",
   },
   OWNER: {
-    label: 'Owner Only',
+    label: "Owner Only",
     Icon: Lock,
-    badgeClass: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
-    iconClass: 'text-slate-500',
+    badgeClass:
+      "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
+    iconClass: "text-slate-500",
   },
 };
 
@@ -136,15 +228,26 @@ function AccessBadge({ level }: { level: string }) {
   const cfg = ACCESS_CONFIG[level] ?? ACCESS_CONFIG.VIEWER;
   const { Icon, label, badgeClass } = cfg;
   return (
-    <Badge variant="outline" className={`text-xs font-medium border gap-1 ${badgeClass}`}>
-      <Icon className="h-2.5 w-2.5" />{label}
+    <Badge
+      variant="outline"
+      className={`text-xs font-medium border gap-1 ${badgeClass}`}
+    >
+      <Icon className="h-2.5 w-2.5" />
+      {label}
     </Badge>
   );
 }
 
-function StatCard({ label, value, icon: Icon, colorClass }: {
-  label: string; value: string | number;
-  icon: React.ElementType; colorClass: string;
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  colorClass,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  colorClass: string;
 }) {
   return (
     <Card className="border border-border/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200">
@@ -163,13 +266,21 @@ function StatCard({ label, value, icon: Icon, colorClass }: {
 
 // ─── Access Level Select ──────────────────────────────────────────────────────
 
-function AccessLevelSelect({ value, onChange }: {
+function AccessLevelSelect({
+  value,
+  onChange,
+}: {
   value: DocumentAccessLevel;
   onChange: (v: DocumentAccessLevel) => void;
 }) {
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as DocumentAccessLevel)}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
+    <Select
+      value={value}
+      onValueChange={(v) => onChange(v as DocumentAccessLevel)}
+    >
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
       <SelectContent>
         <SelectItem value="VIEWER">
           <div className="flex items-center gap-2">
@@ -202,7 +313,11 @@ function AccessLevelSelect({ value, onChange }: {
 
 // ─── Upload Dialog ────────────────────────────────────────────────────────────
 
-function UploadDialog({ open, onOpenChange, onSuccess }: {
+function UploadDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onSuccess: () => void;
@@ -216,8 +331,9 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
 
   const handleFileSelect = (file: File) => {
     setForm((f) => ({
-      ...f, file,
-      title: f.title || file.name.replace(/\.[^/.]+$/, ''),
+      ...f,
+      file,
+      title: f.title || file.name.replace(/\.[^/.]+$/, ""),
     }));
   };
 
@@ -242,9 +358,9 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
 
     try {
       await createMutation.mutateAsync({
-        title:       form.title.trim(),
+        title: form.title.trim(),
         description: form.description.trim() || undefined,
-        file:        form.file,
+        file: form.file,
         accessLevel: form.accessLevel,
         tags:        form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         onProgress: (pct) => {
@@ -315,31 +431,44 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
               <Upload className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-lg sm:text-xl font-semibold">Upload Document</DialogTitle>
-              <DialogDescription className="text-sm mt-0.5">Add a new document to the library</DialogDescription>
+              <DialogTitle className="text-lg sm:text-xl font-semibold">
+                Upload Document
+              </DialogTitle>
+              <DialogDescription className="text-sm mt-0.5">
+                Add a new document to the library
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <input
-            ref={fileInputRef} type="file" className="hidden"
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFileSelect(f);
+            }}
           />
 
           {/* Drop zone */}
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={`relative border-2 border-dashed rounded-xl p-6 sm:p-7 text-center cursor-pointer transition-all duration-150 select-none
-              ${dragOver
-                ? 'border-primary bg-primary/5 scale-[0.99]'
-                : form.file
-                ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
-                : 'border-border hover:border-primary/50 hover:bg-muted/30'
+              ${
+                dragOver
+                  ? "border-primary bg-primary/5 scale-[0.99]"
+                  : form.file
+                    ? "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20"
+                    : "border-border hover:border-primary/50 hover:bg-muted/30"
               }`}
           >
             {form.file ? (
@@ -349,11 +478,21 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
                     <CheckCircle2 className="h-6 w-6 text-emerald-600" />
                   </div>
                 </div>
-                <p className="text-sm font-medium text-foreground break-all">{form.file.name}</p>
-                <p className="text-xs text-muted-foreground">{formatFileSize(form.file.size)}</p>
-                <Button type="button" variant="ghost" size="sm"
+                <p className="text-sm font-medium text-foreground break-all">
+                  {form.file.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(form.file.size)}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   className="text-xs h-7 mt-1 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); setForm((f) => ({ ...f, file: null })); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setForm((f) => ({ ...f, file: null }));
+                  }}
                 >
                   <X className="h-3 w-3 mr-1" /> Remove
                 </Button>
@@ -365,8 +504,12 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
                     <Upload className="h-6 w-6 text-muted-foreground/70" />
                   </div>
                 </div>
-                <p className="text-sm font-medium">Click to upload or drag & drop</p>
-                <p className="text-xs text-muted-foreground">PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX · max 10 MB</p>
+                <p className="text-sm font-medium">
+                  Click to upload or drag & drop
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX · max 10 MB
+                </p>
               </div>
             )}
           </div>
@@ -375,36 +518,61 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
             <Label htmlFor="doc-title" className="text-sm font-medium">
               Title <span className="text-destructive">*</span>
             </Label>
-            <Input id="doc-title" placeholder="e.g. Q1 Financial Report"
+            <Input
+              id="doc-title"
+              placeholder="e.g. Q1 Financial Report"
               value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+              onChange={(e) =>
+                setForm((f) => ({ ...f, title: e.target.value }))
+              }
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="doc-desc" className="text-sm font-medium">
-              Description <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+              Description{" "}
+              <span className="text-muted-foreground text-xs font-normal">
+                (optional)
+              </span>
             </Label>
-            <Textarea id="doc-desc" placeholder="Brief description of this document…"
-              rows={2} className="resize-none text-sm"
+            <Textarea
+              id="doc-desc"
+              placeholder="Brief description of this document…"
+              rows={2}
+              className="resize-none text-sm"
               value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Access Level</Label>
-            <AccessLevelSelect value={form.accessLevel}
-              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))} />
+            <AccessLevelSelect
+              value={form.accessLevel}
+              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))}
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="doc-tags" className="text-sm font-medium">
-              Tags <span className="text-muted-foreground text-xs font-normal">(comma separated)</span>
+              Tags{" "}
+              <span className="text-muted-foreground text-xs font-normal">
+                (comma separated)
+              </span>
             </Label>
             <div className="relative">
               <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-              <Input id="doc-tags" placeholder="budget, finance, 2024" className="pl-8"
+              <Input
+                id="doc-tags"
+                placeholder="budget, finance, 2024"
+                className="pl-8"
                 value={form.tags}
-                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, tags: e.target.value }))
+                }
+              />
             </div>
           </div>
         </div>
@@ -434,8 +602,12 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
         )}
 
         <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
-          <Button variant="outline" onClick={handleClose}
-            disabled={createMutation.isPending} className="w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={createMutation.isPending}
+            className="w-full sm:w-auto"
+          >
             Cancel
           </Button>
           <Button onClick={handleSubmit}
@@ -458,7 +630,12 @@ function UploadDialog({ open, onOpenChange, onSuccess }: {
 
 // ─── Edit Dialog ──────────────────────────────────────────────────────────────
 
-function EditDialog({ doc, open, onOpenChange, onSuccess }: {
+function EditDialog({
+  doc,
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
   doc: DocType | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -466,10 +643,10 @@ function EditDialog({ doc, open, onOpenChange, onSuccess }: {
 }) {
   const updateMutation = useUpdateDocument();
   const [form, setForm] = useState<EditForm>({
-    title:       doc?.title ?? '',
-    description: doc?.description ?? '',
-    accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? 'VIEWER',
-    tags:        (doc?.tags ?? []).join(', '),
+    title: doc?.title ?? "",
+    description: doc?.description ?? "",
+    accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? "VIEWER",
+    tags: (doc?.tags ?? []).join(", "),
   });
 
   // FIX: the previous "set state during render with a sentinel" pattern is the
@@ -478,34 +655,43 @@ function EditDialog({ doc, open, onOpenChange, onSuccess }: {
   // a different document.
   useEffect(() => {
     setForm({
-      title:       doc?.title ?? '',
-      description: doc?.description ?? '',
-      accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? 'VIEWER',
-      tags:        (doc?.tags ?? []).join(', '),
+      title: doc?.title ?? "",
+      description: doc?.description ?? "",
+      accessLevel: (doc?.accessLevel as DocumentAccessLevel) ?? "VIEWER",
+      tags: (doc?.tags ?? []).join(", "),
     });
   }, [doc?.id, doc?.title, doc?.description, doc?.accessLevel, doc?.tags]);
 
   const handleSubmit = async () => {
     if (!doc) return;
-    if (!form.title.trim()) { toast.error('Title is required'); return; }
+    if (!form.title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
     try {
       await updateMutation.mutateAsync({
         id: doc.id,
         data: {
-          title:       form.title.trim(),
+          title: form.title.trim(),
           description: form.description.trim() || undefined,
           accessLevel: form.accessLevel,
-          tags:        form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+          tags: form.tags
+            ? form.tags
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
+            : [],
         },
       });
-      toast.success('Document updated', {
+      toast.success("Document updated", {
         description: `"${form.title}" has been updated successfully.`,
       });
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      toast.error('Update failed', {
-        description: err?.message ?? 'Could not update document. Please try again.',
+      toast.error("Update failed", {
+        description:
+          err?.message ?? "Could not update document. Please try again.",
       });
     }
   };
@@ -519,7 +705,9 @@ function EditDialog({ doc, open, onOpenChange, onSuccess }: {
               <Pencil className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <DialogTitle className="text-lg sm:text-xl font-semibold">Edit Document</DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl font-semibold">
+                Edit Document
+              </DialogTitle>
               <DialogDescription className="text-sm mt-0.5 truncate max-w-[220px] sm:max-w-xs">
                 {doc?.title}
               </DialogDescription>
@@ -529,47 +717,80 @@ function EditDialog({ doc, open, onOpenChange, onSuccess }: {
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label className="text-sm font-medium">Title <span className="text-destructive">*</span></Label>
-            <Input value={form.title} placeholder="Document title"
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+            <Label className="text-sm font-medium">
+              Title <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              value={form.title}
+              placeholder="Document title"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, title: e.target.value }))
+              }
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Description</Label>
-            <Textarea rows={2} className="resize-none text-sm"
-              value={form.description} placeholder="Brief description…"
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            <Textarea
+              rows={2}
+              className="resize-none text-sm"
+              value={form.description}
+              placeholder="Brief description…"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Access Level</Label>
-            <AccessLevelSelect value={form.accessLevel}
-              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))} />
+            <AccessLevelSelect
+              value={form.accessLevel}
+              onChange={(v) => setForm((f) => ({ ...f, accessLevel: v }))}
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Tags</Label>
             <div className="relative">
               <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-              <Input className="pl-8" placeholder="budget, finance, 2024"
+              <Input
+                className="pl-8"
+                placeholder="budget, finance, 2024"
                 value={form.tags}
-                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, tags: e.target.value }))
+                }
+              />
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 border-t border-border/60 pt-4 flex-col-reverse sm:flex-row">
-          <Button variant="outline" onClick={() => onOpenChange(false)}
-            disabled={updateMutation.isPending} className="w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={updateMutation.isPending}
+            className="w-full sm:w-auto"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSubmit}
+          <Button
+            onClick={handleSubmit}
             disabled={updateMutation.isPending || !form.title.trim()}
-            className="gap-2 w-full sm:w-auto sm:min-w-28">
-            {updateMutation.isPending
-              ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
-              : <><Pencil className="h-4 w-4" />Save Changes</>
-            }
+            className="gap-2 w-full sm:w-auto sm:min-w-28"
+          >
+            {updateMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Pencil className="h-4 w-4" />
+                Save Changes
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -580,7 +801,13 @@ function EditDialog({ doc, open, onOpenChange, onSuccess }: {
 // ─── Document Actions Menu (shared by row + card) ─────────────────────────────
 // IMPROVEMENT: extracted into a single reusable component to avoid duplication
 
-function DocActionsMenu({ doc, onEdit, onDelete, onView, onDownload }: {
+function DocActionsMenu({
+  doc,
+  onEdit,
+  onDelete,
+  onView,
+  onDownload,
+}: {
   doc: DocType;
   onEdit: (doc: DocType) => void;
   onDelete: (doc: DocType) => void;
@@ -596,26 +823,32 @@ function DocActionsMenu({ doc, onEdit, onDelete, onView, onDownload }: {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem onClick={() => onEdit(doc)}>
-          <Pencil className="mr-2 h-4 w-4" />Edit details
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit details
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onView(doc)}>
-          <Eye className="mr-2 h-4 w-4" />Preview
+          <Eye className="mr-2 h-4 w-4" />
+          Preview
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onDownload(doc)}>
-          <Download className="mr-2 h-4 w-4" />Download
+          <Download className="mr-2 h-4 w-4" />
+          Download
         </DropdownMenuItem>
         <DropdownMenuItem>
-          <Star className="mr-2 h-4 w-4" />Favourite
+          <Star className="mr-2 h-4 w-4" />
+          Favourite
         </DropdownMenuItem>
         <DropdownMenuItem>
-          <Share2 className="mr-2 h-4 w-4" />Share
+          <Share2 className="mr-2 h-4 w-4" />
+          Share
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive focus:text-destructive focus:bg-destructive/10"
           onClick={() => onDelete(doc)}
         >
-          <Trash2 className="mr-2 h-4 w-4" />Delete
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -624,36 +857,48 @@ function DocActionsMenu({ doc, onEdit, onDelete, onView, onDownload }: {
 
 // ─── Document Row (List View) ─────────────────────────────────────────────────
 
-function DocumentRow({ doc, onEdit, onDelete, onView }: {
+function DocumentRow({
+  doc,
+  onEdit,
+  onDelete,
+  onView,
+}: {
   doc: DocType;
   onEdit: (doc: DocType) => void;
   onDelete: (doc: DocType) => void;
   onView: (doc: DocType) => void;
 }) {
-  const { Icon, color, label } = getFileIcon(doc.fileType ?? '');
+  const { Icon, color, label } = getFileIcon(doc.fileType ?? "");
 
   // IMPROVEMENT: download handler centralised and reused
-  const handleDownload = useCallback(() => {
-    if (!doc.fileUrl) {
-      toast.error('Download unavailable', { description: 'No file URL found for this document.' });
-      return;
+  const handleDownload = useCallback(async () => {
+    try {
+      const url =
+        doc.downloadUrl ?? (await documentsService.getDownloadurl(doc.id));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = doc.fileName ?? doc.title;
+      link.click();
+      toast.success("Download started", { description: doc.title });
+    } catch (err: any) {
+      toast.error("Download failed", {
+        description: err?.message ?? "No download URL available.",
+      });
     }
-    const link = document.createElement('a');
-    link.href = doc.fileUrl;
-    link.download = doc.fileName ?? doc.title;
-    link.click();
-    toast.success('Download started', { description: doc.title });
   }, [doc]);
 
   return (
     <Card className="border border-border/60 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200 group">
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-
           {/* File type icon */}
-          <div className={`flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl shrink-0 ${color}`}>
+          <div
+            className={`flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl shrink-0 ${color}`}
+          >
             <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-            <span className="text-[8px] sm:text-[9px] font-bold mt-0.5 tracking-wide opacity-70">{label}</span>
+            <span className="text-[8px] sm:text-[9px] font-bold mt-0.5 tracking-wide opacity-70">
+              {label}
+            </span>
           </div>
 
           {/* Content */}
@@ -668,7 +913,10 @@ function DocumentRow({ doc, onEdit, onDelete, onView }: {
               </h3>
               {doc.accessLevel && <AccessBadge level={doc.accessLevel} />}
               {doc.version != null && doc.version > 1 && (
-                <Badge variant="outline" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground border-dashed">
+                <Badge
+                  variant="outline"
+                  className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground border-dashed"
+                >
                   v{doc.version}
                 </Badge>
               )}
@@ -676,13 +924,17 @@ function DocumentRow({ doc, onEdit, onDelete, onView }: {
 
             <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <HardDrive className="h-3 w-3 shrink-0" />{formatFileSize(doc.fileSize)}
+                <HardDrive className="h-3 w-3 shrink-0" />
+                {formatFileSize(doc.fileSize)}
               </span>
               <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3 shrink-0" />{formatDate(doc.uploadedAt)}
+                <Clock className="h-3 w-3 shrink-0" />
+                {formatDate(doc.uploadedAt)}
               </span>
               {doc.uploadedByName && (
-                <span className="hidden sm:inline truncate">by {doc.uploadedByName}</span>
+                <span className="hidden sm:inline truncate">
+                  by {doc.uploadedByName}
+                </span>
               )}
             </div>
 
@@ -696,10 +948,19 @@ function DocumentRow({ doc, onEdit, onDelete, onView }: {
             {(doc.tags?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {doc.tags!.slice(0, 3).map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0 h-4.5">{tag}</Badge>
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="text-xs px-1.5 py-0 h-4.5"
+                  >
+                    {tag}
+                  </Badge>
                 ))}
                 {doc.tags!.length > 3 && (
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground">
+                  <Badge
+                    variant="secondary"
+                    className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground"
+                  >
                     +{doc.tags!.length - 3}
                   </Badge>
                 )}
@@ -709,19 +970,30 @@ function DocumentRow({ doc, onEdit, onDelete, onView }: {
 
           {/* Actions */}
           <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-            <Button size="icon" variant="ghost"
+            <Button
+              size="icon"
+              variant="ghost"
               className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex hover:bg-primary/10 hover:text-primary opacity-60 group-hover:opacity-100 transition-opacity"
-              onClick={() => onView(doc)} title="Preview">
+              onClick={() => onView(doc)}
+              title="Preview"
+            >
               <Eye className="h-3.5 w-3.5" />
             </Button>
-            <Button size="icon" variant="ghost"
+            <Button
+              size="icon"
+              variant="ghost"
               className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex hover:bg-primary/10 hover:text-primary opacity-60 group-hover:opacity-100 transition-opacity"
-              onClick={handleDownload} title="Download">
+              onClick={handleDownload}
+              title="Download"
+            >
               <Download className="h-3.5 w-3.5" />
             </Button>
             <DocActionsMenu
-              doc={doc} onEdit={onEdit} onDelete={onDelete}
-              onView={onView} onDownload={handleDownload}
+              doc={doc}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onView={onView}
+              onDownload={handleDownload}
             />
           </div>
         </div>
@@ -732,39 +1004,52 @@ function DocumentRow({ doc, onEdit, onDelete, onView }: {
 
 // ─── Document Card (Grid View) ────────────────────────────────────────────────
 
-function DocumentCard({ doc, onEdit, onDelete, onView }: {
+function DocumentCard({
+  doc,
+  onEdit,
+  onDelete,
+  onView,
+}: {
   doc: DocType;
   onEdit: (doc: DocType) => void;
   onDelete: (doc: DocType) => void;
   onView: (doc: DocType) => void;
 }) {
-  const { Icon, color, label } = getFileIcon(doc.fileType ?? '');
+  const { Icon, color, label } = getFileIcon(doc.fileType ?? "");
 
-  const handleDownload = useCallback(() => {
-    if (!doc.fileUrl) {
-      toast.error('Download unavailable', { description: 'No file URL found for this document.' });
-      return;
+  const handleDownload = useCallback( async () => {
+    try{
+      const url = doc.downloadUrl ?? await documentsService.getDownloadurl(doc.id);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.fileName ?? doc.title;
+      link.click();
+      toast.success('Download started', {description: doc.title});
+      } catch(err: unknown){
+      const message = err instanceof Error ? err.message : 'No download url available.';
+      toast.error('Download failed', {description: message})
     }
-    const link = document.createElement('a');
-    link.href = doc.fileUrl;
-    link.download = doc.fileName ?? doc.title;
-    link.click();
-    toast.success('Download started', { description: doc.title });
   }, [doc]);
 
   return (
     <Card className="border border-border/60 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200 group flex flex-col">
       <CardContent className="p-4 flex flex-col gap-3 h-full">
-
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
-          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 ${color}`}>
+          <div
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 ${color}`}
+          >
             <Icon className="h-5 w-5" />
-            <span className="text-[9px] font-bold mt-0.5 tracking-wide opacity-70">{label}</span>
+            <span className="text-[9px] font-bold mt-0.5 tracking-wide opacity-70">
+              {label}
+            </span>
           </div>
           <DocActionsMenu
-            doc={doc} onEdit={onEdit} onDelete={onDelete}
-            onView={onView} onDownload={handleDownload}
+            doc={doc}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onView={onView}
+            onDownload={handleDownload}
           />
         </div>
 
@@ -780,13 +1065,18 @@ function DocumentCard({ doc, onEdit, onDelete, onView }: {
           <div className="flex flex-wrap gap-1.5">
             {doc.accessLevel && <AccessBadge level={doc.accessLevel} />}
             {doc.version != null && doc.version > 1 && (
-              <Badge variant="outline" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground border-dashed">
+              <Badge
+                variant="outline"
+                className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground border-dashed"
+              >
                 v{doc.version}
               </Badge>
             )}
           </div>
           {doc.description && (
-            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{doc.description}</p>
+            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+              {doc.description}
+            </p>
           )}
         </div>
 
@@ -794,10 +1084,19 @@ function DocumentCard({ doc, onEdit, onDelete, onView }: {
         {(doc.tags?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1">
             {doc.tags!.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0 h-4.5">{tag}</Badge>
+              <Badge
+                key={tag}
+                variant="secondary"
+                className="text-xs px-1.5 py-0 h-4.5"
+              >
+                {tag}
+              </Badge>
             ))}
             {doc.tags!.length > 3 && (
-              <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground">
+              <Badge
+                variant="secondary"
+                className="text-xs px-1.5 py-0 h-4.5 text-muted-foreground"
+              >
                 +{doc.tags!.length - 3}
               </Badge>
             )}
@@ -808,25 +1107,37 @@ function DocumentCard({ doc, onEdit, onDelete, onView }: {
         <div className="border-t border-border/50 pt-3 space-y-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground gap-2">
             <span className="flex items-center gap-1 shrink-0">
-              <HardDrive className="h-3 w-3" />{formatFileSize(doc.fileSize)}
+              <HardDrive className="h-3 w-3" />
+              {formatFileSize(doc.fileSize)}
             </span>
             <span className="flex items-center gap-1 truncate">
-              <Clock className="h-3 w-3 shrink-0" />{formatDate(doc.uploadedAt)}
+              <Clock className="h-3 w-3 shrink-0" />
+              {formatDate(doc.uploadedAt)}
             </span>
           </div>
           {doc.uploadedByName && (
-            <p className="text-xs text-muted-foreground truncate">by {doc.uploadedByName}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              by {doc.uploadedByName}
+            </p>
           )}
           <div className="flex gap-1.5 pt-0.5">
-            <Button variant="outline" size="sm"
+            <Button
+              variant="outline"
+              size="sm"
               className="flex-1 h-8 text-xs gap-1.5 hover:bg-primary/5 hover:text-primary hover:border-primary/30"
-              onClick={() => onView(doc)}>
-              <Eye className="h-3 w-3" />Preview
+              onClick={() => onView(doc)}
+            >
+              <Eye className="h-3 w-3" />
+              Preview
             </Button>
-            <Button variant="outline" size="sm"
+            <Button
+              variant="outline"
+              size="sm"
               className="flex-1 h-8 text-xs gap-1.5 hover:bg-primary/5 hover:text-primary hover:border-primary/30"
-              onClick={handleDownload}>
-              <Download className="h-3 w-3" />Download
+              onClick={handleDownload}
+            >
+              <Download className="h-3 w-3" />
+              Download
             </Button>
           </div>
         </div>
@@ -837,25 +1148,33 @@ function DocumentCard({ doc, onEdit, onDelete, onView }: {
 
 // ─── View Toggle ──────────────────────────────────────────────────────────────
 
-function ViewToggle({ viewMode, onChange }: {
-  viewMode: ViewMode; onChange: (mode: ViewMode) => void;
+function ViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: ViewMode;
+  onChange: (mode: ViewMode) => void;
 }) {
   return (
     <div className="flex items-center rounded-lg border border-border/60 p-0.5 bg-muted/30 shrink-0">
-      {(['list', 'grid'] as const).map((mode) => (
-        <Button key={mode} variant="ghost" size="icon"
+      {(["list", "grid"] as const).map((mode) => (
+        <Button
+          key={mode}
+          variant="ghost"
+          size="icon"
           className={`h-7 w-7 rounded-md transition-all ${
             viewMode === mode
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
+              ? "bg-background shadow-sm text-foreground"
+              : "text-muted-foreground hover:text-foreground"
           }`}
           onClick={() => onChange(mode)}
           title={`${mode} view`}
         >
-          {mode === 'list'
-            ? <LayoutList className="h-3.5 w-3.5" />
-            : <LayoutGrid className="h-3.5 w-3.5" />
-          }
+          {mode === "list" ? (
+            <LayoutList className="h-3.5 w-3.5" />
+          ) : (
+            <LayoutGrid className="h-3.5 w-3.5" />
+          )}
         </Button>
       ))}
     </div>
@@ -866,7 +1185,13 @@ function ViewToggle({ viewMode, onChange }: {
 // IMPROVEMENT: extracted into its own component to avoid duplicate JSX blocks
 // (was copy-pasted twice in the original — once in viewer mode, once in normal mode)
 
-function DeleteConfirmDialog({ doc, open, onOpenChange, onConfirm, isPending }: {
+function DeleteConfirmDialog({
+  doc,
+  open,
+  onOpenChange,
+  onConfirm,
+  isPending,
+}: {
   doc: DocType | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -884,22 +1209,31 @@ function DeleteConfirmDialog({ doc, open, onOpenChange, onConfirm, isPending }: 
             Delete Document
           </AlertDialogTitle>
           <AlertDialogDescription className="pt-1">
-            Are you sure you want to permanently delete{' '}
+            Are you sure you want to permanently delete{" "}
             <span className="font-medium text-foreground">"{doc?.title}"</span>?
             This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
-          <AlertDialogCancel disabled={isPending} className="mt-0">Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending} className="mt-0">
+            Cancel
+          </AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
             onClick={onConfirm}
             disabled={isPending}
           >
-            {isPending
-              ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting…</>
-              : <><Trash2 className="h-4 w-4" />Delete</>
-            }
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Deleting…
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </>
+            )}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -911,20 +1245,27 @@ function DeleteConfirmDialog({ doc, open, onOpenChange, onConfirm, isPending }: 
 // IMPROVEMENT: extracted into its own component for clarity
 
 function LoadingSkeleton({ viewMode }: { viewMode: ViewMode }) {
-  if (viewMode === 'list') {
+  if (viewMode === "list") {
     return (
       <div className="space-y-2.5">
-        {Array(5).fill(0).map((_, i) => (
-          <div key={i} className="h-[72px] sm:h-[76px] animate-pulse rounded-xl bg-muted/50" />
-        ))}
+        {Array(5)
+          .fill(0)
+          .map((_, i) => (
+            <div
+              key={i}
+              className="h-[72px] sm:h-[76px] animate-pulse rounded-xl bg-muted/50"
+            />
+          ))}
       </div>
     );
   }
   return (
     <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-      {Array(6).fill(0).map((_, i) => (
-        <div key={i} className="h-56 animate-pulse rounded-xl bg-muted/50" />
-      ))}
+      {Array(6)
+        .fill(0)
+        .map((_, i) => (
+          <div key={i} className="h-56 animate-pulse rounded-xl bg-muted/50" />
+        ))}
     </div>
   );
 }
@@ -932,7 +1273,10 @@ function LoadingSkeleton({ viewMode }: { viewMode: ViewMode }) {
 // ─── Empty State ──────────────────────────────────────────────────────────────
 // IMPROVEMENT: better empty state with context-aware messaging
 
-function EmptyState({ isFiltered, onUpload }: {
+function EmptyState({
+  isFiltered,
+  onUpload,
+}: {
   isFiltered: boolean;
   onUpload: () => void;
 }) {
@@ -941,23 +1285,25 @@ function EmptyState({ isFiltered, onUpload }: {
       <CardContent className="space-y-4 px-4">
         <div className="flex justify-center">
           <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-muted">
-            {isFiltered
-              ? <FileSearch className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
-              : <FileText  className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
-            }
+            {isFiltered ? (
+              <FileSearch className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
+            ) : (
+              <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground/50" />
+            )}
           </div>
         </div>
         <h3 className="text-base sm:text-lg font-medium">
-          {isFiltered ? 'No matching documents' : 'No documents yet'}
+          {isFiltered ? "No matching documents" : "No documents yet"}
         </h3>
         <p className="text-sm text-muted-foreground max-w-xs mx-auto">
           {isFiltered
-            ? 'Try adjusting your search or filter to find what you\'re looking for.'
-            : 'Upload your first document to start building the library.'}
+            ? "Try adjusting your search or filter to find what you're looking for."
+            : "Upload your first document to start building the library."}
         </p>
         {!isFiltered && (
           <Button size="sm" className="gap-2 mt-1" onClick={onUpload}>
-            <Upload className="h-4 w-4" />Upload Document
+            <Upload className="h-4 w-4" />
+            Upload Document
           </Button>
         )}
       </CardContent>
@@ -968,17 +1314,25 @@ function EmptyState({ isFiltered, onUpload }: {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Documents() {
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [accessFilter,  setAccessFilter]  = useState<string>('all');
-  const [viewMode,      setViewMode]      = useState<ViewMode>('list');
-  const [uploadOpen,    setUploadOpen]    = useState(false);
-  const [editDoc,       setEditDoc]       = useState<DocType | null>(null);
-  const [deleteDoc,     setDeleteDoc]     = useState<DocType | null>(null);
-  const [viewDoc,       setViewDoc]       = useState<DocType | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [accessFilter, setAccessFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [editDoc, setEditDoc] = useState<DocType | null>(null);
+  const [deleteDoc, setDeleteDoc] = useState<DocType | null>(null);
+  const [viewDoc, setViewDoc] = useState<DocType | null>(null);
 
-  const { data: documentsData, isLoading, error, refetch } = useDocuments({
-    query:       searchQuery   || undefined,
-    accessLevel: accessFilter === 'all' ? undefined : (accessFilter as DocumentAccessLevel),
+  const {
+    data: documentsData,
+    isLoading,
+    error,
+    refetch,
+  } = useDocuments({
+    query: searchQuery || undefined,
+    accessLevel:
+      accessFilter === "all"
+        ? undefined
+        : (accessFilter as DocumentAccessLevel),
   });
 
   const deleteMutation = useDeleteDocument();
@@ -1014,7 +1368,8 @@ export function Documents() {
         doc.title?.toLowerCase().includes(term) ||
         (doc.tags ?? []).some((t) => t.toLowerCase().includes(term)) ||
         doc.description?.toLowerCase().includes(term);
-      const matchesAccess = accessFilter === 'all' || doc.accessLevel === accessFilter;
+      const matchesAccess =
+        accessFilter === "all" || doc.accessLevel === accessFilter;
       return matchesSearch && matchesAccess;
     });
   }, [documents, searchQuery, accessFilter]);
@@ -1029,42 +1384,48 @@ export function Documents() {
     if (!deleteDoc) return;
     try {
       await deleteMutation.mutateAsync(deleteDoc.id);
-      toast.success('Document deleted', {
+      toast.success("Document deleted", {
         description: `"${deleteDoc.title}" has been permanently removed.`,
       });
       setDeleteDoc(null);
     } catch (err: any) {
-      toast.error('Delete failed', {
-        description: err?.message ?? 'Could not delete document. Please try again.',
+      toast.error("Delete failed", {
+        description:
+          err?.message ?? "Could not delete document. Please try again.",
       });
     }
   }, [deleteDoc, deleteMutation]);
 
   // ── IMPROVEMENT: clear all filters handler ────────────────────────────────
   const handleClearFilters = useCallback(() => {
-    setSearchQuery('');
-    setAccessFilter('all');
+    setSearchQuery("");
+    setAccessFilter("all");
   }, []);
 
-  const isFiltered = !!searchQuery || accessFilter !== 'all';
+  const isFiltered = !!searchQuery || accessFilter !== "all";
 
   // ── Error state ───────────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="space-y-6 pb-12">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Documents</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Manage files, folders, and board records</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+            Documents
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Manage files, folders, and board records
+          </p>
         </div>
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Failed to load documents</AlertTitle>
           <AlertDescription className="mt-1">
-            {(error as Error).message ?? 'An unexpected error occurred.'}
+            {(error as Error).message ?? "An unexpected error occurred."}
           </AlertDescription>
         </Alert>
         <Button variant="outline" onClick={() => refetch()} className="gap-2">
-          <RefreshCw className="h-4 w-4" />Try Again
+          <RefreshCw className="h-4 w-4" />
+          Try Again
         </Button>
       </div>
     );
@@ -1082,13 +1443,19 @@ export function Documents() {
           onClose={() => setViewDoc(null)}
         />
         <EditDialog
-          doc={editDoc} open={!!editDoc}
-          onOpenChange={(v) => { if (!v) setEditDoc(null); }}
+          doc={editDoc}
+          open={!!editDoc}
+          onOpenChange={(v) => {
+            if (!v) setEditDoc(null);
+          }}
           onSuccess={() => refetch()}
         />
         <DeleteConfirmDialog
-          doc={deleteDoc} open={!!deleteDoc}
-          onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}
+          doc={deleteDoc}
+          open={!!deleteDoc}
+          onOpenChange={(v) => {
+            if (!v) setDeleteDoc(null);
+          }}
           onConfirm={handleDeleteConfirm}
           isPending={deleteMutation.isPending}
         />
@@ -1127,12 +1494,24 @@ export function Documents() {
       {/* Stats — only shown when there are documents */}
       {!isLoading && documents.length > 0 && (
         <div className="grid grid-cols-3 gap-2 sm:gap-4">
-          <StatCard label="Total Documents" value={documents.length}
-            icon={FileText}   colorClass="text-blue-600 bg-blue-50 dark:bg-blue-950/30" />
-          <StatCard label="Storage Used"    value={formatFileSize(totalSize)}
-            icon={HardDrive}  colorClass="text-violet-600 bg-violet-50 dark:bg-violet-950/30" />
-          <StatCard label="Showing"         value={filteredDocs.length}
-            icon={FolderOpen} colorClass="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" />
+          <StatCard
+            label="Total Documents"
+            value={documents.length}
+            icon={FileText}
+            colorClass="text-blue-600 bg-blue-50 dark:bg-blue-950/30"
+          />
+          <StatCard
+            label="Storage Used"
+            value={formatFileSize(totalSize)}
+            icon={HardDrive}
+            colorClass="text-violet-600 bg-violet-50 dark:bg-violet-950/30"
+          />
+          <StatCard
+            label="Showing"
+            value={filteredDocs.length}
+            icon={FolderOpen}
+            colorClass="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+          />
         </div>
       )}
 
@@ -1147,8 +1526,10 @@ export function Documents() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           )}
@@ -1163,16 +1544,28 @@ export function Documents() {
             <SelectContent>
               <SelectItem value="all">All Documents</SelectItem>
               <SelectItem value="VIEWER">
-                <div className="flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-emerald-600" />Viewer</div>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-3.5 w-3.5 text-emerald-600" />
+                  Viewer
+                </div>
               </SelectItem>
               <SelectItem value="EDITOR">
-                <div className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-blue-600" />Editor</div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5 text-blue-600" />
+                  Editor
+                </div>
               </SelectItem>
               <SelectItem value="ADMIN">
-                <div className="flex items-center gap-2"><ShieldAlert className="h-3.5 w-3.5 text-amber-600" />Admin Only</div>
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                  Admin Only
+                </div>
               </SelectItem>
               <SelectItem value="OWNER">
-                <div className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-slate-500" />Owner Only</div>
+                <div className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-slate-500" />
+                  Owner Only
+                </div>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -1185,19 +1578,28 @@ export function Documents() {
         <div className="flex items-center gap-2 flex-wrap -mt-1">
           <span className="text-xs text-muted-foreground">Filters:</span>
           {searchQuery && (
-            <Badge variant="secondary" className="text-xs gap-1 h-5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
-              onClick={() => setSearchQuery('')}>
+            <Badge
+              variant="secondary"
+              className="text-xs gap-1 h-5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+              onClick={() => setSearchQuery("")}
+            >
               "{searchQuery}" <X className="h-2.5 w-2.5" />
             </Badge>
           )}
-          {accessFilter !== 'all' && (
-            <Badge variant="secondary" className="text-xs gap-1 h-5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
-              onClick={() => setAccessFilter('all')}>
-              {ACCESS_CONFIG[accessFilter]?.label ?? accessFilter} <X className="h-2.5 w-2.5" />
+          {accessFilter !== "all" && (
+            <Badge
+              variant="secondary"
+              className="text-xs gap-1 h-5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+              onClick={() => setAccessFilter("all")}
+            >
+              {ACCESS_CONFIG[accessFilter]?.label ?? accessFilter}{" "}
+              <X className="h-2.5 w-2.5" />
             </Badge>
           )}
-          <button onClick={handleClearFilters}
-            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors">
+          <button
+            onClick={handleClearFilters}
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
             Clear all
           </button>
         </div>
@@ -1207,50 +1609,73 @@ export function Documents() {
       {isLoading && <LoadingSkeleton viewMode={viewMode} />}
 
       {/* Document list / grid */}
-      {!isLoading && (
-        filteredDocs.length > 0 ? (
-          viewMode === 'list' ? (
+      {!isLoading &&
+        (filteredDocs.length > 0 ? (
+          viewMode === "list" ? (
             <div className="space-y-2 sm:space-y-2.5">
               {filteredDocs.map((doc) => (
-                <DocumentRow key={doc.id} doc={doc}
-                  onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  onEdit={setEditDoc}
+                  onDelete={setDeleteDoc}
+                  onView={setViewDoc}
+                />
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               {filteredDocs.map((doc) => (
-                <DocumentCard key={doc.id} doc={doc}
-                  onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewDoc} />
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onEdit={setEditDoc}
+                  onDelete={setDeleteDoc}
+                  onView={setViewDoc}
+                />
               ))}
             </div>
           )
         ) : (
-          <EmptyState isFiltered={isFiltered} onUpload={() => setUploadOpen(true)} />
-        )
-      )}
+          <EmptyState
+            isFiltered={isFiltered}
+            onUpload={() => setUploadOpen(true)}
+          />
+        ))}
 
       {/* IMPROVEMENT: result count shown as a subtle footer when filtering */}
       {!isLoading && filteredDocs.length > 0 && isFiltered && (
         <p className="text-xs text-muted-foreground text-center pb-2">
-          Showing {filteredDocs.length} of {documents.length} document{documents.length !== 1 ? 's' : ''}
+          Showing {filteredDocs.length} of {documents.length} document
+          {documents.length !== 1 ? "s" : ""}
         </p>
       )}
 
       {/* Dialogs */}
       <UploadDialog
-        open={uploadOpen} onOpenChange={setUploadOpen}
-        onSuccess={() => refetch()} />
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        onSuccess={() => refetch()}
+      />
 
       <EditDialog
-        doc={editDoc} open={!!editDoc}
-        onOpenChange={(v) => { if (!v) setEditDoc(null); }}
-        onSuccess={() => refetch()} />
+        doc={editDoc}
+        open={!!editDoc}
+        onOpenChange={(v) => {
+          if (!v) setEditDoc(null);
+        }}
+        onSuccess={() => refetch()}
+      />
 
       <DeleteConfirmDialog
-        doc={deleteDoc} open={!!deleteDoc}
-        onOpenChange={(v) => { if (!v) setDeleteDoc(null); }}
+        doc={deleteDoc}
+        open={!!deleteDoc}
+        onOpenChange={(v) => {
+          if (!v) setDeleteDoc(null);
+        }}
         onConfirm={handleDeleteConfirm}
-        isPending={deleteMutation.isPending} />
+        isPending={deleteMutation.isPending}
+      />
     </div>
   );
 }

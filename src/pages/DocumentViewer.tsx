@@ -90,11 +90,11 @@ const ACC: Record<string, { lbl: string; Icon: React.ElementType; cls: string }>
 
 // ─── Resolve the file URL from the backend ──────────────────────────────────
 // The Document objects returned by /documents/get-all do NOT carry a public
-// `fileUrl`. Files live in Azure Blob Storage and require a signed,
+// `downloadUrl`. Files live in Azure Blob Storage and require a signed,
 // temporary URL minted on demand by GET /documents/:id/download-url.
 //
 // Until that round-trip resolves, every preview attempt fails with
-// `doc.fileUrl is undefined` — which is exactly why no one could view
+// `doc.downloadUrl is undefined` — which is exactly why no one could view
 // any document. This hook does the round-trip once per doc, caches the
 // result, and refetches on demand.
 
@@ -127,7 +127,7 @@ function useDocumentUrl(docId: string | undefined, refreshKey: number, fallbackU
           ?? null;
         if (!url) {
           // Fall back to whatever was on the doc (in case future backend versions
-          // start returning fileUrl directly) — better than failing outright.
+          // start returning downloadUrl directly) — better than failing outright.
           if (fallbackUrl) {
             setState({ url: fallbackUrl, status: 'ready' });
           } else {
@@ -245,14 +245,14 @@ function ErrState({ title, detail, doc, onRetry }: {
           <RefreshCw className="h-3.5 w-3.5" />Retry
         </Button>
         <Button size="sm" className="gap-1.5 h-9" onClick={async () => {
-          // Fetch a fresh signed URL on click — `doc.fileUrl` is rarely set.
+          // Fetch a fresh signed URL on click — `doc.downloadUrl` is rarely set.
           try {
             const r = await apiClient.get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(doc.id), { timeout: 15_000 });
             const body = r.data as Record<string, unknown> | undefined;
             const url =
               (body?.data as { url?: string } | undefined)?.url
               ?? ((body as { url?: string } | undefined)?.url)
-              ?? doc.fileUrl
+              ?? doc.downloadUrl
               ?? null;
             if (url) window.open(url, '_blank', 'noopener,noreferrer');
             else toast.error('No download URL available.');
@@ -285,7 +285,7 @@ function ErrState({ title, detail, doc, onRetry }: {
 
 function PdfViewer({ doc, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
   const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
-    useDocumentUrl(doc.id, refreshKey, doc.fileUrl);
+    useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
   const [iframeError, setIframeError] = useState(false);
 
   // Reset error state whenever we get a new URL.
@@ -327,7 +327,7 @@ function ImageViewer({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; re
   // <img src> uses native browser image loading which is exempt from CORS
   // unless we try to read the canvas — we don't, so this works fine.
   const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
-    useDocumentUrl(doc.id, refreshKey, doc.fileUrl);
+    useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -368,7 +368,7 @@ function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number })
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
   const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
-    useDocumentUrl(doc.id, refreshKey, doc.fileUrl);
+    useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
 
   useEffect(() => setState('loading'), [doc.id, refreshKey, retry, resolvedUrl]);
 
@@ -407,10 +407,10 @@ function OfficeViewer({ doc, refreshKey }: { doc: DocType; refreshKey: number })
 
 function UnsupportedViewer({ doc }: { doc: DocType }) {
   const { Icon, clr, bg, lbl } = getIcon(doc.fileType ?? '');
-  const { url: resolvedUrl, status: urlStatus } = useDocumentUrl(doc.id, 0, doc.fileUrl);
+  const { url: resolvedUrl, status: urlStatus } = useDocumentUrl(doc.id, 0, doc.downloadUrl);
 
   // Resolve the signed URL just-in-time when the user clicks. Avoids
-  // hard-coding the broken doc.fileUrl reference.
+  // hard-coding the broken doc.downloadUrl reference.
   const fetchAndOpen = async (mode: 'download' | 'open') => {
     let url = resolvedUrl;
     if (!url) {
@@ -464,7 +464,7 @@ function UnsupportedViewer({ doc }: { doc: DocType }) {
 function ViewerContent({ doc, zoom, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
   const kind = getKind(doc.fileType ?? '') !== 'unknown'
     ? getKind(doc.fileType ?? '')
-    : getKind(doc.fileUrl ?? '');
+    : getKind(doc.downloadUrl ?? '');
 
   if (kind === 'pdf')    return <PdfViewer    doc={doc} zoom={zoom} refreshKey={refreshKey} />;
   if (kind === 'image')  return <ImageViewer  doc={doc} zoom={zoom} refreshKey={refreshKey} />;
@@ -691,7 +691,7 @@ export function DocumentViewer({ doc, allDocs = [], onClose }: DocumentViewerPro
   }, []);
 
   const fetchSignedUrl = useCallback(async (): Promise<string | null> => {
-    if (currentDoc.fileUrl) return currentDoc.fileUrl;
+    if (currentDoc.downloadUrl) return currentDoc.downloadUrl;
     try {
       const r = await apiClient.get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(currentDoc.id), { timeout: 15_000 });
       const body = r.data as Record<string, unknown> | undefined;

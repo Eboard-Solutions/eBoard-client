@@ -546,9 +546,9 @@ export interface Document {
   id: string;
   title: string;
   fileName: string;
-  fileUrl: string;
   fileType: string;
   fileSize: number;
+  downloadUrl?: string;
   folderId?: string;
   tags?: string[];
   version: number;
@@ -910,4 +910,31 @@ export interface ApiError {
   message: string | string[];
   error?: string;
   details?: Record<string, unknown>;
+}
+
+//CALENDAR TYPES--------------------
+export type EventType = 'meeting' | 'task' | 'actionItem' | 'agendaItem';
+
+export interface RawCalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  type: EventType;
+  location?: string
+  url: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  type: EventType;
+  location?: string;
+  url: string;
+}
+
+export interface OrganizationCalendarProps {
+  events: CalendarEvent[];
 }

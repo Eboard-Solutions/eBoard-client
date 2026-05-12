@@ -76,6 +76,26 @@ export const documentsService = {
     }
   },
 
+  async getDownloadurl(id: string): Promise<string> {
+    if (!id?.trim()) throw new Error('Document ID is required.');
+    const documentId = id.trim();
+
+    try {
+      const res = await apiClient.get<ResponseObject<{ url: string }>>(
+        ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(documentId)
+      );
+
+      const downloadUrl = res.data.data?.url;
+      if (!downloadUrl) {
+        throw new Error('Download URL is unavailable.');
+      }
+
+      return downloadUrl;
+    } catch (error) {
+      throw normaliseError(error, `Failed to fetch download URL for document (ID: ${documentId}).`);
+    }
+  },
+
   async createDocument(
     data: CreateDocumentData,
     onProgress?: (percent: number) => void,
