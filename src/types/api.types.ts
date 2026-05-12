@@ -911,3 +911,30 @@ export interface ApiError {
   error?: string;
   details?: Record<string, unknown>;
 }
+
+//CALENDAR TYPES--------------------
+export type EventType = 'meeting' | 'task' | 'actionItem' | 'agendaItem';
+
+export interface RawCalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  type: EventType;
+  location?: string
+  url: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  type: EventType;
+  location?: string;
+  url: string;
+}
+
+export interface OrganizationCalendarProps {
+  events: CalendarEvent[];
+}
