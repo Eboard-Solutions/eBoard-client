@@ -76,17 +76,24 @@ export const documentsService = {
     }
   },
 
-  async getDownloadurl(id: string): Promise<string>{
-    const res = await apiClient.get<ResponseObject<{url: string}>>(
-      ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(id)
-    );
+  async getDownloadurl(id: string): Promise<string> {
+    if (!id?.trim()) throw new Error('Document ID is required.');
+    const documentId = id.trim();
 
-    const downloadUrl = res.data.data?.url;
-    if (!downloadUrl) {
-      throw new Error('Download URL is unavailable.');
+    try {
+      const res = await apiClient.get<ResponseObject<{ url: string }>>(
+        ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(documentId)
+      );
+
+      const downloadUrl = res.data.data?.url;
+      if (!downloadUrl) {
+        throw new Error('Download URL is unavailable.');
+      }
+
+      return downloadUrl;
+    } catch (error) {
+      throw normaliseError(error, `Failed to fetch download URL for document (ID: ${documentId}).`);
     }
-
-    return downloadUrl;
   },
 
   async createDocument(
