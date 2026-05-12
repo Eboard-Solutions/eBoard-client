@@ -1,6 +1,7 @@
 import apiClient from '../client';
 import type { RawCalendarEvent, CalendarEvent } from '../../types/api.types';
 import { ENDPOINTS } from '@/config/api.config';
+import {ResponseObject} from '../response-object';
 
 export const CALENDAR_QUERY_KEYS = {
     all: ['calendarEvents'] as const,
@@ -24,7 +25,7 @@ function unwrapArray<T>(raw: unknown): T[] {
 
 export const calendarService = {
     getEvents: async (): Promise<CalendarEvent[]> => {
-        const response = await apiClient.get<RawCalendarEvent[]>(ENDPOINTS.CALENDAR.BASE);
+        const response = await apiClient.get<ResponseObject<RawCalendarEvent[]>>(ENDPOINTS.CALENDAR.BASE);
         const rawEvents = unwrapArray<RawCalendarEvent>(response.data);
 
         
@@ -40,8 +41,8 @@ export const calendarService = {
             .map((event) => ({
                 ...event,
                 
-                start: new Date(event.start as string),
-                end: new Date(event.end as string),
+                start: new Date(event.start),
+                end: new Date(event.end),
             }));
     },
 }
