@@ -1024,10 +1024,10 @@ function DocumentCard({
       link.href = url;
       link.download = doc.fileName ?? doc.title;
       link.click();
-      toast.success('Download started...', {description: doc.title});
+      toast.success('Download started', {description: doc.title});
       } catch(err: unknown){
       const message = err instanceof Error ? err.message : 'No download url available.';
-      toast.error('Download started', {description: message})
+      toast.error('Download failed', {description: message})
     }
   }, [doc]);
 
