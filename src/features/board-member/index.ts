@@ -19,24 +19,6 @@ export {
   ProfilePage,
 } from './pages';
 
-// ── Store helpers ─────────────────────────────────────────────────────────────
-export { CURRENT_USER, uid } from './store';
-
-// ── React hooks ───────────────────────────────────────────────────────────────
-export {
-  useMeetings,
-  useDocuments,
-  useResolutions,
-  useTasks,
-  usePolls,
-  useAnnouncements,
-  useMessages,
-  useNotifications,
-  useProfile,
-  useCompliance,
-  useAnalytics,
-} from './useBoardStore';
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type {
   Meeting,
