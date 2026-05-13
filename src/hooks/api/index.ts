@@ -69,6 +69,34 @@ export {
   AGENDAS_QUERY_KEYS,
 } from './useAgendas';
 
+//Resolution hooks
+export {
+  useResolutions,
+  useResolutionById,
+  useCreateResolution,
+  useUpdateResolution,
+  useDeleteResolution,
+  useCastResolutionVote,
+  resolutionKeys,
+} from './useResolutions';
+
+//messages hooks
+export {
+  useMessageThreads,
+  useMessageThread,
+  useCreateThread,
+  useSendMessage,
+  useMarkThreadRead,
+  messageKeys,
+} from './useMessages';
+
+//compliance hooks
+export {
+  useCompliance,
+  useAcknowledgeCompliance,
+  complianceKeys,
+} from './useCompliance';
+
 // Announcement hooks
 export {
   useAnnouncements,
