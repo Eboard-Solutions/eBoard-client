@@ -7,14 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
+
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
@@ -24,7 +24,8 @@ import {
   Plus, Trash2, Calendar, Clock, MapPin, Users, CheckCircle,
   ChevronRight, Save, Download, ListChecks, Gavel, AlertCircle,
   Eye, ArrowLeft, ArrowRight, Printer, UserCheck, CalendarPlus,
-  FileText, Loader2, AlertTriangle, X, ChevronDown,
+  FileText, Loader2, AlertTriangle, X,
+
 } from 'lucide-react';
 
 import {
@@ -33,34 +34,37 @@ import {
   useAddMinuteItem, useUpdateMinuteItem, useDeleteMinuteItem,
 } from '@/hooks/api/useMinutes';
 import type {
-  Meeting, User, Minutes, MinuteItem, MinuteItemType,
-  CreateMinutesData, CreateMinuteItemData,
-  VotingDetails, ActionItemDetails, ActionItemAssignee,
+  Meeting, User, Minutes, MinuteItemType,
+
+  CreateMinuteItemData,
+
+  ActionItemDetails, ActionItemAssignee,
+
 } from '@/types/api.types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LocalItem {
-  clientId:          string;
-  serverId?:         string;
-  orderIndex:        number;
-  type:              MinuteItemType;
-  title:             string;
-  content:           string;
-  agendaItemId?:     string;
-  timestamp?:        string;
+  clientId:            string;
+  serverId?:           string;
+  orderIndex:          number;
+  type:                MinuteItemType;
+  title:               string;
+  content:             string;
+  agendaItemId?:       string;
+  timestamp?:          string;
   // vote fields
-  voteQuestion?:     string;
-  voteInFavor?:      number;
-  voteAgainst?:      number;
-  voteAbstain?:      number;
+  voteQuestion?:       string;
+  voteInFavor?:        number;
+  voteAgainst?:        number;
+  voteAbstain?:        number;
   // action fields
   actionDescription?:  string;
   actionAssigneeId?:   string;
   actionAssigneeName?: string;
   actionDueDate?:      string;
   actionPriority?:     ActionItemDetails['priority'];
-  isDirty:           boolean;
+  isDirty:             boolean;
 }
 
 interface AttendanceRow { userId: string; present: boolean }
@@ -253,6 +257,11 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
   const existingMinutes: Minutes | null = minutesResponse?.data ?? null;
 
+  const getBackendMinutesId = (m: Minutes | null | undefined): string | undefined => {
+    const mm: any = m;
+    return mm?.minutesId ?? mm?.id;
+  };
+
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMinutes    = useCreateMinutes();
   const updateMinutes    = useUpdateMinutes();
@@ -271,13 +280,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const goNext  = () => !isLast  && setActiveTab(TABS[tabIdx + 1].id);
   const goPrev  = () => !isFirst && setActiveTab(TABS[tabIdx - 1].id);
 
-  // ── Form state ─────────────────────────────────────────────────────────────
-  // ── State (declarations FIRST — never call any setter before its hook
-  // is initialized; doing so triggers a TDZ error in dev. Previously the
-  // sync logic below ran during render and called setItems/setAttendance
-  // before those hooks were declared, which is what produced the
-  // "Cannot access 'setAttendance' before initialization" crash on the
-  // Minutes page.) ──────────────────────────────────────────────────────
+  // ── Form state — ALL useState declarations before any useEffect ────────────
   const [title,               setTitle]               = useState('');
   const [summary,             setSummary]             = useState('');
   const [preparedById,        setPreparedById]        = useState('');
@@ -290,53 +293,121 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const [syncedMinutesId,     setSyncedMinutesId]     = useState<string | null>(null);
   const [syncedMeetingId,     setSyncedMeetingId]     = useState<string | null>(null);
 
-  // ── Sync from existing minutes (effect, not inline-during-render) ────────
-  // Runs only when the user picks a different existing minutes record.
+  // ── Items state — declared here so setItems is available to effects below ──
+  const [items, setItems] = useState<LocalItem[]>([]);
+
+  // ── Attendance ─────────────────────────────────────────────────────────────
+  const [attendance, setAttendance] = useState<AttendanceRow[]>(() =>
+    members.map(u => ({ userId: u.userId, present: false })),
+  );
+
+  // ── Sync trackers ──────────────────────────────────────────────────────────
+  const [syncedMinutesId, setSyncedMinutesId] = useState<string | null>(null);
+  const [syncedMeetingId, setSyncedMeetingId] = useState<string | null>(null);
+
+  // ── Next meeting ───────────────────────────────────────────────────────────
+  const [nextMeeting, setNextMeeting] = useState<NextMeeting>({
+    date: '', time: '', location: '', agendaHighlights: '',
+  });
+
+  // ── Delete targets ─────────────────────────────────────────────────────────
+  const [deleteItemTarget,  setDeleteItemTarget]  = useState<LocalItem | null>(null);
+  const [deleteMinutesOpen, setDeleteMinutesOpen] = useState(false);
+
+  // ── Effect: sync state from existingMinutes ────────────────────────────────
   useEffect(() => {
-    if (!existingMinutes || existingMinutes.id === syncedMinutesId) return;
-    setSyncedMinutesId(existingMinutes.id);
+    if (!existingMinutes) return;
+
+    const nextId: string | undefined = (existingMinutes as any)?.minutesId ?? (existingMinutes as any)?.id;
+    if (!nextId) return;
+
+    // If we're already synced with this exact minutes record, don't thrash state.
+    if (nextId === syncedMinutesId) return;
+
+    setSyncedMinutesId(nextId);
     setTitle(existingMinutes.title ?? '');
     setSummary(existingMinutes.summary ?? '');
     setItems(
-      (existingMinutes.items ?? []).map(i => ({
-        clientId:          i.id,
-        serverId:          i.id,
-        orderIndex:        i.orderIndex,
-        type:              i.type,
-        title:             i.title,
-        content:           i.content,
-        agendaItemId:      i.agendaItemId,
-        timestamp:         i.timestamp,
-        voteQuestion:      i.votingDetails?.question,
-        voteInFavor:       i.votingDetails?.inFavor,
-        voteAgainst:       i.votingDetails?.against,
-        voteAbstain:       i.votingDetails?.abstain,
-        actionDescription: i.actionItemDetails?.description,
-        actionAssigneeId:  i.actionItemDetails?.assignedTo?.[0]?.userId,
-        actionAssigneeName:i.actionItemDetails?.assignedTo?.[0]?.name,
-        actionDueDate:     i.actionItemDetails?.dueDate,
-        actionPriority:    i.actionItemDetails?.priority,
-        isDirty:           false,
-      })),
+      (existingMinutes.items ?? []).map(i => {
+        const anyItem: any = i as any;
+
+        // Backend MinuteItem primary identifier is `itemId` (entity) — not `id`.
+        // Fallbacks are just defensive for response shape differences.
+        const itemId: string =
+          anyItem?.itemId ?? anyItem?.minutesItemId ?? anyItem?.id;
+
+        return {
+          clientId:           itemId,
+          serverId:           itemId,
+          orderIndex:         i.orderIndex,
+          type:               i.type,
+          title:              i.title,
+          content:            i.content,
+          agendaItemId:       (i as any).agendaItemId,
+          timestamp:          (i as any).timestamp,
+          voteQuestion:       (i as any).votingDetails?.question,
+          voteInFavor:        (i as any).votingDetails?.inFavor,
+          voteAgainst:        (i as any).votingDetails?.against,
+          voteAbstain:        (i as any).votingDetails?.abstain,
+          actionDescription:  (i as any).actionItemDetails?.description,
+          actionAssigneeId:   (i as any).actionItemDetails?.assignedTo?.[0]?.userId,
+          actionAssigneeName: (i as any).actionItemDetails?.assignedTo?.[0]?.name,
+          actionDueDate:      (i as any).actionItemDetails?.dueDate,
+          actionPriority:     (i as any).actionItemDetails?.priority,
+          isDirty:            false,
+        };
+      }),
     );
   }, [existingMinutes, syncedMinutesId]);
 
-  // ── Sync from selected meeting (effect) ──────────────────────────────────
-  // Pre-populates the title and attendance roster the first time the user
-  // picks a meeting that doesn't yet have minutes.
+  // ── Effect: when changing the selected meeting, clear local state ──────
   useEffect(() => {
-    if (!selectedMeeting || selectedMeeting.id === syncedMeetingId) return;
-    setSyncedMeetingId(selectedMeeting.id);
-    if (!existingMinutes) {
-      setTitle(selectedMeeting.title ? `${selectedMeeting.title} — Minutes` : '');
-      setAttendance(members.map(u => ({
+    setSyncedMinutesId(null);
+    setSyncedMeetingId(selectedMeetingId || null);
+    setTitle('');
+    setSummary('');
+    setItems([]);
+    setPreparedById('');
+    setApprovedById('');
+    setApprovalOfPrevious('');
+    setDeleteItemTarget(null);
+    setDeleteMinutesOpen(false);
+
+    setAttendance(members.map(u => ({ userId: u.userId, present: false })));
+    setActiveTab('details');
+  }, [selectedMeetingId, members]);
+
+  // ── Effect: sync state from selectedMeeting (only when no minutes yet) ─────
+  useEffect(() => {
+    if (!selectedMeeting) return;
+    if (existingMinutes) return;
+
+    setTitle(selectedMeeting.title ? `${selectedMeeting.title} — Minutes` : '');
+    setAttendance(
+      members.map(u => ({
         userId:  u.userId,
         present: (selectedMeeting.attendees ?? []).some(a => a.userId === u.userId),
-      })));
-    }
-  }, [selectedMeeting, syncedMeetingId, existingMinutes, members]);
+      })),
+    );
+  }, [selectedMeeting, existingMinutes, members]);
 
-  // ── Item helpers ────────────────────────────────────────────────────────
+  // ── Derived attendance ─────────────────────────────────────────────────────
+  const fullAttendance: AttendanceRow[] = members.map(u => {
+    const row = attendance.find(a => a.userId === u.userId);
+    return row ?? { userId: u.userId, present: false };
+  });
+
+  const togglePresent = (userId: string) =>
+    setAttendance(prev => {
+      const exists = prev.find(a => a.userId === userId);
+      if (exists) return prev.map(a => a.userId === userId ? { ...a, present: !a.present } : a);
+      return [...prev, { userId, present: true }];
+    });
+
+  const presentCount = fullAttendance.filter(a =>  a.present).length;
+  const absentCount  = fullAttendance.filter(a => !a.present).length;
+
+  // ── Item helpers ───────────────────────────────────────────────────────────
   function addItem(type: MinuteItemType = 'general') {
     setItems(p => [...p, {
       clientId: `mi-${Date.now()}`, orderIndex: p.length,
@@ -361,88 +432,16 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const decisionItems = items.filter(i => i.type === 'decision' || i.type === 'vote');
   const actionItems   = items.filter(i => i.type === 'action_item');
 
-  // ── Attendance ─────────────────────────────────────────────────────────────
-
-  const fullAttendance: AttendanceRow[] = members.map(u => {
-    const row = attendance.find(a => a.userId === u.userId);
-    return row ?? { userId: u.userId, present: false };
-  });
-
-  const togglePresent = (userId: string) =>
-    setAttendance(prev => {
-      const exists = prev.find(a => a.userId === userId);
-      if (exists) return prev.map(a => a.userId === userId ? { ...a, present: !a.present } : a);
-      return [...prev, { userId, present: true }];
-    });
-
-  const presentCount = fullAttendance.filter(a =>  a.present).length;
-  const absentCount  = fullAttendance.filter(a => !a.present).length;
-
-  // ── Next meeting ───────────────────────────────────────────────────────────
-  const [nextMeeting, setNextMeeting] = useState<NextMeeting>({
-    date: '', time: '', location: '', agendaHighlights: '',
-  });
-
-  // ── Delete targets ─────────────────────────────────────────────────────────
-  const [deleteItemTarget,   setDeleteItemTarget]   = useState<LocalItem | null>(null);
-  const [deleteMinutesOpen,  setDeleteMinutesOpen]  = useState(false);
-
   const hasDirty = items.some(i => i.isDirty);
   const isSaving = createMinutes.isPending || updateMinutes.isPending ||
     addItemMut.isPending || updateItemMut.isPending;
 
-  // ── Save ───────────────────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
-    if (!title.trim())     { toast.error('Please enter a minutes title'); return; }
-    if (!summary.trim())   { toast.error('Please enter a summary'); return; }
-    if (!selectedMeetingId){ toast.error('Please select a meeting first'); return; }
-
-    try {
-      let minutesId = existingMinutes?.id;
-
-      if (!minutesId) {
-        const created = await createMinutes.mutateAsync({
-          title:    title.trim(),
-          summary:  summary.trim(),
-          meetingId: selectedMeetingId,
-        });
-        minutesId = created.data?.id ?? (created as any).id;
-        toast.success('Minutes created');
-      } else {
-        await updateMinutes.mutateAsync({
-          minutesId,
-          data: { title: title.trim(), summary: summary.trim() },
-        });
-      }
-
-      // Save dirty items
-      const dirtyItems = items.filter(i => i.isDirty);
-      for (const item of dirtyItems) {
-        const payload = buildItemPayload(item);
-        if (item.serverId) {
-          await updateItemMut.mutateAsync({ minutesId: minutesId!, itemId: item.serverId, data: payload });
-        } else {
-          const created = await addItemMut.mutateAsync({ minutesId: minutesId!, data: payload });
-          const newId = created.data?.id ?? (created as any).id;
-          setItems(p => p.map(i => i.clientId === item.clientId ? { ...i, serverId: newId, isDirty: false } : i));
-        }
-      }
-
-      setItems(p => p.map(i => ({ ...i, isDirty: false })));
-      toast.success('Minutes saved successfully');
-      refetchMinutes();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to save minutes');
-    }
-  }, [title, summary, selectedMeetingId, existingMinutes, items,
-      createMinutes, updateMinutes, addItemMut, updateItemMut, refetchMinutes]);
-
-  function buildItemPayload(item: LocalItem): CreateMinuteItemData {
+  const buildItemPayload = useCallback((item: LocalItem): CreateMinuteItemData => {
     const base: CreateMinuteItemData = {
-      orderIndex: item.orderIndex,
-      type:       item.type,
-      title:      item.title,
-      content:    item.content,
+      orderIndex:   item.orderIndex,
+      type:         item.type,
+      title:        item.title,
+      content:      item.content,
       agendaItemId: item.agendaItemId,
       timestamp:    item.timestamp,
     };
@@ -466,13 +465,87 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
       };
     }
     return base;
-  }
+  }, []);
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    if (!title.trim())      { toast.error('Please enter a minutes title'); return; }
+    if (!summary.trim())    { toast.error('Please enter a summary'); return; }
+    if (!selectedMeetingId) { toast.error('Please select a meeting first'); return; }
+
+    try {
+      let minutesId = getBackendMinutesId(existingMinutes);
+
+      if (!minutesId) {
+        const created = await createMinutes.mutateAsync({
+          title:     title.trim(),
+          summary:   summary.trim(),
+          meetingId: selectedMeetingId,
+        });
+        const createdAny: any = created?.data ?? created;
+        minutesId =
+          createdAny?.minutesId ??
+          createdAny?.id;
+        toast.success('Minutes created');
+      } else {
+        await updateMinutes.mutateAsync({
+          minutesId,
+          data: { title: title.trim(), summary: summary.trim() },
+        });
+      }
+
+      // Save dirty items
+      const dirtyItems = items.filter(i => i.isDirty);
+      for (const item of dirtyItems) {
+        const payload = buildItemPayload(item);
+
+        if (item.serverId) {
+          await updateItemMut.mutateAsync({
+            minutesId: minutesId!,
+            itemId: item.serverId,
+            data: payload,
+          });
+        } else {
+          const created = await addItemMut.mutateAsync({
+            minutesId: minutesId!,
+            data: payload,
+          });
+
+          const createdAny: any = created?.data ?? created;
+          const newId =
+            createdAny?.minutesItemId ??
+            createdAny?.itemId ??
+            createdAny?.id;
+
+          setItems(p =>
+            p.map(i =>
+              i.clientId === item.clientId
+                ? { ...i, serverId: newId, isDirty: false }
+                : i,
+            ),
+          );
+        }
+      }
+
+      setItems(p => p.map(i => ({ ...i, isDirty: false })));
+      toast.success('Minutes saved successfully');
+      refetchMinutes();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to save minutes');
+    }
+  }, [title, summary, selectedMeetingId, existingMinutes, items,
+      createMinutes, updateMinutes, addItemMut, updateItemMut, refetchMinutes]);
 
   const handleDeleteItem = async () => {
     if (!deleteItemTarget) return;
-    if (deleteItemTarget.serverId && existingMinutes?.id) {
+
+    const backendMinutesId = getBackendMinutesId(existingMinutes);
+    if (deleteItemTarget.serverId && backendMinutesId) {
       try {
-        await deleteItemMut.mutateAsync({ minutesId: existingMinutes.id, itemId: deleteItemTarget.serverId });
+        await deleteItemMut.mutateAsync({
+          minutesId: backendMinutesId,
+          itemId: deleteItemTarget.serverId,
+        });
         toast.success('Item removed');
       } catch (err: any) {
         toast.error(err?.message ?? 'Failed to remove item');
@@ -480,14 +553,17 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
         return;
       }
     }
+
     setItems(p => p.filter(i => i.clientId !== deleteItemTarget.clientId));
     setDeleteItemTarget(null);
   };
 
   const handleDeleteMinutes = async () => {
-    if (!existingMinutes?.id) return;
+    const backendMinutesId = getBackendMinutesId(existingMinutes);
+    if (!backendMinutesId) return;
+
     try {
-      await deleteMinutesMut.mutateAsync(existingMinutes.id);
+      await deleteMinutesMut.mutateAsync(backendMinutesId);
       toast.success('Minutes deleted');
       setDeleteMinutesOpen(false);
       setItems([]);
@@ -499,9 +575,14 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   };
 
   const handlePublish = async () => {
-    if (!existingMinutes?.id) { toast.error('Save minutes first before publishing'); return; }
+    const backendMinutesId = getBackendMinutesId(existingMinutes);
+    if (!backendMinutesId) {
+      toast.error('Save minutes first before publishing');
+      return;
+    }
+
     try {
-      await publishMinutes.mutateAsync(existingMinutes.id);
+      await publishMinutes.mutateAsync(backendMinutesId);
       toast.success('Minutes published');
       refetchMinutes();
     } catch (err: any) {
@@ -510,9 +591,14 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   };
 
   const handleSubmitReview = async () => {
-    if (!existingMinutes?.id) { toast.error('Save minutes first'); return; }
+    const backendMinutesId = getBackendMinutesId(existingMinutes);
+    if (!backendMinutesId) {
+      toast.error('Save minutes first');
+      return;
+    }
+
     try {
-      await submitReview.mutateAsync(existingMinutes.id);
+      await submitReview.mutateAsync(backendMinutesId);
       toast.success('Submitted for review');
       refetchMinutes();
     } catch (err: any) {
@@ -596,7 +682,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
                     <SelectItem value="_none" disabled>No meetings available</SelectItem>
                   ) : (
                     meetings.map(m => {
-                      const mId = (m as any).meetingId ?? (m as any).id ?? '';
+                      const mId   = (m as any).meetingId ?? (m as any).id ?? '';
                       const mDate = (m as any).scheduledDate ?? m.date;
                       return (
                         <SelectItem key={mId || m.title} value={mId}>
@@ -1070,10 +1156,10 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
                 <CardContent className="px-5 py-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {([
-                      { label: 'Date',              type: 'date', key: 'date'              as keyof NextMeeting, ph: '' },
-                      { label: 'Time',              type: 'time', key: 'time'              as keyof NextMeeting, ph: '' },
-                      { label: 'Location',          type: 'text', key: 'location'          as keyof NextMeeting, ph: 'Conference Room or Zoom' },
-                      { label: 'Agenda Highlights', type: 'text', key: 'agendaHighlights'  as keyof NextMeeting, ph: 'Brief overview' },
+                      { label: 'Date',              type: 'date', key: 'date'             as keyof NextMeeting, ph: '' },
+                      { label: 'Time',              type: 'time', key: 'time'             as keyof NextMeeting, ph: '' },
+                      { label: 'Location',          type: 'text', key: 'location'         as keyof NextMeeting, ph: 'Conference Room or Zoom' },
+                      { label: 'Agenda Highlights', type: 'text', key: 'agendaHighlights' as keyof NextMeeting, ph: 'Brief overview' },
                     ]).map(({ label, type, key, ph }) => (
                       <div key={key}>
                         <label className={lbl}>{label}</label>
