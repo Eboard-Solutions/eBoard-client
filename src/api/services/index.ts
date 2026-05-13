@@ -15,6 +15,9 @@ export { default as TasksService } from './tasks.service';
 export { default as SettingsService } from './settings.service';
 export { default as OverviewService } from './overview.service';
 export { default as OrganisationsService } from './organisations.service';
+export { default as resolutionsService } from './resolutions.service';
+export { default as messagesService } from './messages.service';
+export { default as complianceService } from './compliance.service';
 
 // Re-export the API client for direct access if needed
 export { default as apiClient, TokenService } from '../client';
