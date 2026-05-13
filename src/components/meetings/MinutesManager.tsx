@@ -280,7 +280,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const goNext  = () => !isLast  && setActiveTab(TABS[tabIdx + 1].id);
   const goPrev  = () => !isFirst && setActiveTab(TABS[tabIdx - 1].id);
 
-  // ── Form state — ALL useState declarations before any useEffect ────────────
+   // ── Form state — ALL useState declarations before any useEffect ────────────
   const [title,               setTitle]               = useState('');
   const [summary,             setSummary]             = useState('');
   const [preparedById,        setPreparedById]        = useState('');
@@ -293,19 +293,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const [syncedMinutesId,     setSyncedMinutesId]     = useState<string | null>(null);
   const [syncedMeetingId,     setSyncedMeetingId]     = useState<string | null>(null);
 
-  // ── Items state — declared here so setItems is available to effects below ──
-  const [items, setItems] = useState<LocalItem[]>([]);
-
-  // ── Attendance ─────────────────────────────────────────────────────────────
-  const [attendance, setAttendance] = useState<AttendanceRow[]>(() =>
-    members.map(u => ({ userId: u.userId, present: false })),
-  );
-
-  // ── Sync trackers ──────────────────────────────────────────────────────────
-  const [syncedMinutesId, setSyncedMinutesId] = useState<string | null>(null);
-  const [syncedMeetingId, setSyncedMeetingId] = useState<string | null>(null);
-
-  // ── Next meeting ───────────────────────────────────────────────────────────
+  // ── Next meeting ──────────────────────────────────────────────────────────
   const [nextMeeting, setNextMeeting] = useState<NextMeeting>({
     date: '', time: '', location: '', agendaHighlights: '',
   });
