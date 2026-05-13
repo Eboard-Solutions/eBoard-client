@@ -1,3 +1,4 @@
+// src/lib/permissions.ts
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiClient } from '@/api/client';
 import { TokenService } from '@/lib/auth';
@@ -68,7 +69,7 @@ function normalizeRole(raw: string): string {
   if (ROLE_ALIAS_MAP[trimmed]) return ROLE_ALIAS_MAP[trimmed];
   const lower = trimmed.toLowerCase();
   if (ROLE_ALIAS_MAP[lower]) return ROLE_ALIAS_MAP[lower];
-  const stripped = lower.replace(/[_-\s]/g, '');
+  const stripped = lower.replace(/[_\-\s]/g, '');
   if (ROLE_ALIAS_MAP[stripped]) return ROLE_ALIAS_MAP[stripped];
   return lower;
 }
@@ -103,7 +104,12 @@ function classifyError(err: unknown, status?: number): { message: string; kind: 
   if (status !== undefined && status >= 500)
     return { message: 'The server is temporarily unavailable. Using cached session.', kind: 'server_error' };
   const msg = err instanceof Error ? err.message : String(err ?? '');
-  if (err instanceof TypeError || msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Network Error'))
+  if (
+    err instanceof TypeError ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    msg.includes('Network Error')
+  )
     return { message: 'Cannot reach the server. Check your connection.', kind: 'unreachable' };
   return { message: msg || 'Authentication check failed.', kind: 'unknown' };
 }
@@ -139,12 +145,61 @@ function readCachedUser(): AuthenticatedUser | null {
       role:               String(payload.role ?? ''),
       hasOrganisation:    Boolean(payload.hasOrganisation ?? false),
       organisationStatus: payload.organisationStatus ?? null,
-      orgCode:            payload.orgCode ?? payload.organisationId ?? null,
+      orgCode:            payload.orgCode ?? null,
       organisationId:     payload.organisationId ?? null,
     };
   } catch {
     return null;
   }
+}
+
+// ─── Module-level singleton to prevent duplicate /auth/me calls ───────────────
+//
+// ROOT CAUSE of 4x /auth/me per page load:
+// usePermissions() uses raw useState/useEffect. Every component that calls it
+// mounts its own independent effect and fires a separate /auth/me request.
+// With Dashboard (3 role-specific sub-components) + Layout, that's 4 mounts.
+//
+// FIX: Cache the in-flight promise at module level. All hook instances that
+// call loadUser() within the same tick share one request. Resolved within
+// 30s so a manual refresh() always re-fetches.
+
+let _inflightPromise: Promise<AuthenticatedUser | null> | null = null;
+let _inflightResolvedAt = 0;
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+function fetchMeOnce(): Promise<AuthenticatedUser | null> {
+  const now = Date.now();
+
+  // Return cached promise if it's still fresh
+  if (_inflightPromise && now - _inflightResolvedAt < CACHE_TTL_MS) {
+    return _inflightPromise;
+  }
+
+  _inflightPromise = (async () => {
+    const token = TokenService.getAccessToken();
+    if (!token) return null;
+
+    try {
+      const response = await apiClient.get<{ data: AuthenticatedUser }>('/auth/me');
+      const data = (response.data as Record<string, unknown>).data ?? response.data;
+      TokenService.setUser(data as AuthenticatedUser);
+      _inflightResolvedAt = Date.now();
+      return data as AuthenticatedUser;
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        TokenService.clearTokens();
+        _inflightPromise = null;
+        return null;
+      }
+      // Network / 5xx — fall back to cache
+      _inflightResolvedAt = Date.now();
+      return readCachedUser();
+    }
+  })();
+
+  return _inflightPromise;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -163,17 +218,27 @@ interface UsePermissionsResult {
 }
 
 export function usePermissions(): UsePermissionsResult {
-  const [user,      setUser]      = useState<AuthenticatedUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialise synchronously from cache so the very first render already
+  // knows the role — this eliminates the "all flags false for one frame" bug
+  // that caused canManage to be false and showed the wrong screen briefly.
+  const cachedInitial = readCachedUser();
+  const [user,      setUser]      = useState<AuthenticatedUser | null>(() => cachedInitial);
+  // PERF FIX: if we have a cached user, treat as "loaded" immediately and
+  // revalidate in the background. Previously isLoading was always `true` on
+  // first render, which gated downstream queries (e.g. useMyOrganisation) and
+  // forced a sequential /auth/me → /organisations/my-organisation chain.
+  const [isLoading, setIsLoading] = useState(!cachedInitial);
   const [error,     setError]     = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ErrorKind>(null);
 
-  const loadUser = useCallback(async () => {
-    setIsLoading(true);
+  const loadUser = useCallback(async (forceRefresh = false) => {
+    const hadCache = !!readCachedUser();
+    // Only show the loader when we have nothing to show. Background revalidate
+    // for cached users keeps the UI snappy.
+    if (!hadCache || forceRefresh) setIsLoading(true);
     setError(null);
     setErrorKind(null);
 
-    // Not logged in
     const token = TokenService.getAccessToken();
     if (!token) {
       setUser(null);
@@ -181,48 +246,34 @@ export function usePermissions(): UsePermissionsResult {
       return;
     }
 
-    let status: number | undefined;
+    // Force refresh: bust the module-level cache
+    if (forceRefresh) {
+      _inflightPromise = null;
+      _inflightResolvedAt = 0;
+    }
 
     try {
-      // KEY FIX: use apiClient (Axios) instead of raw fetch.
-      // Raw fetch('/api/v1/auth/me') is a RELATIVE URL that hits the Vite
-      // dev server (localhost:3001), not the backend (localhost:3000).
-      // apiClient uses API_CONFIG.BASE_URL which resolves to VITE_API_URL
-      // (localhost:3000) and automatically attaches the Bearer token via
-      // the request interceptor.
-      const response = await apiClient.get<{ data: AuthenticatedUser }>('/auth/me');
-      const data = response.data.data ?? response.data;
-      setUser(data as AuthenticatedUser);
-      // Keep localStorage in sync with fresh data
-      TokenService.setUser(data);
-      setError(null);
-      setErrorKind(null);
-
-    } catch (err: any) {
-      status = err?.response?.status;
-
-      if (status === 401 || status === 403) {
-        // Genuine auth failure — apiClient interceptor already handles
-        // token refresh for 401. If we still get here, the session is dead.
-        TokenService.clearTokens();
-        const { message, kind } = classifyError(err, status);
-        setUser(null);
-        setError(message);
-        setErrorKind(kind);
-        setIsLoading(false);
-        return;
+      const data = await fetchMeOnce();
+      setUser(data);
+      if (!data) {
+        setError('Your session has expired. Please sign in again.');
+        setErrorKind('invalid_token');
       }
-
-      // 5xx or network error — fall back to cached user so UI keeps working
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
       const { message, kind } = classifyError(err, status);
-      const cached = readCachedUser();
-      setUser(cached);
       setError(message);
       setErrorKind(kind);
+      setUser(readCachedUser());
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  // Expose a refresh that always busts the cache and re-fetches
+  const refresh = useCallback(async () => {
+    await loadUser(true);
+  }, [loadUser]);
 
   useEffect(() => { void loadUser(); }, [loadUser]);
 
@@ -236,7 +287,7 @@ export function usePermissions(): UsePermissionsResult {
 
   const currentorganisationId = useMemo((): string | null => {
     if (!user) return null;
-    return user.orgCode ?? user.organisationId ?? user.orgId ?? null;
+    return user.organisationId ?? user.orgId ?? user.orgCode ?? null;
   }, [user]);
 
   const can = useCallback(
@@ -259,6 +310,6 @@ export function usePermissions(): UsePermissionsResult {
     isLoading,
     authError:             error,
     authErrorKind:         errorKind,
-    refresh:               loadUser,
+    refresh,
   };
 }

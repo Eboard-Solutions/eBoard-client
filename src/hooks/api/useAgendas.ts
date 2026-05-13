@@ -1,5 +1,5 @@
 // src/hooks/api/useAgendas.ts
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agendasService, type FetchAgendasParams } from '@/api/services/agendas.service';
 import type {
   CreateAgendaData,
@@ -24,6 +24,8 @@ export function useAgendas(params?: FetchAgendasParams) {
     queryKey: AGENDAS_QUERY_KEYS.list(params),
     queryFn:  () => agendasService.getAgendas(params),
     staleTime: 2 * 60 * 1000,
+    gcTime:    10 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -59,8 +61,13 @@ export function useAgendaByMeeting(meetingId: string) {
       if (status === 404 || status === 403) return false;
       return failureCount < 1; // allow one retry for genuine network errors
     },
-    // Treat null (no agenda) the same as stale data — no need to refetch constantly
-    staleTime: 30 * 1000,
+    // Keep showing the previous meeting's agenda while the next one loads,
+    // so flipping between meetings doesn't blank the panel back to a spinner.
+    placeholderData: keepPreviousData,
+    // Treat null (no agenda) the same as stale data — no need to refetch constantly.
+    // Longer stale window means revisiting a meeting we already loaded is instant.
+    staleTime: 60 * 1000,
+    gcTime:    10 * 60 * 1000,
   });
 }
 

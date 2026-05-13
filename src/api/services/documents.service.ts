@@ -76,7 +76,30 @@ export const documentsService = {
     }
   },
 
-  async createDocument(data: CreateDocumentData): Promise<ResponseObject<Document>> {
+  async getDownloadurl(id: string): Promise<string> {
+    if (!id?.trim()) throw new Error('Document ID is required.');
+    const documentId = id.trim();
+
+    try {
+      const res = await apiClient.get<ResponseObject<{ url: string }>>(
+        ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(documentId)
+      );
+
+      const downloadUrl = res.data.data?.url;
+      if (!downloadUrl) {
+        throw new Error('Download URL is unavailable.');
+      }
+
+      return downloadUrl;
+    } catch (error) {
+      throw normaliseError(error, `Failed to fetch download URL for document (ID: ${documentId}).`);
+    }
+  },
+
+  async createDocument(
+    data: CreateDocumentData,
+    onProgress?: (percent: number) => void,
+  ): Promise<ResponseObject<Document>> {
     if (!data.file) throw new Error('A file is required to upload a document.');
     if (!data.title?.trim()) throw new Error('Document title is required.');
     validateFile(data.file);
@@ -100,10 +123,24 @@ export const documentsService = {
       formData.append('file', data.file);
       formData.append('document', JSON.stringify(documentMetadata));
 
+      // 90s timeout for uploads — global is 30s, but a 10 MB file on a slow
+      // connection legitimately needs more. Browsers will still abort if the
+      // socket actually dies. onUploadProgress streams percent back so the
+      // dialog can show a real progress bar instead of an indefinite spinner.
       const response = await apiClient.post<ResponseObject<Document>>(
         ENDPOINTS.DOCUMENTS.CREATE,
         formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90_000,
+          onUploadProgress: (e) => {
+            if (!onProgress) return;
+            const total = e.total ?? data.file?.size ?? 0;
+            if (!total) return;
+            const pct = Math.min(100, Math.round((e.loaded / total) * 100));
+            onProgress(pct);
+          },
+        },
       );
       return response.data;
     } catch (error) {

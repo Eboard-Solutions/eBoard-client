@@ -47,8 +47,12 @@ export const agendasService = {
    */
   async getAgendaByMeetingId(meetingId: string): Promise<Agenda | null> {
     try {
+      // Tighter per-call timeout: a missing agenda should fall through quickly
+      // rather than wait the full 30s default. Backend usually answers in <1s,
+      // so 12s is a generous upper bound that still feels snappy on slow links.
       const response = await apiClient.get<ResponseObject<Agenda>>(
-          ENDPOINTS.AGENDAS.BY_MEETING(meetingId)
+          ENDPOINTS.AGENDAS.BY_MEETING(meetingId),
+          { timeout: 12_000 }
       );
       return response.data.data || null;
     } catch (error: unknown) {
@@ -64,11 +68,18 @@ export const agendasService = {
 
   /**
    * Create a new agenda
+   *
+   * Generous 60s timeout: agenda creation can fan out to notifications,
+   * audit logs, and pre-read attachment seeding on the backend, and the
+   * default 30s was being tripped on first-create when the worker pool
+   * was cold. The user sees "timeout of 30000ms exceeded" on a save that
+   * actually succeeded server-side — a confusing failure mode worth avoiding.
    */
   async createAgenda(data: CreateAgendaData): Promise<Agenda> {
     const response = await apiClient.post<ResponseObject<Agenda>>(
         ENDPOINTS.AGENDAS.BASE,
-        data
+        data,
+        { timeout: 60_000 }
     );
     return response.data.data!;
   },
@@ -79,7 +90,8 @@ export const agendasService = {
   async updateAgenda(agendaId: string, data: UpdateAgendaData): Promise<Agenda> {
     const response = await apiClient.patch<ResponseObject<Agenda>>(
         ENDPOINTS.AGENDAS.BY_ID(agendaId),
-        data
+        data,
+        { timeout: 60_000 }
     );
     return response.data.data!;
   },
@@ -119,7 +131,8 @@ export const agendasService = {
   async addItem(agendaId: string, data: CreateAgendaItemData): Promise<AgendaItem> {
     const response = await apiClient.post<ResponseObject<AgendaItem>>(
         ENDPOINTS.AGENDAS.ITEMS.ADD(agendaId),
-        data
+        data,
+        { timeout: 45_000 }
     );
     return response.data.data!;
   },
@@ -134,7 +147,8 @@ export const agendasService = {
   ): Promise<AgendaItem> {
     const response = await apiClient.patch<ResponseObject<AgendaItem>>(
         ENDPOINTS.AGENDAS.ITEMS.UPDATE(agendaId, itemId),
-        data
+        data,
+        { timeout: 45_000 }
     );
     return response.data.data!;
   },

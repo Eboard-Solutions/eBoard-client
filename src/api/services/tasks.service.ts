@@ -17,19 +17,25 @@ function stripEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
 
 export const TasksService = {
   async getAll(filters?: TaskFilters): Promise<ResponseObject<Task[]>> {
-    const response = await apiClient.get<ResponseObject<Task[]>>(ENDPOINTS.TASKS.BASE, { params: filters });
+    const response = await apiClient.get<ResponseObject<Task[]>>(
+      ENDPOINTS.TASKS.BASE, { params: filters, timeout: 20_000 }
+    );
     return response.data;
   },
 
   async getById(id: string): Promise<ResponseObject<Task>> {
-    const response = await apiClient.get<ResponseObject<Task>>(ENDPOINTS.TASKS.BY_ID(id));
+    const response = await apiClient.get<ResponseObject<Task>>(
+      ENDPOINTS.TASKS.BY_ID(id), { timeout: 15_000 }
+    );
     return response.data;
   },
 
+  // Mutations get a generous 60s ceiling. The default 30s was tripping
+  // because task writes fan out to notifications + cache invalidation on
+  // the backend; the save itself succeeds but the response misses the
+  // axios deadline, surfacing as a misleading "timeout of 30000ms exceeded"
+  // even though the row was already updated in the DB.
   async create(data: CreateTaskData): Promise<ResponseObject<Task>> {
-    // Required by DTO: title, assigneeId, dueDate (number)
-    // Optional (backend defaults): status → TODO, priority → MEDIUM
-    // Excluded: createdBy → set by backend from JWT
     const payload: Record<string, unknown> = {
       title:      data.title.trim(),
       assigneeId: data.assigneeId,
@@ -41,32 +47,41 @@ export const TasksService = {
     if (data.description?.trim()) payload.description = data.description.trim();
     if (data.meetingId)           payload.meetingId   = data.meetingId;
 
-    const response = await apiClient.post<ResponseObject<Task>>(ENDPOINTS.TASKS.CREATE, payload);
+    const response = await apiClient.post<ResponseObject<Task>>(
+      ENDPOINTS.TASKS.CREATE, payload, { timeout: 60_000 }
+    );
     return response.data;
   },
 
   async update(id: string, data: UpdateTaskData): Promise<ResponseObject<Task>> {
     const payload = stripEmpty(data as Record<string, unknown>);
     if (payload.dueDate !== undefined) payload.dueDate = Number(payload.dueDate);
-    const response = await apiClient.patch<ResponseObject<Task>>(ENDPOINTS.TASKS.UPDATE(id), payload);
+    const response = await apiClient.patch<ResponseObject<Task>>(
+      ENDPOINTS.TASKS.UPDATE(id), payload, { timeout: 60_000 }
+    );
     return response.data;
   },
 
   async complete(id: string): Promise<ResponseObject<Task>> {
-    const response = await apiClient.patch<ResponseObject<Task>>(ENDPOINTS.TASKS.UPDATE(id), {
-      status:      'COMPLETED',
-      completedAt: Date.now(),
-    });
+    const response = await apiClient.patch<ResponseObject<Task>>(
+      ENDPOINTS.TASKS.UPDATE(id),
+      { status: 'COMPLETED', completedAt: Date.now() },
+      { timeout: 60_000 },
+    );
     return response.data;
   },
 
   async delete(id: string): Promise<ResponseObject<Task>> {
-    const response = await apiClient.delete<ResponseObject<Task>>(ENDPOINTS.TASKS.DELETE(id));
+    const response = await apiClient.delete<ResponseObject<Task>>(
+      ENDPOINTS.TASKS.DELETE(id), { timeout: 30_000 }
+    );
     return response.data;
   },
 
   async bulkDelete(ids: string[]): Promise<ResponseObject<Task[]>> {
-    const response = await apiClient.post<ResponseObject<Task[]>>(ENDPOINTS.TASKS.BULK_DELETE, { ids });
+    const response = await apiClient.post<ResponseObject<Task[]>>(
+      ENDPOINTS.TASKS.BULK_DELETE, { ids }, { timeout: 60_000 }
+    );
     return response.data;
   },
 };

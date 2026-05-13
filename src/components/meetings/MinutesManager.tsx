@@ -110,7 +110,7 @@ function StepStrip({ activeTab, tabIdx, onTabChange, onPrev, onNext, isFirst, is
   onPrev: () => void; onNext: () => void; isFirst: boolean; isLast: boolean;
 }) {
   return (
-    <Card className="border border-border/50 shadow-sm">
+    <Card className="mm-card border-0 shadow-none p-0">
       <CardContent className="p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 overflow-x-auto">
@@ -120,7 +120,8 @@ function StepStrip({ activeTab, tabIdx, onTabChange, onPrev, onNext, isFirst, is
               return (
                 <div key={id} className="flex items-center">
                   <button onClick={() => onTabChange(id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                    data-active={isActive}
+                    className={`mm-step-pill flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                       isActive      ? 'bg-primary text-primary-foreground shadow-sm'
                       : isCompleted ? 'text-foreground hover:bg-muted'
                       :               'text-muted-foreground hover:bg-muted'
@@ -164,7 +165,81 @@ export interface MinutesManagerProps {
   members?:  User[];
 }
 
+// ─── Scoped style layer (injected once) ────────────────────────────────────
+// Adds a calm, premium light-mode polish without rewriting every Card. Only
+// targets elements with the `mm-*` classes added below — won't affect the
+// rest of the app.
+const MM_STYLES = `
+@keyframes mm-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.mm-fade-up { animation: mm-fade-up 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* Card surface — softer shadow + subtle inner highlight in light mode */
+.mm-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 14px;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+:root:not(.dark) .mm-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border-color: hsl(220 22% 90%);
+  box-shadow:
+    0 1px 0 hsl(220 30% 100% / 0.7) inset,
+    0 1px 2px hsl(220 40% 30% / 0.04);
+}
+:root:not(.dark) .mm-card:hover {
+  border-color: hsl(220 22% 84%);
+  box-shadow:
+    0 1px 0 hsl(220 30% 100% / 0.8) inset,
+    0 8px 24px -12px hsl(232 60% 30% / 0.10);
+}
+
+/* Step-strip pill */
+:root:not(.dark) .mm-step-pill[data-active="true"] {
+  background: linear-gradient(135deg, hsl(239 84% 60%), hsl(217 91% 60%));
+  color: white;
+  box-shadow: 0 4px 12px -4px hsl(239 84% 60% / 0.4);
+}
+
+/* Light-mode ambient backdrop */
+:root:not(.dark) .mm-root::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(800px 460px at 12% -10%, hsl(239 90% 70% / 0.07), transparent 60%),
+    radial-gradient(680px 400px at 96% 0%,  hsl(217 90% 65% / 0.06), transparent 60%);
+}
+
+/* Header gradient title (matches Members / Organisation) */
+.mm-grad-title {
+  background: linear-gradient(128deg, hsl(var(--foreground)) 0%, hsl(var(--foreground)/0.6) 50%, hsl(var(--primary)) 80%, hsl(var(--foreground)) 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Status badge polish */
+:root:not(.dark) .mm-status-published { background: linear-gradient(180deg, hsl(142 70% 96%), hsl(142 60% 92%)); border-color: hsl(142 50% 80%); color: hsl(142 70% 28%); }
+:root:not(.dark) .mm-status-approved  { background: linear-gradient(180deg, hsl(217 100% 97%), hsl(217 90% 93%)); border-color: hsl(217 80% 80%); color: hsl(217 80% 32%); }
+:root:not(.dark) .mm-status-review    { background: linear-gradient(180deg, hsl(38 100% 96%), hsl(38 90% 92%));  border-color: hsl(38 80% 78%);  color: hsl(38 90% 32%); }
+:root:not(.dark) .mm-status-draft     { background: linear-gradient(180deg, hsl(220 20% 96%), hsl(220 18% 92%)); border-color: hsl(220 18% 82%); color: hsl(220 15% 32%); }
+
+@media (prefers-reduced-motion: reduce) { .mm-fade-up { animation: none !important; } }
+`;
+
+function useMmStyleInject() {
+  useEffect(() => {
+    const id = 'mm-polish-styles';
+    if (typeof document === 'undefined' || document.getElementById(id)) return;
+    const s = document.createElement('style');
+    s.id = id; s.textContent = MM_STYLES;
+    document.head.appendChild(s);
+  }, []);
+}
+
 export function MinutesManager({ meetings = [], members = [] }: MinutesManagerProps) {
+  useMmStyleInject();
 
   // ── Meeting selector ───────────────────────────────────────────────────────
   const [selectedMeetingId, setSelectedMeetingId] = useState<string>('');
@@ -211,6 +286,12 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const [preparedById,        setPreparedById]        = useState('');
   const [approvedById,        setApprovedById]        = useState('');
   const [approvalOfPrevious,  setApprovalOfPrevious]  = useState('');
+  const [items,               setItems]               = useState<LocalItem[]>([]);
+  const [attendance,          setAttendance]          = useState<AttendanceRow[]>(() =>
+    members.map(u => ({ userId: u.userId, present: false })),
+  );
+  const [syncedMinutesId,     setSyncedMinutesId]     = useState<string | null>(null);
+  const [syncedMeetingId,     setSyncedMeetingId]     = useState<string | null>(null);
 
   // ── Items state — declared here so setItems is available to effects below ──
   const [items, setItems] = useState<LocalItem[]>([]);
@@ -530,52 +611,64 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
+    <div className="mm-root space-y-5 antialiased">
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Meeting Minutes</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Create and manage meeting minutes</p>
+      {/* Header — gradient logo tile + shimmer title to match Members / Organisation */}
+      <div className="mm-fade-up flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3.5 min-w-0">
+          <div className="relative h-11 w-11 shrink-0 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/25 ring-1 ring-white/15">
+            <FileText className="h-5 w-5 text-white drop-shadow-sm" strokeWidth={2.25} />
+            <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="mm-grad-title text-xl sm:text-[1.45rem] font-bold tracking-tight leading-tight">
+              Meeting Minutes
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+              Capture decisions, attendance and action items for each meeting.
+            </p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           {existingMinutes && (
             <>
               {existingMinutes.status === 'draft' || existingMinutes.status === 'in_progress' ? (
-                <Button variant="outline" className="rounded-xl gap-2"
+                <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9"
                   onClick={handleSubmitReview} disabled={submitReview.isPending}>
-                  {submitReview.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
-                  Submit for Review
+                  {submitReview.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  Submit for review
                 </Button>
               ) : existingMinutes.status === 'approved' ? (
-                <Button variant="outline" className="rounded-xl gap-2"
+                <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9"
                   onClick={handlePublish} disabled={publishMinutes.isPending}>
-                  {publishMinutes.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  {publishMinutes.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
                   Publish
                 </Button>
               ) : null}
-              <Button variant="outline"
-                className="rounded-xl gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+              <Button variant="outline" size="sm"
+                className="rounded-lg gap-1.5 h-9 text-destructive border-destructive/30 hover:bg-destructive/5"
                 onClick={() => setDeleteMinutesOpen(true)}>
-                <Trash2 className="h-4 w-4" />Delete
+                <Trash2 className="h-3.5 w-3.5" />Delete
               </Button>
             </>
           )}
-          <Button variant="outline" className="rounded-xl gap-2">
-            <Printer className="h-4 w-4" />Print
+          <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9">
+            <Printer className="h-3.5 w-3.5" />Print
           </Button>
-          <Button variant="outline" className="rounded-xl gap-2">
-            <Download className="h-4 w-4" />Export
+          <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9">
+            <Download className="h-3.5 w-3.5" />Export
           </Button>
-          <Button className="rounded-xl gap-2 shadow-sm" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {existingMinutes ? 'Update Minutes' : 'Save Minutes'}
+          <Button size="sm"
+            className="rounded-lg gap-1.5 h-9 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/20 ring-1 ring-inset ring-white/10"
+            onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {existingMinutes ? 'Update minutes' : 'Save minutes'}
           </Button>
         </div>
       </div>
 
       {/* Meeting selector */}
-      <Card className="border border-border/50 shadow-sm">
+      <Card className="mm-card mm-fade-up border-0 shadow-none p-0" style={{ animationDelay: '60ms' }}>
         <CardContent className="p-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex-1 min-w-[200px]">
@@ -610,12 +703,17 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
             {existingMinutes && (
               <div className="flex items-center gap-2 pt-5">
-                <Badge className={`text-xs gap-1.5 border ${
-                  existingMinutes.status === 'published' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-                  existingMinutes.status === 'approved'  ? 'bg-blue-100 text-blue-700 border-blue-200'         :
-                  existingMinutes.status === 'review'    ? 'bg-amber-100 text-amber-700 border-amber-200'      :
-                  'bg-slate-100 text-slate-600 border-slate-200'
+                <Badge className={`text-[11px] font-semibold uppercase tracking-wider gap-1.5 border px-2.5 py-1 rounded-full ${
+                  existingMinutes.status === 'published' ? 'mm-status-published bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60' :
+                  existingMinutes.status === 'approved'  ? 'mm-status-approved bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/60' :
+                  existingMinutes.status === 'review'    ? 'mm-status-review bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/60' :
+                  'mm-status-draft bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                 }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    existingMinutes.status === 'published' ? 'bg-emerald-500' :
+                    existingMinutes.status === 'approved'  ? 'bg-blue-500' :
+                    existingMinutes.status === 'review'    ? 'bg-amber-500' : 'bg-slate-400'
+                  }`} />
                   {existingMinutes.status ?? 'draft'}
                 </Badge>
               </div>
@@ -636,13 +734,15 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
       </Card>
 
       {!selectedMeetingId ? (
-        <div className="flex flex-col items-center gap-3 py-16 rounded-2xl border-2 border-dashed border-border/50 text-center">
-          <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
-            <FileText className="h-7 w-7 text-muted-foreground/40" />
+        <div className="mm-fade-up flex flex-col items-center gap-4 py-20 rounded-2xl border border-dashed border-border/60 bg-gradient-to-b from-muted/20 to-transparent text-center">
+          <div className="relative h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/30 border border-indigo-100 dark:border-indigo-900/40 flex items-center justify-center shadow-sm">
+            <FileText className="h-7 w-7 text-indigo-500" />
           </div>
           <div>
-            <p className="text-base font-semibold text-muted-foreground">Select a meeting above</p>
-            <p className="text-sm text-muted-foreground/70 mt-0.5">to create or edit its minutes</p>
+            <p className="text-base font-semibold text-foreground">Pick a meeting to start</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto leading-relaxed">
+              Choose a meeting from the selector above to create or edit its minutes, attendance and action items.
+            </p>
           </div>
         </div>
       ) : (
@@ -663,7 +763,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
           {/* ── Details tab ── */}
           {activeTab === 'details' && (
-            <Card className="border border-border/50 shadow-sm">
+            <Card className="mm-card mm-fade-up border-0 shadow-none p-0">
               <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -738,7 +838,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
           {/* ── Attendance tab ── */}
           {activeTab === 'attendance' && (
-            <Card className="border border-border/50 shadow-sm">
+            <Card className="mm-card mm-fade-up border-0 shadow-none p-0">
               <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -796,7 +896,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
           {/* ── Minutes items tab ── */}
           {activeTab === 'items' && (
-            <Card className="border border-border/50 shadow-sm">
+            <Card className="mm-card mm-fade-up border-0 shadow-none p-0">
               <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -856,7 +956,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
           {/* ── Decisions & Votes tab ── */}
           {activeTab === 'decisions' && (
-            <Card className="border border-border/50 shadow-sm">
+            <Card className="mm-card mm-fade-up border-0 shadow-none p-0">
               <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -950,7 +1050,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
           {/* ── Action Items tab ── */}
           {activeTab === 'actions' && (
             <div className="space-y-4">
-              <Card className="border border-border/50 shadow-sm overflow-hidden">
+              <Card className="mm-card mm-fade-up border-0 shadow-none p-0 overflow-hidden">
                 <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -1044,7 +1144,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
               </Card>
 
               {/* Next meeting */}
-              <Card className="border border-border/50 shadow-sm">
+              <Card className="mm-card mm-fade-up border-0 shadow-none p-0">
                 <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -1075,7 +1175,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
 
           {/* ── Preview tab ── */}
           {activeTab === 'preview' && (
-            <Card className="border border-border/50 shadow-sm">
+            <Card className="mm-card mm-fade-up border-0 shadow-none p-0">
               <CardHeader className="px-5 pt-5 pb-4 border-b border-border/30 bg-muted/20">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">

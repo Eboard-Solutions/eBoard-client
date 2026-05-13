@@ -1,5 +1,5 @@
 // src/hooks/api/useUsers.ts
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersService, type FetchUsersParams } from '@/api/services/users.service';
 import type {
   CreateUserData,
@@ -22,11 +22,26 @@ export const USERS_QUERY_KEYS = {
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
-export function useOrganisationUsers() {
+export function useOrganisationUsers(enabled = true) {
   return useQuery({
     queryKey: USERS_QUERY_KEYS.organisation(),
     queryFn:  () => usersService.getOrganisationUsers(),
+    enabled,
     staleTime: 2 * 60 * 1000,
+    gcTime:    10 * 60 * 1000,
+    // Keep showing the last successful list while a background refetch happens
+    // (e.g. after invalidations from create/update/delete). No flicker back to
+    // the skeleton.
+    placeholderData: keepPreviousData,
+    retry: (count, err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      // No point retrying client errors — the user can't fix them by waiting
+      if (status && status >= 400 && status < 500) return false;
+      // Don't retry timeouts — fail fast so the user sees a clear error
+      if ((err as { code?: string })?.code === 'ECONNABORTED') return false;
+      return count < 1;
+    },
+    retryDelay: 500,
   });
 }
 

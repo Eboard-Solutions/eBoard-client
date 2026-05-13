@@ -20,7 +20,10 @@ import { ResetPasswordForm }  from '@/pages/auth/ResetPasswordForm';
 
 // ── Main App Pages ───────────────────────────────────────────────────────────
 import { Dashboard }     from '@/pages/Dashboard';
+import CalendarPage      from '@/pages/CalendarPage';
 import Meetings          from '@/pages/Meetings';
+import Agendas           from '@/pages/Agendas';
+import Minutes           from '@/pages/Minutes';
 import LiveMeeting       from '@/pages/LiveMeeting';
 import Members           from '@/pages/Members';
 import { Documents }     from '@/pages/Documents';
@@ -196,7 +199,10 @@ export default function App() {
 
           {/* ── Main App (most users + org admins) ─────────────────── */}
           <AppRoute path="/dashboard">     <Dashboard />        </AppRoute>
+          <AppRoute path="/calendar">      <CalendarPage />      </AppRoute>
           <AppRoute path="/meetings">      <Meetings />         </AppRoute>
+          <AppRoute path="/agendas">       <Agendas />          </AppRoute>
+          <AppRoute path="/minutes">       <Minutes />          </AppRoute>
           <AppRoute path="/members">       <Members />          </AppRoute>
           <AppRoute path="/documents">     <Documents />        </AppRoute>
           <AppRoute path="/voting">        <Voting />           </AppRoute>

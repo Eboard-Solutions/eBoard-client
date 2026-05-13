@@ -1,6 +1,28 @@
-import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
-import { useAgendas, useCreateAgenda, useDeleteAgenda, AGENDAS_QUERY_KEYS } from '@/hooks/api/useAgendas';
+// src/pages/AgendasPage.tsx
+//
+// Lightweight list-of-all-agendas view. Not the primary page for /agendas
+// (Agendas.tsx → AgendaManager handles per-meeting editing) but kept here
+// because the route is still imported in a few places and a working list
+// view is genuinely useful for an "all agendas across all statuses" overview.
+//
+// Bugs fixed:
+//   1. agendasData?.items → agendasData?.data
+//      (ResponseObject is { statusCode, message, data: T[] } — .items never existed)
+//   2. Removed the hardcoded `status: 'draft'` filter that meant only drafts
+//      could ever show up.
+//   3. handleCreate was wired to BOTH create and edit — split into two
+//      handlers so editing actually updates instead of trying to create.
+//   4. AgendaForm was passed `meetings={[]}` — now passes the real list.
+//   5. Header now uses the gradient-tile pattern consistent with the rest
+//      of the dashboard.
+
+import { useState, useMemo } from 'react';
+import { Plus, ClipboardList, RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  useAgendas, useCreateAgenda, useUpdateAgenda, useDeleteAgenda,
+  AGENDAS_QUERY_KEYS,
+} from '@/hooks/api/useAgendas';
+import { useMeetings } from '@/hooks/api/useMeetings';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,34 +30,71 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import AgendaList from '@/components/agenda/AgendaList';
 import AgendaForm from '@/components/agenda/AgendaForm';
 import { toast } from 'sonner';
-import type { Agenda } from '@/types/api.types';
+import type { Agenda, Meeting } from '@/types/api.types';
+
+function unwrapArray<T>(raw: unknown): T[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as T[];
+  const r = raw as Record<string, unknown>;
+  if (Array.isArray(r.data))  return r.data  as T[];
+  if (Array.isArray(r.items)) return r.items as T[];
+  // Double-wrap fallback
+  const inner = r.data as { data?: unknown } | undefined;
+  if (inner && Array.isArray(inner.data)) return inner.data as T[];
+  return [];
+}
 
 const AgendasPage = () => {
   const queryClient = useQueryClient();
   const [editingAgenda, setEditingAgenda] = useState<Agenda | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const { data: agendasData, isLoading, isError, error, refetch } = useAgendas({ 
-    status: 'draft', 
-    page: 1, 
-    limit: 20 
-  });
+  // No status filter — show every agenda the user can see.
+  const { data: agendasData, isLoading, isError, error, refetch } = useAgendas({ page: 1, limit: 50 });
+  const { data: meetingsData } = useMeetings({ page: 1, limit: 100 });
 
+  // Defensive unwrap — works whether the backend returns ResponseObject,
+  // a plain array, or the legacy double-wrapped shape.
+  const agendas  = useMemo<Agenda[]>(() => unwrapArray<Agenda>(agendasData),  [agendasData]);
+  const meetings = useMemo<Meeting[]>(() => unwrapArray<Meeting>(meetingsData), [meetingsData]);
 
   const createMutation = useCreateAgenda();
+  const updateMutation = useUpdateAgenda();
   const deleteMutation = useDeleteAgenda();
 
-  const handleCreate = (data: { title: string; description?: string; meetingId: string }) => {
+  const closeForm = () => {
+    setIsFormOpen(false);
+    setEditingAgenda(null);
+  };
+
+  // Form submits to one of two mutations depending on whether we're editing
+  // an existing agenda or creating a new one.
+  const handleSubmit = (data: { title: string; description?: string; meetingId: string }) => {
+    if (editingAgenda) {
+      updateMutation.mutate(
+        { id: editingAgenda.id, data: { title: data.title, description: data.description } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: AGENDAS_QUERY_KEYS.all });
+            toast.success('Agenda updated');
+            closeForm();
+          },
+          onError: (err: any) => {
+            toast.error(err?.response?.data?.message || 'Update failed');
+          },
+        },
+      );
+      return;
+    }
     createMutation.mutate(data, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: AGENDAS_QUERY_KEYS.all });
-        toast.success('Agenda created successfully');
-        setIsFormOpen(false);
+        toast.success('Agenda created');
+        closeForm();
       },
-      onError: (error: any) => {
-        const msg = error?.response?.data?.message || 'Failed to create agenda';
-        toast.error(msg);
-      }
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.message || 'Failed to create agenda');
+      },
     });
   };
 
@@ -47,78 +106,98 @@ const AgendasPage = () => {
   const handleDelete = (agendaId: string) => {
     deleteMutation.mutate(agendaId, {
       onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: AGENDAS_QUERY_KEYS.all });
         toast.success('Agenda deleted');
       },
-      onError: (error: any) => {
-        toast.error(error?.response?.data?.message || 'Delete failed');
-      }
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.message || 'Delete failed');
+      },
     });
   };
 
-  if (isLoading) return <div className="p-8 flex items-center justify-center">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-      <p>Loading agendas...</p>
-      <Button variant="link" onClick={() => refetch()} className="mt-2">Retry</Button>
-    </div>
-  </div>;
-
-  if (isError) return <div className="p-8 text-center">
-    <h2 className="text-2xl font-bold text-destructive mb-4">Failed to load agendas</h2>
-    <p className="text-muted-foreground mb-6">Backend returned 500 error. Please check server status.</p>
-    <Button onClick={() => refetch()}>Retry</Button>
-  </div>;
-
+  if (isError) {
+    return (
+      <div className="space-y-6 pb-12">
+        <Header onCreate={() => setIsFormOpen(true)} />
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="mx-auto h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+            </div>
+            <h2 className="text-lg font-semibold">Failed to load agendas</h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              {(error as any)?.response?.data?.message ?? (error as Error)?.message ?? 'The server returned an unexpected error.'}
+            </p>
+            <Button variant="outline" onClick={() => refetch()} className="gap-2">
+              <RefreshCw className="h-4 w-4" />Try again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agendas</h1>
-          <p className="text-muted-foreground">Manage meeting agendas and items</p>
-        </div>
-        <div className="flex gap-2">
-          <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Agenda
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingAgenda ? 'Edit Agenda' : 'Create New Agenda'}</DialogTitle>
-              </DialogHeader>
-              <AgendaForm 
-                onSubmit={handleCreate} 
-                initialData={editingAgenda}
-                onCancel={() => {
-                  setEditingAgenda(null);
-                  setIsFormOpen(false);
-                }}
-                meetings={[]}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+    <div className="space-y-6 pb-12">
+      <Header onCreate={() => setIsFormOpen(true)} />
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Agendas</CardTitle>
+          <CardTitle className="text-base">Agendas</CardTitle>
         </CardHeader>
         <CardContent>
-          <AgendaList 
-            agendas={agendasData?.items || []}
+          <AgendaList
+            agendas={agendas}
             onEdit={handleEdit}
             onDelete={handleDelete}
             loading={isLoading}
           />
         </CardContent>
       </Card>
+
+      <Dialog open={isFormOpen} onOpenChange={(o) => { if (!o) closeForm(); else setIsFormOpen(true); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingAgenda ? 'Edit agenda' : 'Create new agenda'}</DialogTitle>
+          </DialogHeader>
+          <AgendaForm
+            onSubmit={handleSubmit}
+            initialData={editingAgenda}
+            onCancel={closeForm}
+            meetings={meetings}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-export default AgendasPage;
+// Header extracted so error/main paths share it identically.
+function Header({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex items-start gap-4 min-w-0">
+        <div className="relative shrink-0 h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-1 ring-white/15">
+          <ClipboardList className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
+          <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-[1.7rem] font-black tracking-tight leading-tight">Agendas</h1>
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+            Plan, sequence and publish discussion items for each meeting.
+          </p>
+        </div>
+      </div>
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button onClick={onCreate}
+            className="h-9 gap-2 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/25 ring-1 ring-inset ring-white/10">
+            <Plus className="h-4 w-4" />New agenda
+          </Button>
+        </DialogTrigger>
+      </Dialog>
+    </div>
+  );
+}
 
+export default AgendasPage;
