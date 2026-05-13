@@ -138,6 +138,28 @@ export const ENDPOINTS = {
     BULK_DELETE: '/tasks/bulk-delete',
   },
 
+   RESOLUTIONS: {
+    BASE: '/resolutions/get-all',
+    BY_ID: (id: string) => `/resolutions/${id}`,
+    CREATE: '/resolutions/create',
+    UPDATE: (id: string) => `/resolutions/update/${id}`,
+    DELETE: (id: string) => `/resolutions/delete/${id}`,
+    VOTE: '/resolutions/vote',
+  },
+
+   MESSAGES: {
+    THREADS: '/messages/threads',
+    THREAD_BY_ID: (id: string) => `/messages/threads/${id}`,
+    CREATE_THREAD: '/messages/threads/create',
+    SEND_MESSAGE: '/messages/send',
+    MARK_READ: (id: string) => `/messages/threads/${id}/read`,
+  },
+
+  COMPLIANCE: {
+    BASE: '/compliance/get-all',
+    ACKNOWLEDGE: (id: string) => `/compliance/acknowledge/${id}`,
+  },
+
   ORGANISATIONS: {
     BASE: '/organisations',
     BY_ID: (id: string) => `/organisations/${id}`,
