@@ -37,6 +37,9 @@ import type {
   CreateMinutesData, CreateMinuteItemData,
   VotingDetails, ActionItemDetails, ActionItemAssignee,
 } from '@/types/api.types';
+import { printMinutes } from '@/lib/printMinutes';
+import { computeMeetingLock } from '@/lib/meetingLock';
+import { Lock } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -391,6 +394,42 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
   const isSaving = createMinutes.isPending || updateMinutes.isPending ||
     addItemMut.isPending || updateItemMut.isPending;
 
+  // Lock state. Computed from the selected meeting's status + existing
+  // minutes' status — published/approved minutes and completed/cancelled
+  // meetings all gate edits to varying degrees. See computeMeetingLock.
+  const lock = useMemo(
+    () => computeMeetingLock(selectedMeeting, existingMinutes),
+    [selectedMeeting, existingMinutes],
+  );
+
+  // Print / "Save as PDF" — opens the browser print dialog with a clean
+  // print-only document so the user can save a properly formatted record.
+  // Resolve member names locally so the PDF doesn't ship raw userIds.
+  const handlePrint = useCallback(() => {
+    if (!existingMinutes) {
+      toast.error('Save the minutes before printing');
+      return;
+    }
+    const resolved = attendance.map((row) => {
+      const member = members.find((m) => m.userId === row.userId);
+      const fullName = member ? `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim() : '';
+      return {
+        userId: row.userId,
+        name: fullName || member?.email || row.userId,
+        email: member?.email,
+        role: member?.role,
+        // Map the local `present` boolean onto the broader rsvpStatus enum
+        // the print template understands, so present/absent render correctly.
+        rsvpStatus: row.present ? 'attended' : 'absent',
+      };
+    });
+    printMinutes({
+      minutes: existingMinutes,
+      meeting: selectedMeeting,
+      attendance: resolved,
+    });
+  }, [existingMinutes, selectedMeeting, attendance, members]);
+
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!title.trim())     { toast.error('Please enter a minutes title'); return; }
@@ -548,38 +587,73 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
             <>
               {existingMinutes.status === 'draft' || existingMinutes.status === 'in_progress' ? (
                 <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9"
-                  onClick={handleSubmitReview} disabled={submitReview.isPending}>
+                  onClick={handleSubmitReview}
+                  disabled={submitReview.isPending || !lock.canEditMinutes}
+                  title={!lock.canEditMinutes ? lock.label : undefined}>
                   {submitReview.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   Submit for review
                 </Button>
               ) : existingMinutes.status === 'approved' ? (
                 <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9"
-                  onClick={handlePublish} disabled={publishMinutes.isPending}>
+                  onClick={handlePublish}
+                  disabled={publishMinutes.isPending || !lock.canPublishMinutes}
+                  title={!lock.canPublishMinutes ? lock.label : undefined}>
                   {publishMinutes.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
                   Publish
                 </Button>
               ) : null}
               <Button variant="outline" size="sm"
-                className="rounded-lg gap-1.5 h-9 text-destructive border-destructive/30 hover:bg-destructive/5"
-                onClick={() => setDeleteMinutesOpen(true)}>
+                className="rounded-lg gap-1.5 h-9 text-destructive border-destructive/30 hover:bg-destructive/5 disabled:opacity-50"
+                onClick={() => setDeleteMinutesOpen(true)}
+                disabled={!lock.canDeleteMinutes}
+                title={!lock.canDeleteMinutes ? lock.label : undefined}>
                 <Trash2 className="h-3.5 w-3.5" />Delete
               </Button>
             </>
           )}
-          <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9">
-            <Printer className="h-3.5 w-3.5" />Print
-          </Button>
-          <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9">
-            <Download className="h-3.5 w-3.5" />Export
+          <Button variant="outline" size="sm" className="rounded-lg gap-1.5 h-9"
+            onClick={handlePrint} disabled={!existingMinutes}
+            title={!existingMinutes ? 'Save the minutes first' : 'Open print dialog (use "Save as PDF" to export)'}>
+            <Printer className="h-3.5 w-3.5" />Print / PDF
           </Button>
           <Button size="sm"
-            className="rounded-lg gap-1.5 h-9 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/20 ring-1 ring-inset ring-white/10"
-            onClick={handleSave} disabled={isSaving}>
+            className="rounded-lg gap-1.5 h-9 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/20 ring-1 ring-inset ring-white/10 disabled:opacity-60 disabled:from-slate-400 disabled:to-slate-500"
+            onClick={handleSave}
+            disabled={isSaving || !lock.canEditMinutes}
+            title={!lock.canEditMinutes ? lock.label : undefined}>
             {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             {existingMinutes ? 'Update minutes' : 'Save minutes'}
           </Button>
         </div>
       </div>
+
+      {/* Lock banner — surfaces *why* the editor is read-only / partially
+          locked. Without this, the user just sees disabled buttons and has
+          no way to know whether it's a permission issue, a network issue,
+          or simply that the meeting has been finalized. */}
+      {lock.isLocked && (
+        <div className={`mm-fade-up rounded-2xl border px-4 py-3 flex items-start gap-3 ${
+          lock.reason === 'minutes-published'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900/60 dark:text-emerald-300'
+            : lock.reason === 'meeting-cancelled'
+              ? 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/30 dark:border-rose-900/60 dark:text-rose-300'
+              : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/60 dark:text-amber-300'
+        }`}>
+          <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+          <div className="text-sm leading-snug">
+            <p className="font-semibold">{lock.label}</p>
+            <p className="text-xs opacity-80 mt-0.5">
+              {lock.reason === 'minutes-published'
+                ? 'These minutes are the official published record. To make corrections, request a republish from the org admin.'
+                : lock.reason === 'minutes-approved'
+                  ? 'Minutes have been approved. They are no longer editable; only the publish action is available.'
+                  : lock.reason === 'meeting-cancelled'
+                    ? 'This meeting was cancelled. Existing minutes are preserved for the record but cannot be modified.'
+                    : 'The meeting is marked completed. You can still finalize minutes but the meeting details themselves are locked.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Meeting selector */}
       <Card className="mm-card mm-fade-up border-0 shadow-none p-0" style={{ animationDelay: '60ms' }}>

@@ -38,10 +38,19 @@ import {
 import {
   useMeetings, useCreateMeeting, useUpdateMeeting, useDeleteMeeting,
 } from '@/hooks/api/useMeetings';
+import { useCreateNotification } from '@/hooks/api/useNotifications';
+import { authService } from '@/api/services';
+import { Send } from 'lucide-react';
 import type {
   Meeting, MeetingFormat, MeetingFrequency,
   MeetingType, MeetingPriority, RSVPStatus, CreateMeetingData,
 } from '@/types/api.types';
+
+// Confirmed-attendance RSVP statuses. Sharing the agenda only targets
+// these — the user explicitly asked that the agenda reach members who
+// will actually be present in the meeting, so declined/pending invitees
+// are excluded.
+const CONFIRMED_RSVP_STATUSES: RSVPStatus[] = ['accepted', 'attended', 'checkedIn'];
 // Agendas and Minutes have moved to dedicated top-level pages
 // (/agendas and /minutes) — see App.tsx routes and the sidebar nav.
 // This page now focuses solely on meeting CRUD + upcoming/past listing.
@@ -520,8 +529,66 @@ function DetailDialog({ meeting, open, onClose, onEdit, onDelete, onStartLive }:
   onEdit: (m: Meeting) => void; onDelete: (m: Meeting) => void;
   onStartLive: (id: string) => void;
 }) {
+  const createNotification = useCreateNotification();
+  const [sharing, setSharing] = useState(false);
+
+  // Broadcast the agenda to every confirmed attendee. Uses the existing
+  // notifications API so members see it in their bell badge / list and
+  // get a deep-link straight to the meeting page where they can
+  // contribute. Members who declined or never RSVP'd are skipped.
+  const handleShareAgenda = useCallback(async () => {
+    if (!meeting || sharing) return;
+    const meetingId = getMeetingId(meeting);
+    if (!meetingId) {
+      toast.error('Cannot share — meeting has no id');
+      return;
+    }
+    const recipients = (meeting.attendees ?? []).filter((a) =>
+      a.rsvpStatus ? CONFIRMED_RSVP_STATUSES.includes(a.rsvpStatus) : false,
+    );
+    if (recipients.length === 0) {
+      toast.error('No confirmed attendees yet — nobody to share with');
+      return;
+    }
+    const me = authService.getUser?.();
+    const senderName = me ? `${me.firstName ?? ''} ${me.lastName ?? ''}`.trim() || me.email : undefined;
+
+    setSharing(true);
+    try {
+      const results = await Promise.allSettled(
+        recipients.map((r) =>
+          createNotification.mutateAsync({
+            title: `Agenda: ${meeting.title}`,
+            message: meeting.description
+              ? `View and contribute to the agenda. ${meeting.description}`
+              : 'View and contribute to the agenda for this meeting.',
+            category: 'MEETING',
+            priority: 'NORMAL',
+            recipientId: r.userId,
+            senderName,
+            senderId: me?.userId,
+            actionLabel: 'Open agenda',
+            targetRoute: `/meetings/${meetingId}`,
+            attachmentId: meetingId,
+            attachmentType: 'MEETING',
+          }),
+        ),
+      );
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.length - ok;
+      if (ok > 0 && failed === 0) toast.success(`Agenda shared with ${ok} attendee${ok === 1 ? '' : 's'}`);
+      else if (ok > 0)            toast.warning(`Shared with ${ok} of ${results.length} — ${failed} failed`);
+      else                        toast.error('Failed to share agenda');
+    } finally {
+      setSharing(false);
+    }
+  }, [meeting, sharing, createNotification]);
+
   if (!meeting) return null;
   const meetingId = getMeetingId(meeting);
+  const confirmedCount = (meeting.attendees ?? []).filter((a) =>
+    a.rsvpStatus ? CONFIRMED_RSVP_STATUSES.includes(a.rsvpStatus) : false,
+  ).length;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -615,6 +682,18 @@ function DetailDialog({ meeting, open, onClose, onEdit, onDelete, onStartLive }:
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-border/40">
+          <Button
+            variant="outline"
+            className="rounded-xl gap-1.5"
+            onClick={handleShareAgenda}
+            disabled={sharing || confirmedCount === 0}
+            title={confirmedCount === 0
+              ? 'No confirmed attendees to share with yet'
+              : `Notify ${confirmedCount} confirmed attendee${confirmedCount === 1 ? '' : 's'}`}
+          >
+            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {sharing ? 'Sharing…' : `Share agenda${confirmedCount > 0 ? ` (${confirmedCount})` : ''}`}
+          </Button>
           <Button variant="outline" className="rounded-xl gap-1.5" onClick={() => { onClose(); onEdit(meeting); }}>
             <Pencil className="h-4 w-4" />Edit
           </Button>
