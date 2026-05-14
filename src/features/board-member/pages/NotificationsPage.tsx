@@ -5,7 +5,8 @@ import { Bell, CalendarDays, CheckSquare, FileText, Vote, BarChart3, Megaphone, 
 import { Button } from '@/components/ui/button';
 import { useNotifications, useMarkNotificationAsRead, useMarkAllNotificationsAsRead, useDeleteNotification } from '@/hooks/api';
 import type { Notification } from '../types';
-import { PageHeader, EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
+import { EmptyState, unwrapList } from '../components/page-helpers';
 
 export function NotificationsPage() {
   const { data } = useNotifications();
@@ -38,15 +39,14 @@ export function NotificationsPage() {
   const unread = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 md:px-6 py-8">
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <PageHeader icon={Bell} title="Notifications" color="bg-rose-500" subtitle="Alerts and updates" />
-        {unread > 0 && (
+    <MemberPortalLayout icon={Bell} title="Notifications" color="bg-rose-500" subtitle="Alerts and updates">
+      {unread > 0 && (
+        <div className="flex justify-end mb-4">
           <Button size="sm" variant="outline" className="h-8 text-xs shrink-0 mt-1 gap-1.5" onClick={() => markAll.mutate()}>
             <Check className="h-4 w-4" />Clear all
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {notifications.length === 0 ? (
         <EmptyState icon={Bell} title="No notifications" sub="You're all caught up!" />
@@ -80,6 +80,6 @@ export function NotificationsPage() {
           })}
         </div>
       )}
-    </div>
+    </MemberPortalLayout>
   );
 }
