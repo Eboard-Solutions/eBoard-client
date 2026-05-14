@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import {
   Loader2, User, Mail, Lock, Eye, EyeOff, Phone,
@@ -106,9 +107,6 @@ export function SignUp() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error'; message: string; description?: string;
-  } | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -127,17 +125,14 @@ export function SignUp() {
 
   const isFormValid = Object.values(v).every(Boolean);
 
-  const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
-    setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 5000);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // touch all fields to show errors
     setTouched({ firstName: true, lastName: true, org: true, phone: true, email: true, password: true, confirm: true });
     if (!isFormValid) {
-      showNotification('error', 'Please fix the errors above before continuing.');
+      toast.error('Please fix the highlighted fields', {
+        description: 'Some entries are missing or invalid.',
+      });
       return;
     }
     setIsLoading(true);
@@ -147,13 +142,23 @@ export function SignUp() {
         organisationName: organizationName,
         phoneNumber, email, password,
       });
-      setIsLoading(false);
-      showNotification('success', 'Account created!', 'Redirecting you to sign in…');
-      setTimeout(() => setLocation('/auth/signin'), 2000);
+      toast.success('Account created!', {
+        description: 'Redirecting you to sign in…',
+        duration: 2000,
+      });
+      setTimeout(() => setLocation('/auth/signin'), 1500);
     } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      const msg = (error as { response?: { data?: { message?: string } }; message?: string })
+        ?.response?.data?.message
+        ?? (error instanceof Error ? error.message : 'Signup failed unexpectedly');
+      // 409 → email/org already exists, which is the most common signup failure.
+      if (status === 409) {
+        toast.warning('Account already exists', { description: msg || 'That email or organisation is already registered.' });
+      } else {
+        toast.error('Signup failed', { description: msg });
+      }
       setIsLoading(false);
-      const msg = error instanceof Error ? error.message : 'Signup failed unexpectedly';
-      showNotification('error', 'Signup failed', msg);
     }
   };
 
@@ -170,30 +175,7 @@ export function SignUp() {
 
   return (
     <div className="min-h-screen flex font-sans">
-      {/* ════════════════ TOAST ════════════════ */}
-      {notification && (
-        <div
-          className={cx(
-            'fixed top-6 right-6 z-50 max-w-sm w-full border rounded-2xl shadow-2xl backdrop-blur-sm p-4',
-            'animate-in slide-in-from-top-4 fade-in duration-300',
-            notification.type === 'success'
-              ? 'bg-emerald-50/95 border-emerald-200 text-emerald-900'
-              : 'bg-red-50/95 border-red-200 text-red-900'
-          )}
-        >
-          <div className="flex items-start gap-3">
-            {notification.type === 'success'
-              ? <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
-              : <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />}
-            <div>
-              <p className="font-semibold text-sm">{notification.message}</p>
-              {notification.description && (
-                <p className="mt-0.5 text-sm opacity-80">{notification.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Feedback toasts come from the app-wide <Toaster /> in App.tsx. */}
 
       {/* ════════════════ LEFT PANEL ════════════════ */}
       <div className="hidden lg:flex lg:w-[40%] flex-col justify-between relative overflow-hidden bg-linear-to-br from-indigo-700 via-indigo-600 to-blue-600 p-14">

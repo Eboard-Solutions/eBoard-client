@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -20,13 +21,12 @@ import {
   Lock,
   Eye,
   EyeOff,
-  CheckCircle2,
-  XCircle,
   Hash,
   ArrowRight,
   ShieldCheck,
   Users,
   Building2,
+  AlertCircle,
 } from 'lucide-react';
 
 import authService from '@/lib/auth';
@@ -37,11 +37,7 @@ const ROUTES = {
   forgotPassword: '/auth/forgot-password',
 };
 
-interface Notification {
-  type: 'success' | 'error';
-  message: string;
-  description?: string;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export function UserLogin() {
   const [, setLocation] = useLocation();
@@ -51,27 +47,31 @@ export function UserLogin() {
   const [orgCode, setOrgCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [notification, setNotification] = useState<Notification | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [touched, setTouched] = useState({ email: false, password: false, orgCode: false });
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
-    setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 5000);
-  };
+  const emailInvalid = touched.email && !!email && !EMAIL_RE.test(email.trim());
+  const passwordInvalid = touched.password && !!password && password.length < 8;
+  const orgCodeInvalid = touched.orgCode && !orgCode.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ email: true, password: true, orgCode: true });
 
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
     const trimmedOrgCode = orgCode.trim();
 
     if (!trimmedEmail || !trimmedPassword || !trimmedOrgCode) {
-      showNotification('error', 'All fields are required');
+      toast.error('All fields are required');
+      return;
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      toast.error('Invalid email', { description: 'Please enter a valid email address.' });
       return;
     }
 
@@ -85,22 +85,23 @@ export function UserLogin() {
       });
 
       const { user } = response;
-      showNotification('success', 'Login successful!', `Welcome back, ${user.firstName}!`);
-
-      // Redirect to dashboard - it handles role-based views
-      setTimeout(() => {
-        setLocation(ROUTES.dashboard);
-      }, 1200);
+      toast.success('Login successful, redirecting…', {
+        description: `Welcome back, ${user.firstName}!`,
+        duration: 2000,
+      });
+      setLocation(ROUTES.dashboard);
     } catch (err: unknown) {
       console.error('[LOGIN ERROR]', err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const msg = (err as { response?: { data?: { message?: string } }; message?: string })
+        ?.response?.data?.message
+        ?? (err instanceof Error ? err.message : 'Login failed. Please try again.');
 
-      let msg = 'Login failed. Please try again.';
-
-      if (err instanceof Error && err.message) {
-        msg = err.message;
+      if (status === 401 || status === 403) {
+        toast.error('Invalid email or password', { description: 'Please check your details and try again.' });
+      } else {
+        toast.error('Login failed', { description: msg });
       }
-
-      showNotification('error', 'Login Failed', msg);
       setIsLoading(false);
     }
   };
@@ -109,32 +110,7 @@ export function UserLogin() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
-
-      {/* Notification Toast */}
-      {notification && (
-        <div
-          className={`fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-5 fade-in duration-300 ${
-            notification.type === 'success'
-              ? 'bg-green-50/95 border-green-200 text-green-900'
-              : 'bg-red-50/95 border-red-200 text-red-900'
-          } border rounded-xl shadow-xl backdrop-blur-sm p-4`}
-        >
-          <div className="flex items-start gap-3">
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-            )}
-            <div>
-              <p className="font-medium text-sm">{notification.message}</p>
-              {notification.description && (
-                <p className="mt-1 text-sm opacity-90">{notification.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Feedback toasts come from the app-wide <Toaster /> in App.tsx. */}
       <div
         className="w-full max-w-md"
         style={{

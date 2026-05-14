@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -18,8 +19,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-react';
 
 import { authService } from '@/lib/auth';
@@ -28,11 +27,7 @@ const ROUTES = {
   dashboard: '/',
 };
 
-interface Notification {
-  type: 'success' | 'error';
-  message: string;
-  description?: string;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export function SuperAdminLogin() {
   const [, setLocation] = useLocation();
@@ -41,23 +36,17 @@ export function SuperAdminLogin() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [notification, setNotification] = useState<Notification | null>(null);
-
-  const showNotification = (
-    type: 'success' | 'error',
-    message: string,
-    description?: string
-  ) => {
-    setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 4200);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      showNotification('error', 'Please enter email and password');
+      toast.error('Please enter email and password');
+      return;
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      toast.error('Invalid email', { description: 'Please enter a valid email address.' });
       return;
     }
 
@@ -69,24 +58,23 @@ export function SuperAdminLogin() {
         password,
       });
 
-      showNotification(
-        'success',
-        `Welcome back${data.user?.firstName ? `, ${data.user.firstName}` : ''}!`
-      );
-
-      // Redirect to dashboard - it handles role-based views
-      setTimeout(() => {
-        setLocation(ROUTES.dashboard);
-      }, 1200);
-    } catch (err: any) {
+      toast.success('Login successful, redirecting…', {
+        description: `Welcome back${data.user?.firstName ? `, ${data.user.firstName}` : ''}!`,
+        duration: 2000,
+      });
+      setLocation(ROUTES.dashboard);
+    } catch (err: unknown) {
       console.error('Login error:', err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const msg = (err as { response?: { data?: { message?: string } }; message?: string })
+        ?.response?.data?.message
+        ?? (err instanceof Error ? err.message : 'Something went wrong. Please try again.');
 
-      const msg =
-        err.message ||
-        err?.response?.data?.message ||
-        'Something went wrong. Please try again.';
-
-      showNotification('error', 'Login failed', msg);
+      if (status === 401 || status === 403) {
+        toast.error('Invalid email or password', { description: 'Please check your details and try again.' });
+      } else {
+        toast.error('Login failed', { description: msg });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -98,42 +86,7 @@ export function SuperAdminLogin() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 via-slate-100 to-blue-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/20 px-5 py-12 sm:px-6 lg:px-8">
-      {notification && (
-        <div
-          className={`fixed top-5 right-5 z-50 w-full max-w-sm sm:max-w-md animate-in slide-in-from-top-6 fade-in-5 duration-300 ${
-            notification.type === 'success'
-              ? 'bg-emerald-50/95 border-emerald-200'
-              : 'bg-red-50/95 border-red-200'
-          } border rounded-xl shadow-2xl backdrop-blur-sm p-4`}
-        >
-          <div className="flex items-start gap-3">
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-            )}
-            <div className="flex-1">
-              <p
-                className={`font-semibold text-sm ${
-                  notification.type === 'success' ? 'text-emerald-900' : 'text-red-900'
-                }`}
-              >
-                {notification.message}
-              </p>
-              {notification.description && (
-                <p
-                  className={`mt-1 text-sm ${
-                    notification.type === 'success' ? 'text-emerald-700' : 'text-red-700'
-                  }`}
-                >
-                  {notification.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Feedback toasts come from the app-wide <Toaster /> in App.tsx. */}
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-600 to-blue-700 shadow-xl mb-5 mx-auto">

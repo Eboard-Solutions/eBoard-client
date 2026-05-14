@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -18,13 +19,12 @@ import {
   Lock,
   Eye,
   EyeOff,
-  CheckCircle2,
-  XCircle,
   Hash,
   User,
   Building2,
   Shield,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
 
 import { authService } from '@/lib/auth';
@@ -36,11 +36,9 @@ const ROUTES = {
   signup: '/auth/signup',
 };
 
-interface Notification {
-  type: 'success' | 'error';
-  message: string;
-  description?: string;
-}
+// Permissive email check — strict enough to catch obvious typos
+// ("name@.com", "name@host"), loose enough not to fight on edge-case TLDs.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const LOGIN_TABS: {
   type: LoginType;
@@ -77,19 +75,17 @@ export function SignIn() {
   const [orgCode, setOrgCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [notification, setNotification] = useState<Notification | null>(null);
+  // `touched` powers inline error styling: don't shout at the user before they
+  // actually try a field, but light up red the moment they leave it invalid.
+  const [touched, setTouched] = useState<{ email: boolean; password: boolean; orgCode: boolean }>({
+    email: false, password: false, orgCode: false,
+  });
 
-  const showNotification = (
-    type: 'success' | 'error',
-    message: string,
-    description?: string
-  ) => {
-    setNotification({ type, message, description });
-    // Only auto-dismiss error toasts; success redirects immediately
-    if (type === 'error') {
-      setTimeout(() => setNotification(null), 5000);
-    }
-  };
+  // Live field-level validity — computed on every render so the red borders
+  // and helper text update as the user types, without needing extra state.
+  const emailInvalid = touched.email && !!email && !EMAIL_RE.test(email.trim());
+  const passwordInvalid = touched.password && !!password && password.length < 8;
+  const orgCodeInvalid = touched.orgCode && loginType === 'user' && !orgCode.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,13 +94,19 @@ export function SignIn() {
     const trimmedPassword = password.trim();
     const trimmedOrgCode = orgCode.trim();
 
+    // Force-touch every field so any latent inline errors show on submit.
+    setTouched({ email: true, password: true, orgCode: true });
+
     if (!trimmedEmail || !trimmedPassword) {
-      showNotification('error', 'Validation Error', 'Email and password are required.');
+      toast.error('Missing details', { description: 'Email and password are required.' });
       return;
     }
-
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      toast.error('Invalid email', { description: 'Please enter a valid email address.' });
+      return;
+    }
     if (loginType === 'user' && !trimmedOrgCode) {
-      showNotification('error', 'Validation Error', 'Organization code is required for user login.');
+      toast.error('Organisation code required', { description: 'Board members need their org code to sign in.' });
       return;
     }
 
@@ -141,40 +143,38 @@ export function SignIn() {
       const displayName =
         user?.firstName || user?.email?.split('@')[0] || 'User';
 
-      // Show success toast briefly, then redirect immediately.
-      // NO setTimeout — redirecting immediately prevents the ProtectedRoute
-      // from mounting before the token is in localStorage.
-      showNotification(
-        'success',
-        'Login Successful!',
-        `Welcome back, ${displayName}!`
-      );
-
-      // ✅ Redirect immediately — token is already in localStorage at this
-      // point because authService.login() calls TokenService.setTokens()
-      // before returning. A setTimeout here creates a race condition where
-      // ProtectedRoute can mount, read an empty token, and bounce back.
+      // Quick success toast, then redirect immediately. Don't wrap the
+      // navigation in setTimeout — the token is already in localStorage,
+      // but a delay lets ProtectedRoute mount with stale state and bounce
+      // back to /auth/signin.
+      toast.success('Login successful, redirecting…', {
+        description: `Welcome back, ${displayName}!`,
+        duration: 2000,
+      });
       setLocation(ROUTES.dashboard);
     } catch (err: unknown) {
       console.error('[LOGIN ERROR]', err);
 
-      let msg = 'Login failed. Please check your credentials and try again.';
-
+      // Surface whatever the server actually said. 401 → invalid credentials;
+      // anything else → fall back to a generic message but include the raw.
+      let msg = 'Invalid email or password';
+      let status: number | undefined;
       if (err && typeof err === 'object' && 'response' in err) {
-        // Axios error — extract server message
         const axiosErr = err as {
-          response?: { data?: { message?: string } };
+          response?: { status?: number; data?: { message?: string } };
           message?: string;
         };
-        msg =
-          axiosErr.response?.data?.message ||
-          axiosErr.message ||
-          msg;
+        status = axiosErr.response?.status;
+        msg = axiosErr.response?.data?.message || axiosErr.message || msg;
       } else if (err instanceof Error && err.message) {
         msg = err.message;
       }
 
-      showNotification('error', 'Login Failed', msg);
+      if (status === 401 || status === 403) {
+        toast.error('Invalid email or password', { description: 'Please check your details and try again.' });
+      } else {
+        toast.error('Login failed', { description: msg });
+      }
       setIsLoading(false);
     }
   };
@@ -183,38 +183,8 @@ export function SignIn() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
-
-      {/* Notification Toast */}
-      {notification && (
-        <div
-          className={`fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-5 fade-in duration-300 ${
-            notification.type === 'success'
-              ? 'bg-green-50/95 border-green-200 text-green-900'
-              : 'bg-red-50/95 border-red-200 text-red-900'
-          } border rounded-xl shadow-xl backdrop-blur-sm p-5`}
-        >
-          <div className="flex items-start gap-3">
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="h-6 w-6 text-green-600 mt-0.5 shrink-0" />
-            ) : (
-              <XCircle className="h-6 w-6 text-red-600 mt-0.5 shrink-0" />
-            )}
-            <div>
-              {/* ✅ Increased from text-sm font-medium → text-base font-semibold */}
-              <p className="font-semibold text-base leading-snug">
-                {notification.message}
-              </p>
-              {notification.description && (
-                /* ✅ Increased from text-sm → text-sm (kept) but added font-medium */
-                <p className="mt-1 text-sm font-medium opacity-90">
-                  {notification.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Feedback toasts come from the app-wide <Toaster /> (sonner) mounted
+          in App.tsx — colour cues and dismiss button are configured there. */}
       <div className="w-full max-w-md">
 
         {/* Header */}
@@ -284,11 +254,22 @@ export function SignIn() {
                       placeholder="e.g. KIR001"
                       value={orgCode}
                       onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
-                      className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all uppercase"
+                      onBlur={() => setTouched(t => ({ ...t, orgCode: true }))}
+                      aria-invalid={orgCodeInvalid || undefined}
+                      className={`h-12 pl-11 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 transition-all uppercase ${
+                        orgCodeInvalid
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500/20'
+                      }`}
                       required
                       autoFocus
                     />
                   </div>
+                  {orgCodeInvalid && (
+                    <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" /> Organisation code is required.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -314,12 +295,23 @@ export function SignIn() {
                     }
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    onBlur={() => setTouched(t => ({ ...t, email: true }))}
+                    aria-invalid={emailInvalid || undefined}
+                    className={`h-12 pl-11 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 transition-all ${
+                      emailInvalid
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500/20'
+                    }`}
                     required
                     autoFocus={loginType !== 'user'}
                     autoComplete="email"
                   />
                 </div>
+                {emailInvalid && (
+                  <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3 w-3" /> Enter a valid email address.
+                  </p>
+                )}
               </div>
 
               {/* Password */}
@@ -349,7 +341,13 @@ export function SignIn() {
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 pl-11 pr-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                    aria-invalid={passwordInvalid || undefined}
+                    className={`h-12 pl-11 pr-11 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 transition-all ${
+                      passwordInvalid
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500/20'
+                    }`}
                     required
                     minLength={8}
                     autoComplete="current-password"
@@ -366,6 +364,11 @@ export function SignIn() {
                     )}
                   </button>
                 </div>
+                {passwordInvalid && (
+                  <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3 w-3" /> Password must be at least 8 characters.
+                  </p>
+                )}
               </div>
 
               {/* Submit */}
