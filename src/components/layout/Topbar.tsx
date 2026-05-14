@@ -165,9 +165,29 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
 
   if (!user) return null; // don't render topbar before auth resolves
 
-  const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
-  const fullName = `${user.firstName} ${user.lastName}`;
-  const roleName = user.role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ?? 'Member';
+  // Derive a safe display name and initials even when backend returns
+  // a different shape (e.g. `name` or only `email`). This prevents
+  // "undefined undefined" appearing in the UI when first/last names
+  // are missing from the stored user object.
+  const resolvedFullName = (() => {
+    if (user.firstName || user.lastName) {
+      return `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+    }
+    if ((user as any).name) return (user as any).name as string;
+    if (user.email) return user.email.split('@')[0];
+    return 'User';
+  })();
+
+  const initials = (() => {
+    const parts = resolvedFullName.split(' ').filter(Boolean);
+    if (parts.length === 0) return 'U';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  })();
+
+  const fullName = resolvedFullName;
+  const roleName = (user.role ?? 'Member').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const isBoardMember = String(user.role ?? '').toLowerCase().includes('board');
 
   const handleSignOut = async () => {
     try {
@@ -257,42 +277,44 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
         {/* ══ RIGHT ACTIONS ══════════════════════════════════ */}
         <div className="flex items-center gap-1.5">
 
-          {/* Quick create */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/40 hover:scale-[1.04] active:scale-95 transition-all duration-200 ring-1 ring-inset ring-white/10"
-                aria-label="Quick create"
-              >
-                <Plus className="h-4 w-4" strokeWidth={2.5} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 dark:bg-gray-900 dark:border-gray-700">
-              <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 px-3 py-2">
-                Quick Create
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="dark:bg-gray-800" />
-              {([
-                { type: 'meeting',      icon: Calendar,     label: 'New Meeting',      shortcut: 'M' },
-                { type: 'task',         icon: CheckSquare,  label: 'New Task',         shortcut: 'T' },
-                { type: 'poll',         icon: Vote,         label: 'New Poll',         shortcut: 'P' },
-                { type: 'announcement', icon: Bell,         label: 'New Announcement', shortcut: 'A' },
-              ] as const).map(({ type, icon: Icon, label, shortcut }) => (
-                <DropdownMenuItem
-                  key={type}
-                  onSelect={() => quickCreate(type)}
-                  className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:bg-gray-800"
+          {/* Quick create - hidden for board members */}
+          {!isBoardMember && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white shadow-md shadow-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/40 hover:scale-[1.04] active:scale-95 transition-all duration-200 ring-1 ring-inset ring-white/10"
+                  aria-label="Quick create"
                 >
-                  <Icon className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
-                  <span className="flex-1">{label}</span>
-                  <kbd className="text-[9px] font-mono text-gray-300 dark:text-gray-600 border border-gray-200 dark:border-gray-700 rounded px-1 py-0.5">
-                    {shortcut}
-                  </kbd>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 dark:bg-gray-900 dark:border-gray-700">
+                <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 px-3 py-2">
+                  Quick Create
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="dark:bg-gray-800" />
+                {([
+                  { type: 'meeting',      icon: Calendar,     label: 'New Meeting',      shortcut: 'M' },
+                  { type: 'task',         icon: CheckSquare,  label: 'New Task',         shortcut: 'T' },
+                  { type: 'poll',         icon: Vote,         label: 'New Poll',         shortcut: 'P' },
+                  { type: 'announcement', icon: Bell,         label: 'New Announcement', shortcut: 'A' },
+                ] as const).map(({ type, icon: Icon, label, shortcut }) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onSelect={() => quickCreate(type)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:bg-gray-800"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                    <span className="flex-1">{label}</span>
+                    <kbd className="text-[9px] font-mono text-gray-300 dark:text-gray-600 border border-gray-200 dark:border-gray-700 rounded px-1 py-0.5">
+                      {shortcut}
+                    </kbd>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Dark mode toggle */}
           <Button
@@ -432,7 +454,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                   </AvatarFallback>
                 </Avatar>
                 {/* Online dot */}
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-gray-950" />
+                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-indigo-400 ring-2 ring-white dark:ring-gray-950" />
               </button>
             </DropdownMenuTrigger>
 
@@ -453,9 +475,9 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                       <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-700 px-2 py-0.5">
                         <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300">{roleName}</span>
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 px-2 py-0.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">Online</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 px-2 py-0.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                        <span className="text-[9px] font-semibold text-indigo-700 dark:text-indigo-400">Online</span>
                       </span>
                     </div>
                   </div>
@@ -464,7 +486,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
 
               <div className="p-1.5 space-y-0.5">
                 <DropdownMenuItem
-                  onSelect={() => setLocation('/profile')}
+                  onSelect={() => setLocation(isBoardMember ? '/board/profile' : '/profile')}
                   className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[12px] font-medium cursor-pointer dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:bg-gray-800"
                 >
                   <User className="h-[14px] w-[14px] text-gray-400 dark:text-gray-500 shrink-0" />
