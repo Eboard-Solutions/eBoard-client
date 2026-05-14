@@ -41,6 +41,8 @@ interface TaskDisplay {
   id: string; title: string; description?: string;
   status: TaskStatus; priority: TaskPriority;
   dueDate: number; assigneeId?: string; assignee?: ApiUser;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface TaskForm {
@@ -529,6 +531,26 @@ function TaskCard({ task, users, onEdit, onDelete, onStatusChange, onView, compa
                 </Button>
               </div>
             </div>
+            {task.status === 'REVIEW' && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 dark:border-violet-800/60 bg-violet-50/60 dark:bg-violet-950/20 px-3 py-2">
+                <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 inline-flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5" /> Submitted by {assignee?.firstName ?? 'member'} — needs your review
+                </span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <Button size="sm" variant="outline"
+                    className="h-7 rounded-full border-rose-200 dark:border-rose-800 px-3 text-xs text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                    onClick={() => onStatusChange(task, 'IN_PROGRESS')}>
+                    Send Back
+                  </Button>
+                  <Button size="sm"
+                    className="h-7 rounded-full px-3 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
+                    onClick={() => onStatusChange(task, 'COMPLETED')}>
+                    <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                    Approve
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -587,6 +609,7 @@ export function Tasks() {
   const [search, setSearch]         = useState('');
   const [view, setView]             = useState<'list' | 'kanban'>('list');
   const [createOpen, setCreateOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editTask, setEditTask]     = useState<TaskDisplay | null>(null);
   const [delTarget, setDelTarget]   = useState<TaskDisplay | null>(null);
   const [viewTask, setViewTask]     = useState<TaskDisplay | null>(null);
@@ -615,6 +638,8 @@ export function Tasks() {
       dueDate:     typeof t.dueDate === 'number' ? t.dueDate : new Date(t.dueDate ?? Date.now()).getTime(),
       assigneeId:  t.assigneeId,
       assignee:    t.assignee as unknown as ApiUser | undefined,
+      createdAt:   t.createdAt,
+      updatedAt:   t.updatedAt,
     })),
     [rawTasks]
   );
@@ -634,6 +659,45 @@ export function Tasks() {
   const inProg = useMemo(() => byS('IN_PROGRESS'), [byS]);
   const rev    = useMemo(() => byS('REVIEW'), [byS]);
   const done   = useMemo(() => byS('COMPLETED'), [byS]);
+
+  const now = Date.now();
+  const overdueTasks = useMemo(
+    () => tasks.filter((task) => task.status !== 'COMPLETED' && task.dueDate < now),
+    [tasks, now],
+  );
+  const completionRate = useMemo(() => {
+    if (tasks.length === 0) return 0;
+    return Math.round((done.length / tasks.length) * 100);
+  }, [tasks.length, done.length]);
+  const dueSoonCount = useMemo(() => {
+    const soon = now + 3 * 24 * 60 * 60 * 1000;
+    return tasks.filter((task) => task.status !== 'COMPLETED' && task.dueDate >= now && task.dueDate <= soon).length;
+  }, [tasks, now]);
+  const recentCompleted = useMemo(
+    () => [...done].sort((a, b) => (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) - (a.updatedAt ? new Date(a.updatedAt).getTime() : 0)).slice(0, 6),
+    [done],
+  );
+  const memberPerformance = useMemo(() => {
+    const source = users.filter((user) => user.role === 'BoardMember' || user.role === 'secretary');
+    return source
+      .map((user) => {
+        const assigned = tasks.filter((task) => task.assigneeId === user.userId);
+        const completed = assigned.filter((task) => task.status === 'COMPLETED').length;
+        const overdue = assigned.filter((task) => task.status !== 'COMPLETED' && task.dueDate < now).length;
+        const active = assigned.length - completed;
+        const rate = assigned.length === 0 ? 0 : Math.round((completed / assigned.length) * 100);
+        return {
+          user,
+          assigned: assigned.length,
+          completed,
+          active,
+          overdue,
+          rate,
+        };
+      })
+      .filter((item) => item.assigned > 0)
+      .sort((left, right) => right.assigned - left.assigned);
+  }, [users, tasks, now]);
 
   // Surface all missing required fields in a single toast instead of revealing
   // them one-by-one as the user resubmits.
@@ -678,7 +742,7 @@ export function Tasks() {
         status: createForm.status, priority: createForm.priority,
         assigneeId: createForm.assigneeId, dueDate: toTs(createForm.dueDateStr)!,
       } as CreateTaskData);
-      toast.success('Task created'); setCreateOpen(false); setCreateForm(BLANK);
+      toast.success('Task created'); setCreateDialogOpen(false); setCreateForm(BLANK);
     } catch (err) { toast.error(apiMsg(err, 'Failed to create task')); }
   }
 
@@ -770,31 +834,55 @@ export function Tasks() {
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-[28px] border border-border/60 bg-card/90 p-5 sm:p-6 shadow-sm backdrop-blur flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-4">
-          <div className="shrink-0 h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center border border-blue-100 dark:border-blue-800">
-            <Activity className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <div className="shrink-0 h-14 w-14 rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25 ring-1 ring-white/20">
+            <Activity className="h-7 w-7 text-white" />
           </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight">Tasks</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {tasks.length} total &middot; <span className="text-blue-500 font-medium">{inProg.length} in progress</span> &middot; {todo.length} pending
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-400">Task Center</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight mt-1">Tasks</h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+              Manage assignments, track progress, and create new work items for the organization from one place.
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full bg-muted px-2.5 py-1 font-semibold">{tasks.length} total</span>
+              <span className="rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2.5 py-1 font-semibold">{inProg.length} in progress</span>
+              <span className="rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-2.5 py-1 font-semibold">{todo.length} pending</span>
+              {rev.length > 0 && (
+                <span className="rounded-full bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 px-2.5 py-1 font-semibold inline-flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+                  {rev.length} awaiting review
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) setCreateForm(BLANK); }}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="gap-2 rounded-xl self-start sm:self-auto shadow-sm text-sm font-semibold px-5">
-              <Plus className="h-4 w-4" /> New Task
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg rounded-2xl">
-            <DialogHeader className="pb-2">
-              <DialogTitle className="text-xl">Create New Task</DialogTitle>
-              <DialogDescription className="text-sm">Fill in the details to create an action item.</DialogDescription>
-            </DialogHeader>
-            <TaskFormFields form={createForm} onChange={setCreateForm} users={users} />
-            <Footer onCancel={() => setCreateOpen(false)} onSubmit={handleCreate} busy={createM.isPending} label="Create Task" />
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <Button
+            size="lg"
+            onClick={() => setCreateDialogOpen(true)}
+            className="gap-2 rounded-2xl shadow-sm text-sm font-semibold px-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+          >
+            <Plus className="h-4 w-4" /> Add Task
+          </Button>
+        </div>
+        <Dialog open={createDialogOpen} onOpenChange={(o) => { setCreateDialogOpen(o); if (!o) setCreateForm(BLANK); }}>
+          <DialogContent className="max-w-xl rounded-3xl border-border/60 bg-background/95 p-0 shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 py-5 text-white">
+              <DialogHeader className="space-y-2 text-left">
+                <DialogTitle className="text-2xl font-semibold tracking-tight">Create New Task</DialogTitle>
+                <DialogDescription className="text-sm text-white/85">
+                  Assign a task, set the priority, and give the team a clear next step.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+            <div className="max-h-[72vh] overflow-y-auto px-6 py-5">
+              <TaskFormFields form={createForm} onChange={setCreateForm} users={users} />
+              <div className="mt-6">
+                <Footer onCancel={() => setCreateDialogOpen(false)} onSubmit={handleCreate} busy={createM.isPending} label="Create Task" />
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -805,7 +893,7 @@ export function Tasks() {
           const cfg   = S[status];
           const count = byS(status).length;
           return (
-            <div key={status} className={`relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br ${grad} shadow-lg ${glow}`}>
+            <div key={status} className={`relative overflow-hidden rounded-3xl p-5 bg-gradient-to-br ${grad} shadow-lg ${glow} ring-1 ring-white/10`}>
               <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10 pointer-events-none" />
               <div className="absolute right-3 -bottom-5 h-14 w-14 rounded-full bg-black/10 pointer-events-none" />
               <div className="relative flex items-start justify-between gap-2">
@@ -822,12 +910,89 @@ export function Tasks() {
         })}
       </div>
 
+      <section className="rounded-[28px] border border-border/60 bg-card/90 p-5 sm:p-6 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-indigo-600 dark:text-indigo-400">Monitoring dashboard</p>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Completion and performance overview</h2>
+            <p className="text-sm text-muted-foreground mt-1">Trace completed work, detect overdue assignments, and identify members needing follow-up.</p>
+          </div>
+          <div className="text-xs text-muted-foreground">Updated from live task data</div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Completion rate', value: `${completionRate}%`, tone: 'from-emerald-500 to-emerald-700', sub: `${done.length}/${tasks.length} tasks` },
+            { label: 'Overdue assignments', value: overdueTasks.length, tone: 'from-rose-500 to-rose-700', sub: 'Require immediate action' },
+            { label: 'Due in 72h', value: dueSoonCount, tone: 'from-amber-500 to-amber-700', sub: 'Upcoming deadlines' },
+            { label: 'Active members', value: memberPerformance.length, tone: 'from-indigo-500 to-indigo-700', sub: 'Tracked with assigned work' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">{item.label}</p>
+              <div className={`mt-2 inline-flex items-center rounded-xl bg-gradient-to-r px-3 py-1.5 text-2xl font-black text-white ${item.tone}`}>{item.value}</div>
+              <p className="mt-2 text-xs text-muted-foreground">{item.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
+            <h3 className="text-sm font-semibold">Recent completed tasks</h3>
+            <div className="mt-3 space-y-2">
+              {recentCompleted.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No completed tasks yet.</p>
+              ) : (
+                recentCompleted.map((task) => (
+                  <div key={task.id} className="rounded-xl border border-border/50 bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground line-clamp-1">{task.title}</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Completed</span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                      <span>{task.assignee?.firstName ? `${task.assignee.firstName} ${task.assignee.lastName ?? ''}`.trim() : 'Unassigned member'}</span>
+                      <span>·</span>
+                      <span>{task.updatedAt ? new Date(task.updatedAt).toLocaleString() : 'No completion timestamp'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
+            <h3 className="text-sm font-semibold">Member performance trace</h3>
+            <div className="mt-3 space-y-2">
+              {memberPerformance.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No member assignments found.</p>
+              ) : (
+                memberPerformance.slice(0, 8).map((item) => (
+                  <div key={item.user.userId} className="rounded-xl border border-border/50 bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold line-clamp-1">{item.user.firstName} {item.user.lastName}</p>
+                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{item.rate}% complete</span>
+                    </div>
+                    <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${item.rate}%` }} />
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+                      <span>Assigned: {item.assigned}</span>
+                      <span>Active: {item.active}</span>
+                      <span className={item.overdue > 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : ''}>Overdue: {item.overdue}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <div className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search tasks by title or description…"
-            className="pl-11 h-11 rounded-xl border-border/60 text-sm bg-background"
+            className="pl-11 h-11 rounded-xl border-border/60 text-sm bg-background shadow-inner"
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border/40 shrink-0">
@@ -844,7 +1009,7 @@ export function Tasks() {
       {/* List view */}
       {view === 'list' && (
         <Tabs defaultValue="all">
-          <TabsList className="h-auto p-1 bg-muted/40 rounded-xl border border-border/30 gap-1 flex-wrap">
+          <TabsList className="h-auto p-1.5 bg-muted/40 rounded-2xl border border-border/30 gap-1 flex-wrap shadow-sm">
             {[
               { v: 'all',        l: 'All',         n: filtered.length },
               { v: 'todo',       l: 'To Do',       n: todo.length },
@@ -852,7 +1017,7 @@ export function Tasks() {
               { v: 'review',     l: 'Review',      n: rev.length },
               { v: 'completed',  l: 'Completed',   n: done.length },
             ].map(({ v, l, n }) => (
-              <TabsTrigger key={v} value={v} className="rounded-lg text-sm h-9 px-4 font-medium data-[state=active]:shadow-sm gap-2">
+              <TabsTrigger key={v} value={v} className="rounded-xl text-sm h-9 px-4 font-medium data-[state=active]:shadow-sm gap-2">
                 {l}
                 <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-border/50 text-xs font-bold">{n}</span>
               </TabsTrigger>

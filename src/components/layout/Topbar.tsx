@@ -50,14 +50,83 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-/** Notification icon colour by type */
-function notifDot(type?: string): string {
-  switch (type) {
-    case 'meeting':      return 'bg-indigo-500';
-    case 'task':         return 'bg-amber-500';
-    case 'vote':         return 'bg-rose-500';
-    case 'announcement': return 'bg-emerald-500';
-    default:             return 'bg-blue-500';
+/** Notification accent colour by backend category (matches API enum). */
+function notifDot(category?: string): string {
+  switch ((category ?? '').toUpperCase()) {
+    case 'MEETING':      return 'bg-indigo-500';
+    case 'VOTING':       return 'bg-rose-500';
+    case 'ANNOUNCEMENT': return 'bg-emerald-500';
+    case 'DOCUMENT':     return 'bg-blue-500';
+    case 'FINANCIAL':    return 'bg-amber-500';
+    case 'SYSTEM':       return 'bg-slate-500';
+    default:             return 'bg-slate-400';
+  }
+}
+
+// Map a backend `targetRoute` ("/tasks/<id>", "/polls/<id>", etc.) onto a
+// route the app actually serves. Board members live under `/board/...`;
+// org admins use the top-level routes. Returns null when nothing sensible
+// can be derived, so the caller can fall back to the details dialog.
+function resolveNotificationRoute(
+  notif: { targetRoute?: string; category?: string; attachmentType?: string },
+  isBoardMember: boolean,
+): string | null {
+  const segment = (() => {
+    const first = (notif.targetRoute ?? '').split('/').filter(Boolean)[0]?.toLowerCase();
+    if (first) return first;
+    const att = (notif.attachmentType ?? '').toLowerCase();
+    if (att) return att;
+    const cat = (notif.category ?? '').toLowerCase();
+    return cat;
+  })();
+
+  const memberRoutes: Record<string, string> = {
+    task: '/board/tasks',
+    tasks: '/board/tasks',
+    poll: '/board/polls',
+    polls: '/board/polls',
+    voting: '/board/polls',
+    vote: '/board/polls',
+    meeting: '/board/meetings',
+    meetings: '/board/meetings',
+    minutes: '/board/meetings',
+    document: '/board/documents',
+    documents: '/board/documents',
+    announcement: '/board/announcements',
+    announcements: '/board/announcements',
+    resolution: '/board/resolutions',
+    resolutions: '/board/resolutions',
+  };
+  const adminRoutes: Record<string, string> = {
+    task: '/tasks',
+    tasks: '/tasks',
+    poll: '/voting',
+    polls: '/voting',
+    voting: '/voting',
+    vote: '/voting',
+    meeting: '/meetings',
+    meetings: '/meetings',
+    minutes: '/minutes',
+    document: '/documents',
+    documents: '/documents',
+    announcement: '/announcements',
+    announcements: '/announcements',
+  };
+
+  const table = isBoardMember ? memberRoutes : adminRoutes;
+  return table[segment] ?? null;
+}
+
+/** Friendly group label for the dropdown headers. */
+function categoryLabel(category?: string): string {
+  switch ((category ?? '').toUpperCase()) {
+    case 'MEETING':      return 'Meetings';
+    case 'VOTING':       return 'Polls & Voting';
+    case 'ANNOUNCEMENT': return 'Announcements';
+    case 'DOCUMENT':     return 'Documents';
+    case 'FINANCIAL':    return 'Financial';
+    case 'SYSTEM':       return 'System';
+    default:             return 'Other';
   }
 }
 
@@ -179,14 +248,36 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
     ? (notificationsList.find((notif) => notif.id === selectedNotificationId) as NotificationPreview | undefined) ?? null
     : null;
 
+  // Clicking a notification: mark read immediately (optimistic — the badge
+  // and row update in the same frame) and redirect to whatever entity the
+  // notification points at. The backend stores routes like `/tasks/<id>`
+  // and `/polls/<id>`, but board-member screens live under `/board/...`
+  // and there's no detail route for an individual task/poll/etc. — just
+  // list pages. We rewrite the target to a page that exists for the
+  // current user so clicks stop landing on the 404 page.
   const openNotification = (notif: Notification) => {
     closeNotifications();
-    setSelectedNotificationId(notif.id);
+    if (!notif.isRead) markRead.mutate(notif.id);
 
-    if (!notif.isRead) {
-      markRead.mutate(notif.id);
-    }
+    const route = resolveNotificationRoute(notif, isBoardMember);
+    if (route) setLocation(route);
+    else setSelectedNotificationId(notif.id);
   };
+
+  // Group the dropdown list by category so meetings/polls/announcements
+  // visually cluster instead of forming one undifferentiated stream. Order
+  // preserves backend recency within each group.
+  const dropdownItems = notificationsList.slice(0, 8);
+  const groupedNotifications = (() => {
+    const groups = new Map<string, Notification[]>();
+    for (const n of dropdownItems) {
+      const key = categoryLabel(n.category);
+      const arr = groups.get(key) ?? [];
+      arr.push(n);
+      groups.set(key, arr);
+    }
+    return Array.from(groups.entries());
+  })();
 
   // User — read after mount
   const [user] = useState<ReturnType<typeof authService.getUser>>(() => {
@@ -394,14 +485,20 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                 {unreadCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      closeNotifications();
+                    onClick={(e) => {
+                      // Keep the dropdown open so the user sees the rows
+                      // flip from unread to read in real time. Optimistic
+                      // updates in the hook handle the actual state flip.
+                      e.preventDefault();
+                      e.stopPropagation();
                       markAllRead.mutate();
                     }}
                     className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 transition-colors disabled:opacity-50"
                     disabled={markAllRead.isPending}
                   >
-                    <Check className="h-3 w-3" />
+                    {markAllRead.isPending
+                      ? <span className="h-3 w-3 rounded-full border-2 border-indigo-300 border-t-transparent animate-spin" />
+                      : <Check className="h-3 w-3" />}
                     Mark all read
                   </button>
                 )}
@@ -421,45 +518,56 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No new notifications right now.</p>
                   </div>
                 ) : (
-                  notificationsList.slice(0, 8).map(notif => (
-                    <DropdownMenuItem
-                      key={notif.id}
-                      onSelect={() => openNotification(notif)}
-                      className={cn(
-                        'group relative flex items-start gap-3 px-4 py-3 cursor-pointer',
-                        'border-b border-gray-50 dark:border-gray-800/60 last:border-0',
-                        'hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors',
-                        !notif.isRead && 'bg-indigo-50/40 dark:bg-indigo-900/10',
-                      )}
-                    >
-                      {/* Type dot */}
-                      <span className={cn(
-                        'mt-1.5 h-2 w-2 rounded-full shrink-0',
-                        !notif.isRead ? notifDot((notif as any).type) : 'bg-gray-300 dark:bg-gray-700',
-                      )} />
-
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          'text-[12.5px] leading-snug truncate',
-                          !notif.isRead
-                            ? 'font-semibold text-gray-900 dark:text-white'
-                            : 'font-medium text-gray-700 dark:text-gray-300',
-                        )}>
-                          {notif.title}
-                        </p>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
-                          {notif.message}
-                        </p>
-                        <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1">
-                          {notif.createdAt ? relativeTime(notif.createdAt) : ''}
-                        </p>
+                  groupedNotifications.map(([groupLabel, items]) => (
+                    <div key={groupLabel}>
+                      <div className="sticky top-0 z-[1] px-4 py-1.5 text-[9.5px] font-bold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800/60">
+                        {groupLabel}
                       </div>
+                      {items.map((notif) => (
+                        <DropdownMenuItem
+                          key={notif.id}
+                          onSelect={() => openNotification(notif)}
+                          className={cn(
+                            'group relative flex items-start gap-3 px-4 py-3 cursor-pointer',
+                            'border-b border-gray-50 dark:border-gray-800/60 last:border-0',
+                            'hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200',
+                            // Soft, animated read-state transition — the
+                            // tinted background fades out the moment the
+                            // optimistic update flips isRead.
+                            !notif.isRead && 'bg-indigo-50/40 dark:bg-indigo-900/10',
+                          )}
+                        >
+                          <span className={cn(
+                            'mt-1.5 h-2 w-2 rounded-full shrink-0 transition-colors duration-300',
+                            !notif.isRead ? notifDot(notif.category) : 'bg-gray-300 dark:bg-gray-700',
+                          )} />
 
-                      {/* Unread dot */}
-                      {!notif.isRead && (
-                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />
-                      )}
-                    </DropdownMenuItem>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              'text-[12.5px] leading-snug truncate transition-all duration-200',
+                              !notif.isRead
+                                ? 'font-semibold text-gray-900 dark:text-white'
+                                : 'font-medium text-gray-600 dark:text-gray-400',
+                            )}>
+                              {notif.title}
+                            </p>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
+                              {notif.message}
+                            </p>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1">
+                              {notif.createdAt ? relativeTime(notif.createdAt) : ''}
+                              {notif.targetRoute && (
+                                <span className="ml-1.5 text-indigo-500/80 dark:text-indigo-400/70">· tap to open</span>
+                              )}
+                            </p>
+                          </div>
+
+                          {!notif.isRead && (
+                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 animate-pulse" />
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
                   ))
                 )}
               </div>

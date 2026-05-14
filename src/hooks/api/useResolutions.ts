@@ -11,13 +11,17 @@ export const resolutionKeys = {
     detail: (id: string) => [...resolutionKeys.details(), id] as const,
 };
 
+// Backend has no /resolutions controller yet — until it does, the polling
+// hook would 404 every 60s. Keep the query in place so callers don't blow
+// up, but suppress retries, background polling, and refetch-on-focus so we
+// fire at most one request per mount.
 export function useResolutions() {
     return useQuery({
         queryKey: resolutionKeys.list(),
         queryFn: () => resolutionsService.getAll(),
-        staleTime: 60 * 1000,
-        refetchInterval: 60 * 1000,
-        refetchOnWindowFocus: true,
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+        retry: false,
     });
 }
 
@@ -26,6 +30,7 @@ export function useResolutionById(id: string) {
         queryKey: resolutionKeys.detail(id),
         queryFn: () => resolutionsService.getById(id),
         enabled: !!id,
+        retry: false,
     })
 }
 export function useCreateResolution() {
