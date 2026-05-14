@@ -22,16 +22,28 @@ function useBoardBadges() {
 
   function compute() {
     try {
-      const parse = (key: string) => { try { return JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { return []; } };
-      const resolutions   = parse('bm:resolutions').filter((r: any) => r.status === 'OPEN' && !r.myVote).length;
-      const tasks         = parse('bm:tasks').filter((t: any) => ['PENDING','IN_PROGRESS','OVERDUE'].includes(t.status)).length;
-      const announcements = parse('bm:announcements').filter((a: any) => !a.isRead).length;
-      const polls         = parse('bm:polls').filter((p: any) => p.status === 'ACTIVE' && !(p.myResponse?.length)).length;
-      const threads       = parse('bm:threads');
-      const messages      = threads.reduce((acc: number, t: any) =>
-        acc + (t.messages ?? []).filter((m: any) => !m.readBy?.includes('user-001') && m.senderId !== 'user-001').length, 0);
-      const notifications = parse('bm:notifications').filter((n: any) => !n.isRead).length;
-      const compliance    = parse('bm:compliance').filter((c: any) => !c.isAcknowledged).length;
+      // Only use the board-member localStorage store if the app explicitly
+      // initialized it. This prevents sample/demo data saved in localStorage
+      // from appearing in production. The app should set 'bm:initialized'='1'
+      // when the bm: keys are intentionally written.
+      if (localStorage.getItem('bm:initialized') !== '1') {
+        setCounts({ resolutions: 0, tasks: 0, announcements: 0, polls: 0, messages: 0, notifications: 0, compliance: 0 });
+        return;
+      }
+
+      const parse = (key: string) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : []; } catch { return []; } };
+      const currentUserId = (authService.getUser() as any)?.userId ?? null;
+
+      const resolutions   = parse('bm:resolutions').filter((r: any) => r?.status === 'OPEN' && !r?.myVote).length;
+      const tasks         = parse('bm:tasks').filter((t: any) => ['PENDING','IN_PROGRESS','OVERDUE'].includes(t?.status)).length;
+      const announcements = parse('bm:announcements').filter((a: any) => !a?.isRead).length;
+      const polls         = parse('bm:polls').filter((p: any) => p?.status === 'ACTIVE' && (!p?.myResponse || p.myResponse.length === 0)).length;
+      const threads       = Array.isArray(parse('bm:threads')) ? parse('bm:threads') : [];
+      const messages      = currentUserId
+        ? threads.reduce((acc: number, t: any) => acc + (Array.isArray(t?.messages) ? t.messages.filter((m: any) => !(m.readBy ?? []).includes(currentUserId) && m.senderId !== currentUserId).length : 0), 0)
+        : 0;
+      const notifications = parse('bm:notifications').filter((n: any) => !n?.isRead).length;
+      const compliance    = parse('bm:compliance').filter((c: any) => !c?.isAcknowledged).length;
       setCounts({ resolutions, tasks, announcements, polls, messages, notifications, compliance });
     } catch {}
   }
@@ -58,10 +70,30 @@ interface NavItem {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function useTheme() {
-  const [isDark, setIsDark] = useState(() => typeof window !== 'undefined' && localStorage.getItem('eboard-theme') === 'dark');
-  useEffect(() => { document.documentElement.classList.toggle('dark', isDark); localStorage.setItem('eboard-theme', isDark ? 'dark' : 'light'); }, [isDark]);
-  return { isDark, toggle: useCallback(() => setIsDark(p => !p), []) };
+// Use the same theme sync semantics as Topbar to avoid divergent state.
+function useThemeSyncSidebar() {
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('eboard-theme') === 'dark';
+  });
+
+  useEffect(() => {
+    // Observe external changes (Topbar or other tabs) and keep state in sync
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const toggle = useCallback(() => {
+    const next = !document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('eboard-theme', next ? 'dark' : 'light');
+    setIsDark(next);
+  }, []);
+
+  return { isDark, toggle };
 }
 
 function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
@@ -94,11 +126,11 @@ function NavLink({ item, isActive, collapsed, onNavigate }: { item: NavItem; isA
 
   const inner = (
     <div onClick={onNavigate} className={cn('group relative flex items-center rounded-xl cursor-pointer select-none transition-all duration-200', collapsed ? 'justify-center p-2.5 mx-1.5' : 'gap-3 px-3.5 py-2.5 mx-1', isActive
-      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/30'
-      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-emerald-600 dark:hover:text-emerald-400 active:scale-[0.98]')}>
+      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-[0.98]')}>
       {isActive && !collapsed && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-white/60" />}
       <span className="relative flex shrink-0 items-center justify-center">
-        <Icon className={cn('h-[18px] w-[18px] transition-colors', isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-emerald-500')} />
+        <Icon className={cn('h-[18px] w-[18px] transition-colors', isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-indigo-500')} />
         {collapsed && badge > 0 && <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white ring-2 ring-white dark:ring-gray-950 px-0.5 z-10">{badge > 99 ? '99+' : badge}</span>}
       </span>
       {!collapsed && (
@@ -120,21 +152,25 @@ function NavLink({ item, isActive, collapsed, onNavigate }: { item: NavItem; isA
 
 function BoardSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const [location] = useLocation();
-  const { isDark, toggle } = useTheme();
+  const { isDark, toggle } = useThemeSyncSidebar();
   const badges = useBoardBadges();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   useClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
-  // Read from localStorage store (board member profile)
-  const profile = (() => {
+  // Prefer the authenticated user profile; fall back to the board-member
+  // localStorage profile only if present. Avoid using hard-coded demo
+  // defaults so the sidebar doesn't display fake names.
+  const authProfile = authService.getUser() as any | null;
+  const localProfile = (() => {
     try { return JSON.parse(localStorage.getItem('bm:profile') ?? 'null'); } catch { return null; }
   })();
-  const firstName = profile?.firstName ?? 'Alex';
-  const lastName  = profile?.lastName  ?? 'Johnson';
-  const email     = profile?.email     ?? '';
-  const title     = profile?.title     ?? 'Board Member';
-  const initials  = `${firstName[0]}${lastName[0]}`.toUpperCase();
+
+  const firstName = authProfile?.firstName ?? localProfile?.firstName ?? '';
+  const lastName  = authProfile?.lastName  ?? localProfile?.lastName ?? '';
+  const email     = authProfile?.email     ?? localProfile?.email ?? '';
+  const title     = authProfile?.title     ?? localProfile?.title ?? 'Member';
+  const initials  = ((firstName?.[0] ?? '') + (lastName?.[0] ?? '')).toUpperCase() || 'U';
 
   const mainNav: NavItem[] = [
     { icon: LayoutDashboard, label: 'Overview',       href: '/board' },
@@ -164,13 +200,13 @@ function BoardSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNa
       {/* Logo — board member branding */}
       <div className={cn('flex h-16 shrink-0 items-center border-b border-gray-200/70 dark:border-gray-800/70', collapsed ? 'justify-center px-2' : 'px-4')}>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
+          <div className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
             <span className="text-white font-black text-sm">BM</span>
           </div>
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-[15px] font-black text-gray-900 dark:text-white tracking-tight">E-Board</p>
-              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold tracking-wide uppercase">Board Member</p>
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-0.5 font-bold tracking-wide uppercase">Board Member</p>
             </div>
           )}
         </div>
@@ -203,13 +239,13 @@ function BoardSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNa
       {/* User */}
       <div ref={userMenuRef} className="border-t border-gray-200/70 dark:border-gray-800/70 p-2.5">
         {collapsed
-          ? <Tooltip label={`${firstName} ${lastName} · ${title}`}><button className="mx-auto block p-0.5"><Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-emerald-500 to-teal-600 text-white">{initials}</AvatarFallback></Avatar></button></Tooltip>
+          ? <Tooltip label={`${firstName} ${lastName} · ${title}`}><button className="mx-auto block p-0.5"><Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar></button></Tooltip>
           : (
             <div className="relative">
-              <button onClick={() => setUserMenuOpen(o => !o)} className={cn('w-full flex items-center gap-3 rounded-xl px-3 py-2 transition-all border', userMenuOpen ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200')}>
+              <button onClick={() => setUserMenuOpen(o => !o)} className={cn('w-full flex items-center gap-3 rounded-xl px-3 py-2 transition-all border', userMenuOpen ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800' : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200')}>
                 <div className="relative shrink-0">
-                  <Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-emerald-500 to-teal-600 text-white">{initials}</AvatarFallback></Avatar>
-                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-950" />
+                  <Avatar className="h-9 w-9"><AvatarFallback className="text-xs font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar>
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-gray-950" />
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-none">{firstName} {lastName}</p>
@@ -220,13 +256,13 @@ function BoardSidebarInner({ collapsed, onNavigate }: { collapsed: boolean; onNa
 
               {userMenuOpen && (
                 <div className={cn('absolute bottom-full left-0 right-0 mb-2 z-[60] bg-white dark:bg-gray-950 rounded-2xl overflow-hidden border border-gray-200/80 dark:border-gray-800/70 shadow-2xl animate-in fade-in-60 zoom-in-95 slide-in-from-bottom-2 duration-150')}>
-                  <div className="px-4 py-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-gray-900 dark:to-gray-900 border-b border-gray-200/60 dark:border-gray-800/60">
+                  <div className="px-4 py-3.5 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-900 border-b border-gray-200/60 dark:border-gray-800/60">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 shrink-0"><AvatarFallback className="text-sm font-extrabold bg-gradient-to-br from-emerald-500 to-teal-600 text-white">{initials}</AvatarFallback></Avatar>
+                          <Avatar className="h-10 w-10 shrink-0"><AvatarFallback className="text-sm font-extrabold bg-gradient-to-br from-indigo-500 to-blue-600 text-white">{initials}</AvatarFallback></Avatar>
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{firstName} {lastName}</p>
                         <p className="text-xs text-gray-500 truncate">{email}</p>
-                        <span className="inline-flex items-center mt-1 rounded-full bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">{title}</span>
+                        <span className="inline-flex items-center mt-1 rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">{title}</span>
                       </div>
                     </div>
                   </div>
@@ -290,7 +326,7 @@ export function BoardSidebar({ className }: { className?: string }) {
 
   return (
     <aside className={cn('fixed inset-y-0 left-0 z-40 flex flex-col bg-white dark:bg-gray-950 border-r border-gray-200/70 dark:border-gray-800/70 shadow-sm transition-[width] duration-300', collapsed ? 'w-[68px]' : 'w-64', className)}>
-      <button onClick={() => setCollapsed(!collapsed)} className="absolute -right-3.5 top-[72px] z-50 flex h-7 w-7 items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-md hover:border-emerald-400 text-emerald-500 transition-all hover:scale-110" aria-label={collapsed ? 'Expand' : 'Collapse'}>
+      <button onClick={() => setCollapsed(!collapsed)} className="absolute -right-3.5 top-[72px] z-50 flex h-7 w-7 items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-md hover:border-indigo-400 text-indigo-500 transition-all hover:scale-110" aria-label={collapsed ? 'Expand' : 'Collapse'}>
         {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
       </button>
       <BoardSidebarInner collapsed={collapsed} />
