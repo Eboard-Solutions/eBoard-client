@@ -48,7 +48,8 @@ function StatCard({ icon: Icon, label, value, subtext, color }: {
 
 export function SuperAdminDashboard() {
   const [, setLocation] = useLocation();
-  const { data: users = [], isLoading: loadingUsers } = useUsers();
+  const { data: usersResponse = [], isLoading: loadingUsers } = useUsers();
+  const users = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data ?? []);
   const { data: orgs = [], isLoading: loadingOrgs } = useOrganisations();
   const { data: pendingOrgs = [], isLoading: loadingPending } = usePendingOrganisations();
   const { data: analyticsRaw } = useAnalytics();
@@ -57,8 +58,8 @@ export function SuperAdminDashboard() {
   const analytics = analyticsRaw as AnalyticsData | undefined;
   const finance = financeRaw as FinanceOverview | undefined;
 
-  const activeUsers = users.filter((u: User) => u.isActive !== false);
-  const inactiveUsers = users.filter((u: User) => u.isActive === false);
+  const activeUsers = users.filter((u: User) => u.status === 'active');
+  const inactiveUsers = users.filter((u: User) => u.status !== 'active');
   const activeOrgs = orgs.filter((o: Organisation) => o.status === 'active' || o.status === 'approved');
   const suspendedOrgs = orgs.filter((o: Organisation) => o.status === 'suspended');
 
@@ -247,7 +248,7 @@ export function SuperAdminDashboard() {
             ) : (
               <div className="space-y-2.5">
                 {pendingOrgs.slice(0, 5).map((org: Organisation) => (
-                  <div key={org.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <div key={org.organisationId} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-900/40 dark:to-indigo-900/40 flex items-center justify-center flex-shrink-0">
                       <Building2 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                     </div>
@@ -302,7 +303,7 @@ export function SuperAdminDashboard() {
             ) : (
               <div className="space-y-2.5">
                 {users.slice(0, 5).map((user: User) => (
-                  <div key={user.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <div key={user.userId} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                       {(user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')}
                     </div>
@@ -312,7 +313,7 @@ export function SuperAdminDashboard() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="text-[10px]">{user.role}</Badge>
-                      {user.isActive !== false ? (
+                      {user.status === 'active' ? (
                         <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
                       ) : (
                         <UserX className="h-3.5 w-3.5 text-red-400" />

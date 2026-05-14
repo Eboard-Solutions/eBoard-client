@@ -79,18 +79,22 @@ function StatCard({ label, value, sub, accentClass, icon: Icon }: {
   label: string; value: number; sub?: string; accentClass: string;
   icon?: React.ElementType;
 }) {
+  // Resolve the matching foreground tint from the bg-*-500 accent so the
+  // icon container and number share a single colour identity.
+  const tintBg = accentClass.replace('-500', '-50') + ' dark:' + accentClass.replace('bg-', 'bg-') + '/15';
+  const tintFg = accentClass.replace('bg-', 'text-');
   return (
-    <div className="group relative rounded-2xl border border-border/60 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.10)] hover:border-border transition-all duration-200 overflow-hidden">
-      <div className={`absolute top-0 right-0 w-24 h-24 rounded-full ${accentClass} opacity-10 group-hover:opacity-15 transition-opacity translate-x-6 -translate-y-6 pointer-events-none`} />
-      <div className="relative flex items-start justify-between">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+    <div className="group relative rounded-2xl border border-border/60 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_10px_30px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:border-border transition-all duration-200 overflow-hidden">
+      <div className={`absolute top-0 right-0 w-28 h-28 rounded-full ${accentClass} opacity-[0.08] group-hover:opacity-[0.14] transition-opacity translate-x-8 -translate-y-8 pointer-events-none`} />
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-black tabular-nums tracking-tight leading-none">{value}</p>
-          {sub && <p className="text-xs text-muted-foreground mt-1.5 font-medium">{sub}</p>}
+          {sub && <p className="text-xs text-muted-foreground mt-2 font-medium">{sub}</p>}
         </div>
         {Icon && (
-          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/40 dark:ring-white/5 ${accentClass.replace('bg-', 'bg-').replace('-500', '-100 dark:bg-').concat('-500/20')} text-foreground/70`}>
-            <Icon className="h-4 w-4" />
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tintBg} ${tintFg} ring-1 ring-inset ring-white/40 dark:ring-white/5`}>
+            <Icon className="h-4 w-4" strokeWidth={2.25} />
           </div>
         )}
       </div>
@@ -210,21 +214,40 @@ export default function MembersPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleAddSubmit = useCallback((data: AddMemberFormData) => {
-    // OPTIMISTIC UX: close the dialog and show success the moment the
-    // request leaves — the network round-trip happens in the background.
-    // The mutation resolves seconds later; if it errors, we re-open the
-    // dialog and surface the reason. This is the single biggest perceived
-    // latency win: the user no longer sits looking at a spinning button.
+    // OPTIMISTIC UX: close the dialog and show a loading toast the moment
+    // the request leaves. If a temp password was set we surface it in the
+    // success toast with a one-click Copy action so the admin can share it
+    // with the new member without having to remember what they typed.
     setShowAddDialog(false);
     const pendingToast = toast.loading('Adding member…');
+    const tempPassword = data.password;
 
     createUser.mutate(data, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
-        toast.success('Member added', {
-          id: pendingToast,
-          description: 'They will receive their activation email shortly. Use Invite to resend if needed.',
-        });
+
+        if (tempPassword) {
+          // Long-duration toast with a Copy action — keeps the password
+          // visible while the admin tabs to their chat tool to share it.
+          toast.success(`${data.firstName} ${data.lastName} added`, {
+            id: pendingToast,
+            duration: 30_000, // 30s — give the admin time to copy/share
+            description: `Temporary password: ${tempPassword}  ·  They must change it on first login.`,
+            action: {
+              label: 'Copy password',
+              onClick: () => {
+                navigator.clipboard.writeText(tempPassword)
+                  .then(() => toast.success('Password copied to clipboard'))
+                  .catch(() => toast.error('Could not access clipboard'));
+              },
+            },
+          });
+        } else {
+          toast.success('Member added', {
+            id: pendingToast,
+            description: 'They will receive their activation email shortly. Use Invite to resend if needed.',
+          });
+        }
       },
       onError: (err) => {
         // The service attached situation-specific copy to err.message

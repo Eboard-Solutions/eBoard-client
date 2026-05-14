@@ -1,10 +1,10 @@
 // src/pages/super-admin/UsersManagement.tsx
 import { useState, useMemo } from 'react';
 import {
-  Users, Search, UserPlus, MoreHorizontal, Shield,
-  UserCheck, UserX, ChevronDown, ArrowUpDown, Trash2, Edit,
+  Users, Search, MoreHorizontal, Shield,
+  UserCheck, UserX, Trash2,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -29,14 +29,13 @@ import {
 } from '@/hooks/api/useUsers';
 import type { User, UserRole } from '@/types/api.types';
 
-const ROLES: UserRole[] = ['SuperAdmin', 'OrgAdmin', 'BoardMember', 'Admin', 'User'];
+const ROLES: UserRole[] = ['superAdmin', 'OrgAdmin', 'BoardMember', 'secretary'];
 
 const roleBadge: Record<string, string> = {
-  SuperAdmin:  'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
+  superAdmin:  'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
   OrgAdmin:    'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700',
-  Admin:       'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
   BoardMember: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700',
-  User:        'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+  secretary:   'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
 };
 
 export function UsersManagement() {
