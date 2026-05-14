@@ -42,8 +42,7 @@ export function useUnreadNotificationsCount() {
     queryKey: notificationKeys.unreadCount(),
     queryFn: async () => {
       const response = await NotificationsService.getAll();
-      // Count unread from the items array
-      const items = response.items || [];
+      const items = response.data || [];
       return items.filter((n: { isRead?: boolean }) => !n.isRead).length;
     },
   });
@@ -105,7 +104,7 @@ export function useMarkAllNotificationsAsRead() {
   return useMutation({
     mutationFn: async () => {
       const notifications = await NotificationsService.getAll();
-      const items = notifications.items || [];
+      const items = notifications.data || [];
       const unreadItems = items.filter((n: { id: string; isRead?: boolean }) => !n.isRead);
       await Promise.all(unreadItems.map((n: { id: string }) => NotificationsService.markAsRead(n.id)));
     },

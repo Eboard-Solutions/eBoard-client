@@ -4,9 +4,37 @@ import { formatDistanceToNow } from 'date-fns';
 import { Bell, CalendarDays, CheckSquare, FileText, Vote, BarChart3, Megaphone, MessageSquare, Check, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNotifications, useMarkNotificationAsRead, useMarkAllNotificationsAsRead, useDeleteNotification } from '@/hooks/api';
-import type { Notification } from '../types';
 import MemberPortalLayout from '../components/MemberPortalLayout';
 import { EmptyState, unwrapList } from '../components/page-helpers';
+
+type NotificationItem = {
+  notificationId: string;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt?: string | number | Date | null;
+};
+
+function normalizeNotification(item: any): NotificationItem {
+  return {
+    notificationId: item?.notificationId ?? item?.id ?? '',
+    type: item?.type ?? item?.category ?? 'SYSTEM',
+    title: item?.title ?? 'Notification',
+    body: item?.body ?? item?.message ?? '',
+    isRead: Boolean(item?.isRead),
+    createdAt: item?.createdAt ?? null,
+  };
+}
+
+function formatNotificationTime(createdAt?: string | number | Date | null): string {
+  if (!createdAt) return 'Just now';
+
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+
+  return formatDistanceToNow(date, { addSuffix: true });
+}
 
 export function NotificationsPage() {
   const { data } = useNotifications();
@@ -14,7 +42,7 @@ export function NotificationsPage() {
   const markAll = useMarkAllNotificationsAsRead();
   const deleteNotification = useDeleteNotification();
 
-  const notifications = unwrapList<Notification>(data);
+  const notifications = unwrapList<any>(data).map(normalizeNotification);
 
   const TYPE_ICONS: Record<string, React.ElementType> = {
     MEETING: CalendarDays,
@@ -56,22 +84,22 @@ export function NotificationsPage() {
             const Icon = TYPE_ICONS[n.type] ?? Bell;
             const color = TYPE_COLORS[n.type] ?? 'bg-slate-100 text-slate-600';
             return (
-              <div key={n.notificationId} className={`group flex items-start gap-3 p-4 rounded-2xl border transition-all ${!n.isRead ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/10' : ''}`}>
+              <div key={n.notificationId || `${n.title}-${n.createdAt ?? 'unknown'}`} className={`group flex items-start gap-3 p-4 rounded-2xl border transition-all ${!n.isRead ? 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/10' : ''}`}>
                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className={`text-sm font-semibold ${n.isRead ? 'text-muted-foreground' : 'text-foreground'}`}>{n.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{formatNotificationTime(n.createdAt)}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   {!n.isRead && (
-                    <button type="button" onClick={() => markRead.mutate(n.notificationId)} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                    <button type="button" disabled={!n.notificationId} onClick={() => markRead.mutate(n.notificationId)} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium disabled:cursor-not-allowed disabled:opacity-50">
                       <Check className="h-4 w-4" />
                     </button>
                   )}
-                  <button type="button" onClick={() => deleteNotification.mutate(n.notificationId)} className="text-muted-foreground hover:text-destructive transition-colors">
+                  <button type="button" disabled={!n.notificationId} onClick={() => deleteNotification.mutate(n.notificationId)} className="text-muted-foreground hover:text-destructive transition-colors disabled:cursor-not-allowed disabled:opacity-50">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>

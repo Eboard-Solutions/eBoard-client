@@ -162,7 +162,7 @@ function BoardRoute({ path, children }: { path: string; children: React.ReactNod
   return (
     <Route path={path}>
       <ProtectedRoute allowedRoles={['boardmember', 'orgadmin', 'superadmin']}>
-        <AppLayout>{children}</AppLayout>
+        <AppLayout fullWidth={path === '/board'}>{children}</AppLayout>
       </ProtectedRoute>
     </Route>
   );

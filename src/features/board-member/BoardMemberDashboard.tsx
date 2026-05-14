@@ -24,6 +24,51 @@ import {
 import type { Poll } from "./types";
 import { unwrapList, unwrap } from "./components/page-helpers";
 
+type DashboardMeeting = {
+  meetingId?: string;
+  id?: string;
+  title?: string;
+  scheduledAt?: string;
+  startTime?: string;
+  location?: string;
+  status?: string;
+  attendees?: unknown[];
+};
+
+type DashboardTask = {
+  taskId?: string;
+  id?: string;
+  title?: string;
+  dueDate?: string;
+  status?: string;
+  priority?: string;
+};
+
+type DashboardAnnouncement = {
+  announcementId?: string;
+  id?: string;
+  title?: string;
+  content?: string;
+  createdAt?: string;
+  isRead?: boolean;
+};
+
+function safeDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatShortDate(value?: string) {
+  const date = safeDate(value);
+  return date ? format(date, 'MMM d') : 'TBD';
+}
+
+function formatShortTime(value?: string) {
+  const date = safeDate(value);
+  return date ? format(date, 'p') : 'TBD';
+}
+
 function StatCard({
   icon: Icon,
   label,
@@ -119,10 +164,10 @@ export default function BoardMemberDashboard() {
   const { data: analyticsData } = useAnalytics();
   const { data: currentUser } = useCurrentUser();
 
-  const meetings = unwrapList<any>(meetingsData);
-  const tasks = unwrapList<any>(tasksData);
+  const meetings = unwrapList<DashboardMeeting>(meetingsData);
+  const tasks = unwrapList<DashboardTask>(tasksData);
   const resolutions = unwrapList<any>(resolutionsData);
-  const announcements = unwrapList<any>(announcementsData);
+  const announcements = unwrapList<DashboardAnnouncement>(announcementsData);
   const polls = unwrapList<Poll>(pollsData);
   const notifications = unwrapList<any>(notificationsData);
   const analytics = unwrap<any>(analyticsData) ?? {
@@ -143,17 +188,14 @@ export default function BoardMemberDashboard() {
         : "Good evening";
 
   const upcomingMeetings = meetings
-    .filter(
-      (m: any) => m.status === "SCHEDULED" && new Date(m.scheduledAt) > now,
-    )
-    .sort(
-      (a: any, b: any) =>
-        new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
-    )
-    .slice(0, 3);
-  const myTasks = tasks
-    .filter((t: any) => t.status !== "COMPLETED")
+    .filter((meeting) => meeting.status === 'SCHEDULED' && safeDate(meeting.scheduledAt) && safeDate(meeting.scheduledAt)! > now)
+    .sort((a, b) => {
+      const left = safeDate(a.scheduledAt)?.getTime() ?? 0;
+      const right = safeDate(b.scheduledAt)?.getTime() ?? 0;
+      return left - right;
+    })
     .slice(0, 4);
+  const myTasks = tasks.filter((task) => task.status !== 'COMPLETED').slice(0, 4);
   const pendingVotes = resolutions.filter(
     (r: any) => r.status === "OPEN" && !r.myVote,
   );
@@ -167,30 +209,71 @@ export default function BoardMemberDashboard() {
     ? `${currentUser.firstName} ${currentUser.lastName}`.trim()
     : "User";
 
+  const quickStats = [
+    { label: 'Upcoming meetings', value: upcomingMeetings.length, color: 'bg-indigo-500', href: '/board/meetings' },
+    { label: 'Open tasks', value: myTasks.length, color: 'bg-emerald-500', href: '/board/tasks' },
+    { label: 'Unread alerts', value: unreadCount, color: 'bg-rose-500', href: '/board/notifications' },
+    { label: 'Active polls', value: polls.filter((poll) => poll.status === 'ACTIVE').length, color: 'bg-violet-500', href: '/board/polls' },
+    { label: 'Pending votes', value: pendingVotes.length, color: 'bg-amber-500', href: '/board/resolutions' },
+    { label: 'Meeting completion', value: `${analytics.taskCompletionRate ?? 0}%`, color: 'bg-sky-500', href: '/board/compliance' },
+  ];
+
+  const attentionItems = [
+    { title: 'Vote queue', value: `${pendingVotes.length} resolutions`, note: pendingVotes.length ? pendingVotes[0].title : 'No pending votes', href: '/board/resolutions' },
+    { title: 'Unread announcements', value: `${unreadAnns.length} updates`, note: unreadAnns.length ? unreadAnns[0].title : 'All caught up', href: '/board/announcements' },
+    { title: 'Notifications', value: `${unreadCount} unread`, note: unreadCount ? 'Open the latest alerts' : 'Nothing new right now', href: '/board/notifications' },
+  ];
+
   return (
-    <div className="container mx-auto max-w-7xl px-4 md:px-6 py-8 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {greeting}, {userName}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {format(now, "EEEE, MMMM d, yyyy")}
-          </p>
-        </div>
-        {unreadCount > 0 && (
-          <Link href="/board/notifications">
-            <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2 cursor-pointer hover:shadow-sm transition-shadow">
-              <Bell className="h-4 w-4 text-indigo-600" />
-              <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-                {unreadCount} new notifications
+    <div className="w-full min-w-0 px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6 lg:space-y-8">
+      <section className="relative overflow-hidden rounded-[28px] border border-border/60 bg-card shadow-sm">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-rose-500/10" />
+        <div className="relative grid gap-6 p-5 sm:p-6 lg:grid-cols-[1.5fr_0.85fr] lg:items-center lg:p-8">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+              <Shield className="h-3.5 w-3.5 text-indigo-600" />
+              Board member dashboard
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-balance">
+                {greeting}, {userName}
+              </h1>
+              <p className="max-w-2xl text-sm sm:text-base text-muted-foreground">
+                Your meetings, votes, tasks, and updates in one responsive view. Everything important is surfaced first so you can act faster on any device.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-2 rounded-full bg-muted/60 px-3 py-1.5">
+                <CalendarDays className="h-4 w-4 text-indigo-600" />
+                {format(now, 'EEEE, MMM d')}
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-muted/60 px-3 py-1.5">
+                <BarChart3 className="h-4 w-4 text-violet-600" />
+                {analytics.meetingsThisQuarter ?? 0} meetings this quarter
               </span>
             </div>
-          </Link>
-        )}
-      </div>
+          </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <Link href="/board/notifications">
+              <div className="group h-full rounded-2xl border border-indigo-200/80 bg-indigo-50/80 p-4 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                <Bell className="h-5 w-5 text-indigo-600" />
+                <p className="mt-4 text-2xl font-black text-indigo-950 dark:text-indigo-100">{unreadCount}</p>
+                <p className="text-sm font-medium text-indigo-700/90 dark:text-indigo-300">Unread notifications</p>
+              </div>
+            </Link>
+            <Link href="/board/tasks">
+              <div className="group h-full rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                <CheckSquare className="h-5 w-5 text-emerald-600" />
+                <p className="mt-4 text-2xl font-black text-emerald-950 dark:text-emerald-100">{myTasks.length}</p>
+                <p className="text-sm font-medium text-emerald-700/90 dark:text-emerald-300">Open tasks</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <StatCard
           icon={CalendarDays}
           label="Upcoming"
@@ -238,54 +321,167 @@ export default function BoardMemberDashboard() {
           accentClass="bg-sky-500"
           href="/board/compliance"
         />
-      </div>
+      </section>
 
-      {activePoll && (
-        <Link href="/board/polls">
-          <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/20 dark:to-indigo-950/20 p-4 flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-violet-600 flex items-center justify-center shrink-0">
-              <BarChart3 className="h-5 w-5 text-white" />
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[28px] border border-border/60 bg-card p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">Priority actions</h2>
+              <p className="text-sm text-muted-foreground">Things that need attention now.</p>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">
-                Active Poll — Your response needed
-              </p>
-              <p className="text-sm text-violet-700 dark:text-violet-300 truncate">
-                {activePoll.question}
-              </p>
-            </div>
-            <span className="shrink-0 text-xs font-semibold text-violet-600 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 px-3 py-1.5 rounded-full">
-              Respond →
-            </span>
+            <Link href="/board/analytics">
+              <span className="text-sm font-medium text-indigo-600 hover:text-indigo-700">View analytics</span>
+            </Link>
           </div>
-        </Link>
-      )}
 
-      {pendingVotes.length > 0 && (
-        <Link href="/board/resolutions">
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 p-4 flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
-              <Vote className="h-5 w-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                {pendingVotes.length} resolution
-                {pendingVotes.length > 1 ? "s" : ""} awaiting your vote
-              </p>
-              <p className="text-sm text-amber-700 dark:text-amber-300 truncate">
-                {pendingVotes[0].title}
-              </p>
-            </div>
-            <span className="shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 rounded-full">
-              Vote now →
-            </span>
+          <div className="space-y-3">
+            {attentionItems.map((item) => (
+              <Link key={item.title} href={item.href}>
+                <div className="group rounded-2xl border border-border/60 bg-muted/20 p-4 transition-all hover:border-indigo-200 hover:bg-indigo-50/40 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/20">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.note}</p>
+                    </div>
+                    <span className="mt-2 inline-flex self-start rounded-full bg-background px-3 py-1 text-xs font-semibold text-foreground shadow-sm sm:mt-0">
+                      {item.value}
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
-        </Link>
-      )}
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* The remainder of the dashboard body can stay as-is using existing data above */}
-      </div>
+        <div className="rounded-[28px] border border-border/60 bg-card p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">Quick insights</h2>
+              <p className="text-sm text-muted-foreground">At-a-glance board metrics.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {quickStats.map((stat) => (
+              <Link key={stat.label} href={stat.href}>
+                <div className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                  <div className={`h-9 w-9 rounded-xl ${stat.color} opacity-15 mb-3`} />
+                  <p className="text-2xl font-black tracking-tight">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {activePoll && (
+            <Link href="/board/polls">
+              <div className="mt-4 rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 via-indigo-50 to-sky-50 dark:from-violet-950/20 dark:via-indigo-950/20 dark:to-sky-950/20 p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-violet-600 flex items-center justify-center shrink-0">
+                    <BarChart3 className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">Active poll needs your response</p>
+                    <p className="mt-1 text-sm text-violet-700 dark:text-violet-300 line-clamp-2">{activePoll.question}</p>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-[28px] border border-border/60 bg-card p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">Upcoming meetings</h2>
+              <p className="text-sm text-muted-foreground">Next sessions on your schedule.</p>
+            </div>
+            <Link href="/board/meetings">
+              <span className="text-sm font-medium text-indigo-600 hover:text-indigo-700">Open meetings</span>
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {upcomingMeetings.length > 0 ? (
+              upcomingMeetings.map((meeting) => (
+                <div key={meeting.meetingId ?? meeting.id ?? meeting.title} className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-tight truncate">{meeting.title ?? 'Untitled meeting'}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {formatShortDate(meeting.scheduledAt)} at {formatShortTime(meeting.scheduledAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CalendarDays className="h-4 w-4" />
+                      {meeting.location ?? 'Location TBD'}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-8 text-center text-sm text-muted-foreground">
+                No upcoming meetings right now.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-border/60 bg-card p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">Tasks and updates</h2>
+              <p className="text-sm text-muted-foreground">Your current workload and recent notices.</p>
+            </div>
+            <Link href="/board/tasks">
+              <span className="text-sm font-medium text-indigo-600 hover:text-indigo-700">Open tasks</span>
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {myTasks.length > 0 ? (
+              myTasks.map((task) => (
+                <div key={task.taskId ?? task.id ?? task.title} className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-tight truncate">{task.title ?? 'Untitled task'}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Due {formatShortDate(task.dueDate)}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-background px-3 py-1 text-xs font-semibold shadow-sm">
+                      {task.priority ?? 'NORMAL'}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-8 text-center text-sm text-muted-foreground">
+                No open tasks to show.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-border/60 bg-background p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Announcements</p>
+                <p className="text-xs text-muted-foreground">Latest unread items from the board.</p>
+              </div>
+              <span className="text-sm font-black">{unreadAnns.length}</span>
+            </div>
+            {unreadAnns.slice(0, 2).map((ann) => (
+              <div key={ann.announcementId ?? ann.id ?? ann.title} className="mt-3 rounded-xl bg-muted/20 p-3">
+                <p className="text-sm font-medium line-clamp-1">{ann.title}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{ann.content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
