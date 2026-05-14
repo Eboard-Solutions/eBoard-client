@@ -34,6 +34,7 @@ import { Announcements } from '@/pages/Announcements';
 import { Reports }       from '@/pages/Reports';
 import { Settings }      from '@/pages/Settings';
 import OrganisationPage  from '@/pages/Organisation';
+import Profile           from '@/pages/Profile';
 
 // ── Board Member Dashboard ───────────────────────────────────────────────────
 import {
@@ -209,6 +210,7 @@ export default function App() {
           <AppRoute path="/tasks">         <Tasks />            </AppRoute>
           <AppRoute path="/announcements"> <Announcements />    </AppRoute>
           <AppRoute path="/organisation">  <OrganisationPage /> </AppRoute>
+          <AppRoute path="/profile">       <Profile />          </AppRoute>
           <AppRoute path="/settings">      <Settings />         </AppRoute>
 
           <AppRoute path="/meetings/live/:id" fullWidth>

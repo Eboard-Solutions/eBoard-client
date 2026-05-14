@@ -70,9 +70,22 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
+// Only re-wrap responses that *already* look like a server ResponseObject
+// payload ({ statusCode, message, data, ... }). Some endpoints — notably the
+// meeting-session controller — return raw TypeORM entities. Blindly running
+// `ResponseObject.fromObject(rawEntity)` on those reads `rawEntity.data`
+// (undefined) and overwrites `response.data` with an empty wrapper, dropping
+// the actual payload on the floor. The signature we look for is "has either
+// a numeric statusCode or a string message at the top level".
+const looksWrapped = (body: unknown): boolean => {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Record<string, unknown>;
+  return typeof b.statusCode === 'number' || typeof b.message === 'string';
+};
+
 apiClient.interceptors.response.use(
     (response: AxiosResponse) => {
-      if (response.data) {
+      if (response.data && looksWrapped(response.data)) {
         response.data = ResponseObject.fromObject(response.data);
       }
       return response;
@@ -141,7 +154,7 @@ apiClient.interceptors.response.use(
         }
       }
 
-      if (error.response?.data) {
+      if (error.response?.data && looksWrapped(error.response.data)) {
         error.response.data = ResponseObject.fromObject(error.response.data);
       }
 
