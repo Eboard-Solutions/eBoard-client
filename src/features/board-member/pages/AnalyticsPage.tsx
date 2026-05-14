@@ -2,7 +2,8 @@
 
 import { CalendarDays, FileText, Award, Clock, TrendingUp } from 'lucide-react';
 import { useAnalytics } from '@/hooks/api';
-import { PageHeader, unwrap } from '../components/page-helpers';
+import { unwrap } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
 
 export function AnalyticsPage() {
   const { data } = useAnalytics();
@@ -39,8 +40,7 @@ export function AnalyticsPage() {
   const maxBar = Math.max(...analytics.monthlyTrend.map((m: any) => Math.max(m.meetings, m.tasks, m.votes)), 1);
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 md:px-6 py-8">
-      <PageHeader icon={TrendingUp} title="Analytics & Reports" color="bg-rose-500" subtitle="Board performance insights" />
+    <MemberPortalLayout icon={TrendingUp} title="Analytics & Reports" color="bg-rose-500" subtitle="Board performance insights">
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <RingGauge value={analytics.attendanceRate} label="Meeting Attendance" color="text-indigo-500" sub={`${analytics.meetingsThisQuarter} meetings this quarter`} />
@@ -85,6 +85,6 @@ export function AnalyticsPage() {
           ))}
         </div>
       </div>
-    </div>
+    </MemberPortalLayout>
   );
 }
