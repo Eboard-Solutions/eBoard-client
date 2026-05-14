@@ -26,7 +26,6 @@ import {
   ShieldCheck,
   Users,
   Building2,
-  AlertCircle,
 } from 'lucide-react';
 
 import authService from '@/lib/auth';
@@ -53,10 +52,6 @@ export function UserLogin() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const emailInvalid = touched.email && !!email && !EMAIL_RE.test(email.trim());
-  const passwordInvalid = touched.password && !!password && password.length < 8;
-  const orgCodeInvalid = touched.orgCode && !orgCode.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

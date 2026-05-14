@@ -1,7 +1,7 @@
 // src/pages/super-admin/SuperAdminDashboard.tsx
 import {
   Users, Building2, ShieldAlert, Clock, TrendingUp, UserCheck, UserX,
-  AlertTriangle, Calendar, ListTodo, Vote, DollarSign, FileText,
+  AlertTriangle, Calendar, ListTodo, Vote, DollarSign,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,7 @@ import { useUsers } from '@/hooks/api/useUsers';
 import { useOrganisations, usePendingOrganisations } from '@/hooks/api/useOrganisations';
 import { useAnalytics, useFinanceOverview } from '@/hooks/api/useOverview';
 import { useLocation } from 'wouter';
-import type { User, Organisation, Meeting, Task, Poll, AnalyticsData, FinanceOverview } from '@/types/api.types';
+import type { User, Organisation, AnalyticsData, FinanceOverview } from '@/types/api.types';
 
 function StatCard({ icon: Icon, label, value, subtext, color }: {
   icon: React.ElementType;
@@ -60,7 +60,7 @@ export function SuperAdminDashboard() {
 
   const activeUsers = users.filter((u: User) => u.status === 'active');
   const inactiveUsers = users.filter((u: User) => u.status !== 'active');
-  const activeOrgs = orgs.filter((o: Organisation) => o.status === 'active' || o.status === 'approved');
+  const activeOrgs = orgs.filter((o: Organisation) => o.status === 'approved');
   const suspendedOrgs = orgs.filter((o: Organisation) => o.status === 'suspended');
 
   const upcomingMeetings = analytics?.upcomingMeetings ?? [];

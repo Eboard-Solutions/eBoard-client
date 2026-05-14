@@ -565,7 +565,7 @@ export function Settings() {
     clearDirty: () => void,
   ) => {
     try {
-      await updateSettings.mutateAsync({ ...patch, version: settings?.version });
+      await updateSettings.mutateAsync(patch);
       toast.success('Settings saved');
       clearDirty();
       refetchSettings();
