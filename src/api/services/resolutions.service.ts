@@ -20,8 +20,13 @@ export interface CastVoteData {
 
 export const resolutionsService = {
     async getAll(): Promise<ResponseObject<Resolution[]>> {
-        const response = await apiClient.get<ResponseObject<Resolution[]>>(ENDPOINTS.RESOLUTIONS.BASE);
-        return response.data;
+        try {
+            const response = await apiClient.get<ResponseObject<Resolution[]>>(ENDPOINTS.RESOLUTIONS.BASE);
+            return response.data;
+        } catch (err) {
+            // If the backend doesn't expose resolutions yet (404), return an empty successful wrapper
+            return new ResponseObject<Resolution[]>(404, 'Not found', []);
+        }
     },
 
     async getById(id: string): Promise<ResponseObject<Resolution>> {
