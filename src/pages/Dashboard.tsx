@@ -3,7 +3,7 @@
 // src/pages/Dashboard.tsx
 import { useState, useEffect, useRef, useMemo} from 'react';
 import { useLocation } from 'wouter';
-import { useMyMeetings } from '@/hooks/api/useMeetings';
+import { useMyMeetings, useMeetings } from '@/hooks/api/useMeetings';
 import { useAnnouncements } from '@/hooks/api/useAnnouncements';
 import { useDocuments } from '@/hooks/api/useDocuments';
 import { useTasks } from '@/hooks/api/useTasks';
@@ -1281,7 +1281,11 @@ function OrgAdminDashboard({ currentUser }: { currentUser: Record<string, unknow
   const [, navigate] = useLocation();
   const { data: analyticsRes, isLoading: loadingAnalytics } = useAnalytics();
   const { data: financeRes,   isLoading: loadingFinance   } = useFinanceOverview();
-  const { data: meetingsRes,  isLoading: loadingMeetings  } = useMyMeetings();
+  // Use the full org-wide meetings list, not `useMyMeetings`. Admins
+  // need to see every upcoming meeting in the org, including ones they
+  // created but aren't an attendee of — otherwise this widget renders
+  // empty while the Meetings page (which uses `useMeetings`) shows them.
+  const { data: meetingsRes,  isLoading: loadingMeetings  } = useMeetings({ page: 1, limit: 50 });
   const { data: tasksRes,     isLoading: loadingTasks     } = useTasks();
   const { data: pollsRes,     isLoading: loadingPolls     } = usePolls();
   const { data: announcementsRes }                          = useAnnouncements();
@@ -1436,7 +1440,7 @@ function OrgAdminDashboard({ currentUser }: { currentUser: Record<string, unknow
         <div className="col-span-12 lg:col-span-4 space-y-5">
           <WidgetCard title="Upcoming Meetings" icon={Calendar} iconColor="text-indigo-500"
             action={{ label: 'All', onClick: () => navigate('/meetings') }} delay={0}>
-            {loadingMeetings ? <WidgetSkel rows={3} h={56} /> : <UpcomingMeetingsWidget meetings={upcoming} />}
+            {loadingMeetings ? <WidgetSkel rows={3} h={56} /> : <UpcomingMeetingsWidget meetings={upcoming} meetingsRoute="/meetings" />}
           </WidgetCard>
 
           <WidgetCard title="Smart Reminders" icon={Clock} iconColor="text-rose-500" delay={20}>
@@ -1613,7 +1617,7 @@ function UserDashboard({ currentUser }: { currentUser: Record<string, unknown> }
         <div className="col-span-12 lg:col-span-4 space-y-5">
           <WidgetCard title="My Meetings" icon={Calendar} iconColor="text-indigo-500"
             action={{ label: 'All', onClick: () => navigate('/meetings') }} delay={0}>
-            {loadingMeetings ? <WidgetSkel rows={3} h={56} /> : <UpcomingMeetingsWidget meetings={upcoming} />}
+            {loadingMeetings ? <WidgetSkel rows={3} h={56} /> : <UpcomingMeetingsWidget meetings={upcoming} meetingsRoute="/meetings" />}
           </WidgetCard>
 
           <WidgetCard title="Smart Reminders" icon={Clock} iconColor="text-rose-500" delay={20}>
