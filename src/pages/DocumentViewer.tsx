@@ -98,48 +98,119 @@ const ACC: Record<string, { lbl: string; Icon: React.ElementType; cls: string }>
 // any document. This hook does the round-trip once per doc, caches the
 // result, and refetches on demand.
 
-interface UrlState { url: string | null; status: 'idle' | 'loading' | 'ready' | 'error'; error?: string }
+interface UrlState { url: string | null; status: 'idle' | 'loading' | 'ready' | 'error'; error?: string; notFound?: boolean }
+
+// Module-level caches. The "resolved" cache stores successful URLs so
+// revisiting a doc doesn't re-fetch (signed URLs are long-lived enough
+// for a session). The "in-flight" cache deduplicates concurrent requests
+// for the same docId so React StrictMode's double-invoke in dev — which
+// was causing the duplicate 404s you were seeing — doesn't hit the
+// network twice. The "not-found" cache short-circuits retries on docs
+// the backend has already told us don't have a downloadable file: those
+// are deterministic 404s (no blob attached), not transient errors, so
+// retrying just spams the console.
+const resolvedUrlCache = new Map<string, string>();
+const inflightUrlCache = new Map<string, Promise<string | null>>();
+const notFoundCache    = new Set<string>();
+
+async function fetchDownloadUrl(docId: string): Promise<string | null> {
+  const cached = resolvedUrlCache.get(docId);
+  if (cached) return cached;
+  if (notFoundCache.has(docId)) return null;
+
+  const inflight = inflightUrlCache.get(docId);
+  if (inflight) return inflight;
+
+  const promise = apiClient
+    .get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(docId), { timeout: 15_000 })
+    .then((res) => {
+      const body = res.data as Record<string, unknown> | undefined;
+      const url =
+        (body?.data as { url?: string } | undefined)?.url
+        ?? ((body as { url?: string } | undefined)?.url)
+        ?? ((body?.data as Record<string, unknown> | undefined)?.data as { url?: string } | undefined)?.url
+        ?? null;
+      if (url) resolvedUrlCache.set(docId, url);
+      return url;
+    })
+    .finally(() => {
+      inflightUrlCache.delete(docId);
+    });
+
+  inflightUrlCache.set(docId, promise);
+  return promise;
+}
 
 function useDocumentUrl(docId: string | undefined, refreshKey: number, fallbackUrl?: string): UrlState & { reload: () => void } {
-  const [state, setState] = useState<UrlState>(
-    fallbackUrl ? { url: fallbackUrl, status: 'ready' } : { url: null, status: 'idle' },
-  );
+  const [state, setState] = useState<UrlState>(() => {
+    if (docId && resolvedUrlCache.has(docId)) return { url: resolvedUrlCache.get(docId)!, status: 'ready' };
+    if (fallbackUrl) return { url: fallbackUrl, status: 'ready' };
+    return { url: null, status: 'idle' };
+  });
   const [bump, setBump] = useState(0);
-  const reload = useCallback(() => setBump(b => b + 1), []);
+  const reload = useCallback(() => {
+    if (docId) {
+      // Manual reload — invalidate caches so we genuinely try again.
+      resolvedUrlCache.delete(docId);
+      notFoundCache.delete(docId);
+    }
+    setBump((b) => b + 1);
+  }, [docId]);
 
   useEffect(() => {
     if (!docId) { setState({ url: null, status: 'idle' }); return; }
-    let cancelled = false;
-    setState(s => ({ ...s, status: 'loading', error: undefined }));
 
-    apiClient
-      .get(ENDPOINTS.DOCUMENTS.DOWNLOAD_URL(docId), { timeout: 15_000 })
-      .then(res => {
+    // Hot-cache short-circuit: we've already resolved this doc in the
+    // current session, no need to even loop through React Query.
+    const cached = resolvedUrlCache.get(docId);
+    if (cached) {
+      setState({ url: cached, status: 'ready' });
+      return;
+    }
+    // Hard-404 short-circuit: we know this doc has no file. Show the
+    // friendlier message immediately instead of firing another request
+    // that we already know will 404.
+    if (notFoundCache.has(docId)) {
+      setState({
+        url: null,
+        status: 'error',
+        notFound: true,
+        error: 'This document has no file attached, or the file is no longer available.',
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setState((s) => ({ ...s, status: 'loading', error: undefined }));
+
+    fetchDownloadUrl(docId)
+      .then((url) => {
         if (cancelled) return;
-        // Backend wraps in ResponseObject — the URL is at .data.data.url
-        // or .data.url depending on whether the global response interceptor
-        // double-unwraps. Walk both shapes.
-        const body = res.data as Record<string, unknown> | undefined;
-        const url =
-          (body?.data as { url?: string } | undefined)?.url
-          ?? ((body as { url?: string } | undefined)?.url)
-          ?? ((body?.data as Record<string, unknown> | undefined)?.data as { url?: string } | undefined)?.url
-          ?? null;
-        if (!url) {
-          // Fall back to whatever was on the doc (in case future backend versions
-          // start returning downloadUrl directly) — better than failing outright.
-          if (fallbackUrl) {
-            setState({ url: fallbackUrl, status: 'ready' });
-          } else {
-            setState({ url: null, status: 'error', error: 'Server did not return a download URL.' });
-          }
+        if (url) {
+          setState({ url, status: 'ready' });
           return;
         }
-        setState({ url, status: 'ready' });
+        if (fallbackUrl) {
+          setState({ url: fallbackUrl, status: 'ready' });
+          return;
+        }
+        setState({ url: null, status: 'error', error: 'Server did not return a download URL.' });
       })
-      .catch(err => {
+      .catch((err) => {
         if (cancelled) return;
-        // Same fallback path as above.
+        const status = err?.response?.status;
+        // 404 = backend confirmed there's no file for this id. Cache it
+        // so we never re-request, and surface a copy-friendly message.
+        if (status === 404) {
+          notFoundCache.add(docId);
+          setState({
+            url: null,
+            status: 'error',
+            notFound: true,
+            error: 'This document has no file attached, or the file is no longer available.',
+          });
+          return;
+        }
         if (fallbackUrl) {
           setState({ url: fallbackUrl, status: 'ready' });
           return;
@@ -284,7 +355,7 @@ function ErrState({ title, detail, doc, onRetry }: {
 // print, download — all handled by the native viewer.
 
 function PdfViewer({ doc, refreshKey }: { doc: DocType; zoom: number; refreshKey: number }) {
-  const { url: resolvedUrl, status: urlStatus, error: urlError, reload: reloadUrl } =
+  const { url: resolvedUrl, status: urlStatus, error: urlError, notFound, reload: reloadUrl } =
     useDocumentUrl(doc.id, refreshKey, doc.downloadUrl);
   const [iframeError, setIframeError] = useState(false);
 
@@ -295,7 +366,16 @@ function PdfViewer({ doc, refreshKey }: { doc: DocType; zoom: number; refreshKey
     return <div className="flex-1 relative bg-[#525659]"><Spinner msg="Preparing document…" /></div>;
   }
   if (urlStatus === 'error' || !resolvedUrl) {
-    return <div className="flex-1 relative bg-[#525659]"><ErrState doc={doc} detail={urlError} onRetry={reloadUrl} /></div>;
+    return (
+      <div className="flex-1 relative bg-[#525659]">
+        <ErrState
+          doc={doc}
+          title={notFound ? 'No file available' : undefined}
+          detail={urlError}
+          onRetry={reloadUrl}
+        />
+      </div>
+    );
   }
   if (iframeError) {
     return <div className="flex-1 relative bg-[#525659]"><ErrState doc={doc} detail="The browser failed to load the PDF." onRetry={reloadUrl} /></div>;
