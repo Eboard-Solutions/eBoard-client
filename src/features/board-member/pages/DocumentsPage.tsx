@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDocuments, useUpdateDocument, useCurrentUser } from '@/hooks/api';
 import type { Document } from '../types';
-import { PageHeader, SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import { SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
 
 export function DocumentsPage() {
   const { data: documentsData } = useDocuments();
@@ -70,8 +71,7 @@ export function DocumentsPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 md:px-6 py-8">
-      <PageHeader icon={FileText} title="Documents" color="bg-sky-600" subtitle="Board packs, policies, reports and more" />
+    <MemberPortalLayout icon={FileText} title="Documents" color="bg-sky-600" subtitle="Board packs, policies, reports and more">
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchBar value={search} onChange={setSearch} placeholder="Search documents…" />
@@ -146,6 +146,6 @@ export function DocumentsPage() {
       )}
 
       {/* dialog unchanged */}
-    </div>
+    </MemberPortalLayout>
   );
 }
