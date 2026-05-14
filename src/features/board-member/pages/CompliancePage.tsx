@@ -31,33 +31,33 @@ export function CompliancePage() {
         <div className="space-y-6">
           {pending.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2">
                 <AlertCircle className="h-3.5 w-3.5 text-amber-500" />Pending · {pending.length}
               </h2>
               {pending.map((c) => (
-                <div key={c.complianceId} className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/20 dark:bg-amber-950/10 p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={c.complianceId} className="rounded-[24px] border border-amber-200/80 dark:border-amber-800/70 bg-amber-50/20 dark:bg-amber-950/10 p-4 sm:p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[c.type]}`}>{c.type}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_COLORS[c.type]}`}>{c.type}</span>
                       </div>
-                      <h3 className="font-semibold text-foreground">{c.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">{c.description}</p>
+                      <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{c.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{c.description}</p>
                       {c.dueDate && (
                         <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 flex items-center gap-1">
                           <Clock className="h-3 w-3" />Due {formatDistanceToNow(new Date(c.dueDate), { addSuffix: true })}
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex flex-wrap gap-2 shrink-0">
                       {c.documentUrl && (
-                        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" asChild>
+                        <Button size="sm" variant="outline" className="h-9 rounded-xl text-xs gap-1.5" asChild>
                           <a href={c.documentUrl} target="_blank" rel="noopener noreferrer">
                             <FileText className="h-3.5 w-3.5" />View
                           </a>
                         </Button>
                       )}
-                      <Button size="sm" className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => acknowledge.mutate(c.complianceId)}>
+                      <Button size="sm" className="h-9 rounded-xl text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => acknowledge.mutate(c.complianceId)}>
                         <Check className="h-3.5 w-3.5" />Acknowledge
                       </Button>
                     </div>
@@ -69,18 +69,18 @@ export function CompliancePage() {
 
           {acknowledged.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Completed · {acknowledged.length}
               </h2>
               {acknowledged.map((c) => (
-                <div key={c.complianceId} className="rounded-2xl border border-border/60 bg-card p-4 opacity-70">
+                <div key={c.complianceId} className="rounded-[24px] border border-border/60 bg-card p-4 opacity-80 shadow-sm">
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm text-foreground">{c.title}</p>
+                      <p className="font-semibold text-sm text-foreground">{c.title}</p>
                       {c.acknowledgedAt && <p className="text-xs text-muted-foreground mt-0.5">Acknowledged {format(new Date(c.acknowledgedAt), 'MMM d, yyyy')}</p>}
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[c.type]}`}>{c.type}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_COLORS[c.type]}`}>{c.type}</span>
                   </div>
                 </div>
               ))}

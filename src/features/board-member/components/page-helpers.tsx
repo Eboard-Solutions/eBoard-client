@@ -16,13 +16,15 @@ export function PageHeader({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-3 mb-6">
-      <div className={`h-10 w-10 rounded-xl ${color} flex items-center justify-center shadow-sm`}>
-        <Icon className="h-5 w-5 text-white" />
-      </div>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <div className={`h-10 w-10 rounded-2xl ${color} flex items-center justify-center shadow-sm shadow-black/10`}>
+          <Icon className="h-4.5 w-4.5 text-white" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-balance">{title}</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">{subtitle}</p>
+        </div>
       </div>
     </div>
   );
@@ -38,13 +40,13 @@ export function SearchBar({
   placeholder: string;
 }) {
   return (
-    <div className="relative flex-1 min-w-0 max-w-sm">
+    <div className="relative w-full min-w-0 sm:max-w-md">
       <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-9 pl-9 pr-8 text-sm"
+        className="h-10 rounded-xl pl-9 pr-8 text-sm"
       />
       {value && (
         <button

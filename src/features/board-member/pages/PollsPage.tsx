@@ -24,16 +24,16 @@ export function PollsPage() {
     const hasVoted = (poll.myResponse ?? []).length > 0;
 
     return (
-      <div className={`rounded-2xl border transition-all hover:shadow-md ${poll.status === 'ACTIVE' && !hasVoted ? 'border-violet-200 dark:border-violet-800 bg-violet-50/20 dark:bg-violet-950/10' : ''}`}>
-        <div className="p-5">
+      <div className={`rounded-[24px] border border-border/60 bg-card transition-all hover:-translate-y-0.5 hover:shadow-md ${poll.status === 'ACTIVE' && !hasVoted ? 'ring-1 ring-violet-200/70 dark:ring-violet-900/50 bg-violet-50/20 dark:bg-violet-950/10' : ''}`}>
+        <div className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${poll.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{poll.status}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${poll.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{poll.status}</span>
                 {poll.isAnonymous && <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Lock className="h-2.5 w-2.5" />Anonymous</span>}
               </div>
-              <h3 className="font-semibold text-foreground">{poll.question}</h3>
-              {poll.description && <p className="text-xs text-muted-foreground mt-0.5">{poll.description}</p>}
+              <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{poll.question}</h3>
+              {poll.description && <p className="text-sm text-muted-foreground mt-1">{poll.description}</p>}
             </div>
           </div>
 
@@ -84,11 +84,11 @@ export function PollsPage() {
 
           {poll.status === 'ACTIVE' && !hasVoted && myChoice.length > 0 && (
             <Button
-              className="mt-4 w-full h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
-              disabled={vote.isLoading}
+              className="mt-4 w-full h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+              disabled={vote.isPending}
               onClick={() => {
                 // Prevent double submissions
-                if (vote.isLoading) return;
+                if (vote.isPending) return;
 
                 // For single-choice polls, send a single optionId
                 if (poll.pollType === 'SINGLE') {
@@ -109,7 +109,7 @@ export function PollsPage() {
                 toast.success('Responses submitted!');
               }}
             >
-              {vote.isLoading ? 'Submitting…' : 'Submit Response'}
+              {vote.isPending ? 'Submitting…' : 'Submit Response'}
             </Button>
           )}
 
@@ -146,14 +146,14 @@ export function PollsPage() {
         <div className="space-y-6">
           {active.length > 0 && (
             <div className="space-y-4">
-              <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Active · {active.length}</h2>
-              {active.map((p, idx) => <PollCard key={p.pollId ?? p.id ?? `poll-${idx}`} poll={p} />)}
+              <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Active · {active.length}</h2>
+              {active.map((p, idx) => <PollCard key={p.pollId ?? `poll-${idx}`} poll={p} />)}
             </div>
           )}
           {closed.length > 0 && (
             <div className="space-y-4">
-              <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Closed · {closed.length}</h2>
-              {closed.map((p, idx) => <PollCard key={p.pollId ?? p.id ?? `poll-${idx}`} poll={p} />)}
+              <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Closed · {closed.length}</h2>
+              {closed.map((p, idx) => <PollCard key={p.pollId ?? `poll-${idx}`} poll={p} />)}
             </div>
           )}
         </div>

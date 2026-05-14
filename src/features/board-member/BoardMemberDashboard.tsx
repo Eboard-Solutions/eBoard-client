@@ -97,8 +97,8 @@ function StatCard({
         >
           <Icon className="h-5 w-5 text-foreground" />
         </div>
-        <p className="text-3xl font-bold tracking-tight">{value}</p>
-        <p className="text-sm font-medium text-foreground mt-0.5">{label}</p>
+        <p className="text-2xl sm:text-3xl font-semibold tracking-tight">{value}</p>
+        <p className="text-sm font-medium text-foreground mt-1">{label}</p>
         {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
       </div>
     </Link>
@@ -235,7 +235,7 @@ export default function BoardMemberDashboard() {
               Board member dashboard
             </div>
             <div className="space-y-2">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-balance">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-balance">
                 {greeting}, {userName}
               </h1>
               <p className="max-w-2xl text-sm sm:text-base text-muted-foreground">
@@ -258,14 +258,14 @@ export default function BoardMemberDashboard() {
             <Link href="/board/notifications">
               <div className="group h-full rounded-2xl border border-indigo-200/80 bg-indigo-50/80 p-4 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-indigo-900/60 dark:bg-indigo-950/20">
                 <Bell className="h-5 w-5 text-indigo-600" />
-                <p className="mt-4 text-2xl font-black text-indigo-950 dark:text-indigo-100">{unreadCount}</p>
+                <p className="mt-4 text-xl sm:text-2xl font-semibold text-indigo-950 dark:text-indigo-100">{unreadCount}</p>
                 <p className="text-sm font-medium text-indigo-700/90 dark:text-indigo-300">Unread notifications</p>
               </div>
             </Link>
             <Link href="/board/tasks">
               <div className="group h-full rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm transition-transform hover:-translate-y-0.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
                 <CheckSquare className="h-5 w-5 text-emerald-600" />
-                <p className="mt-4 text-2xl font-black text-emerald-950 dark:text-emerald-100">{myTasks.length}</p>
+                <p className="mt-4 text-xl sm:text-2xl font-semibold text-emerald-950 dark:text-emerald-100">{myTasks.length}</p>
                 <p className="text-sm font-medium text-emerald-700/90 dark:text-emerald-300">Open tasks</p>
               </div>
             </Link>
@@ -367,7 +367,7 @@ export default function BoardMemberDashboard() {
               <Link key={stat.label} href={stat.href}>
                 <div className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                   <div className={`h-9 w-9 rounded-xl ${stat.color} opacity-15 mb-3`} />
-                  <p className="text-2xl font-black tracking-tight">{stat.value}</p>
+                  <p className="text-xl sm:text-2xl font-semibold tracking-tight">{stat.value}</p>
                   <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                 </div>
               </Link>

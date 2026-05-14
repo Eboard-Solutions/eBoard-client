@@ -81,26 +81,26 @@ export function MeetingsPage() {
             return (
               <div
                 key={m.meetingId}
-                className={`rounded-2xl border transition-all duration-200 hover:shadow-md cursor-pointer overflow-hidden ${
+                className={`rounded-[24px] border border-border/60 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer overflow-hidden ${
                   isT ? 'border-indigo-300 bg-indigo-50/30 dark:border-indigo-800 dark:bg-indigo-950/20' : ''
                 }`}
                 onClick={() => setSelected(m)}
               >
                 <div className={`h-0.5 ${m.status === 'COMPLETED' ? 'bg-slate-300' : m.status === 'CANCELLED' ? 'bg-red-400' : 'bg-indigo-500'}`} />
-                <div className="p-5">
+                <div className="p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div className={`shrink-0 rounded-xl p-2.5 text-center min-w-[52px] ${isT || isTo ? 'bg-indigo-600 text-white' : 'bg-muted text-foreground'}`}>
                         <p className="text-[9px] font-bold uppercase">{format(new Date(m.scheduledAt), 'MMM')}</p>
-                        <p className="text-xl font-black leading-none">{format(new Date(m.scheduledAt), 'd')}</p>
+                        <p className="text-lg font-semibold leading-none">{format(new Date(m.scheduledAt), 'd')}</p>
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[m.meetingType] ?? TYPE_COLORS.BOARD}`}>{m.meetingType}</span>
-                          {(isT || isTo) && <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">{isT ? 'Today' : 'Tomorrow'}</span>}
-                          {m.status !== 'SCHEDULED' && <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full">{m.status}</span>}
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_COLORS[m.meetingType] ?? TYPE_COLORS.BOARD}`}>{m.meetingType}</span>
+                          {(isT || isTo) && <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">{isT ? 'Today' : 'Tomorrow'}</span>}
+                          {m.status !== 'SCHEDULED' && <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full">{m.status}</span>}
                         </div>
-                        <h3 className="font-semibold text-foreground">{m.title}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{m.title}</h3>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
@@ -129,7 +129,7 @@ export function MeetingsPage() {
                               rsvpMutation.mutate({ meetingId: m.meetingId, data: { status: s.toLowerCase() as any } });
                               toast.success(`RSVP updated: ${s}`);
                             }}
-                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all ${
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${
                               m.myRsvp === s
                                 ? s === 'ACCEPTED'
                                   ? 'bg-emerald-600 text-white border-emerald-600'
@@ -153,7 +153,7 @@ export function MeetingsPage() {
       )}
 
       <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null); }}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl rounded-2xl max-h-[80vh] overflow-y-auto">
           {selected && (
             <>
               <DialogHeader>
@@ -166,9 +166,9 @@ export function MeetingsPage() {
                 {selected.description && <p className="text-sm text-muted-foreground">{selected.description}</p>}
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                    <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Location</p>
-                    <p className="font-medium">{selected.location || '—'}</p>
+                      <p className="font-medium text-sm sm:text-base">{selected.location || '—'}</p>
                   </div>
                   {selected.meetingLink && (
                     <div className="rounded-xl border border-border/60 bg-muted/20 p-3">

@@ -64,14 +64,14 @@ export function ArchivesPage() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         {[
           { label: 'Past Meetings', value: pastMeetings.length, color: 'text-indigo-600' },
           { label: 'Archived Docs', value: archivedDocs.length, color: 'text-sky-600' },
           { label: 'Closed Resolutions', value: closedRes.length, color: 'text-amber-600' },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-border/60 bg-card p-3 text-center shadow-sm">
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+          <div key={s.label} className="rounded-2xl border border-border/60 bg-card p-4 text-center shadow-sm">
+            <p className={`text-xl sm:text-2xl font-semibold ${s.color}`}>{s.value}</p>
             <p className="text-xs text-muted-foreground">{s.label}</p>
           </div>
         ))}
@@ -84,15 +84,15 @@ export function ArchivesPage() {
           {all.map((item) => {
             const Icon = TYPE_ICONS[item.type];
             return (
-              <div key={item.id} className="flex items-start gap-4 p-4 rounded-2xl border border-border/60 bg-card hover:shadow-sm transition-all">
+              <div key={item.id} className="flex items-start gap-4 p-4 rounded-2xl border border-border/60 bg-card hover:-translate-y-0.5 hover:shadow-md transition-all">
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${TYPE_COLORS[item.type]}`}>
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[item.type]}`}>{item.type}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_COLORS[item.type]}`}>{item.type}</span>
                   </div>
-                  <h3 className="font-semibold text-sm text-foreground">{item.title}</h3>
+                  <h3 className="text-sm sm:text-base font-semibold tracking-tight text-foreground">{item.title}</h3>
                   {item.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.summary}</p>}
                   <p className="text-xs text-muted-foreground mt-1">{format(new Date(item.date), 'MMM d, yyyy')}</p>
                 </div>
