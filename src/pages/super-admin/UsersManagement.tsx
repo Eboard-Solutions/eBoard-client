@@ -40,7 +40,8 @@ const roleBadge: Record<string, string> = {
 };
 
 export function UsersManagement() {
-  const { data: users = [], isLoading } = useUsers();
+  const { data: usersResponse = [] as any, isLoading } = useUsers();
+  const users = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data ?? []);
   const deleteUser = useDeleteUser();
   const changeRole = useChangeRole();
   const toggleStatus = useToggleUserStatus();
@@ -52,7 +53,7 @@ export function UsersManagement() {
   // Dialogs
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [roleTarget, setRoleTarget] = useState<User | null>(null);
-  const [newRole, setNewRole] = useState<UserRole>('User');
+  const [newRole, setNewRole] = useState<UserRole>('superAdmin');
 
   const filtered = useMemo(() => {
     let result = users;
@@ -68,16 +69,16 @@ export function UsersManagement() {
       result = result.filter((u: User) => u.role === roleFilter);
     }
     if (statusFilter === 'active') {
-      result = result.filter((u: User) => u.isActive !== false);
+      result = result.filter((u: User) => u.status === 'active');
     } else if (statusFilter === 'inactive') {
-      result = result.filter((u: User) => u.isActive === false);
+      result = result.filter((u: User) => u.status !== 'active');
     }
     return result;
   }, [users, search, roleFilter, statusFilter]);
 
   function handleDelete() {
     if (!deleteTarget) return;
-    deleteUser.mutate(deleteTarget.id, {
+    deleteUser.mutate(deleteTarget.userId, {
       onSuccess: () => { toast.success('User deleted'); setDeleteTarget(null); },
       onError: () => toast.error('Failed to delete user'),
     });
@@ -85,15 +86,15 @@ export function UsersManagement() {
 
   function handleChangeRole() {
     if (!roleTarget) return;
-    changeRole.mutate({ userId: roleTarget.id, data: { role: newRole } }, {
+    changeRole.mutate({ userId: roleTarget.userId, data: { role: newRole } }, {
       onSuccess: () => { toast.success('Role updated'); setRoleTarget(null); },
       onError: () => toast.error('Failed to update role'),
     });
   }
 
   function handleToggleStatus(user: User) {
-    const nextActive = user.isActive === false;
-    toggleStatus.mutate({ userId: user.id, isActive: nextActive }, {
+    const nextActive = user.status !== 'active';
+    toggleStatus.mutate({ userId: user.userId, isActive: nextActive }, {
       onSuccess: () => toast.success(`User ${nextActive ? 'activated' : 'deactivated'}`),
       onError: () => toast.error('Failed to toggle status'),
     });
@@ -172,7 +173,7 @@ export function UsersManagement() {
               </TableHeader>
               <TableBody>
                 {filtered.map((user: User, idx: number) => (
-                  <TableRow key={user.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                  <TableRow key={user.userId} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
                     <TableCell className="text-xs text-gray-400">{idx + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -191,7 +192,7 @@ export function UsersManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {user.isActive !== false ? (
+                      {user.status === 'active' ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           Active
@@ -199,7 +200,7 @@ export function UsersManagement() {
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-500 dark:text-red-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                          Inactive
+                          {user.status || 'Inactive'}
                         </span>
                       )}
                     </TableCell>
@@ -221,7 +222,7 @@ export function UsersManagement() {
                             Change Role
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
-                            {user.isActive !== false ? (
+                            {user.status === 'active' ? (
                               <><UserX className="h-4 w-4 mr-2" />Deactivate</>
                             ) : (
                               <><UserCheck className="h-4 w-4 mr-2" />Activate</>
