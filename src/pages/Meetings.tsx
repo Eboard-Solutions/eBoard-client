@@ -32,7 +32,7 @@ import {
   FileText, Video, Users, Wifi, Building2,
   Layers, MoreVertical, Pencil, Trash2,
   Globe, CheckCircle2, XCircle, AlertCircle, RefreshCw,
-  CalendarDays, X, TrendingUp, Filter,
+  CalendarDays, X, TrendingUp, Filter, Grid3x3, List,
 } from 'lucide-react';
 
 import {
@@ -528,7 +528,7 @@ function DetailDialog({ meeting, open, onClose, onEdit, onDelete, onStartLive }:
   meeting: Meeting | null; open: boolean; onClose: () => void;
   onEdit: (m: Meeting) => void; onDelete: (m: Meeting) => void;
   onStartLive: (id: string) => void;
-}) {
+}): React.ReactNode {
   const createNotification = useCreateNotification();
   const [sharing, setSharing] = useState(false);
 
@@ -748,6 +748,7 @@ export default function Meetings() {
 
   const [search,       setSearch]       = useState('');
   const [fmtFilter,    setFmtFilter]    = useState<MeetingFormat | 'all'>('all');
+  const [viewMode,     setViewMode]     = useState<'grid' | 'list'>('grid');
   const [createOpen,   setCreateOpen]   = useState(false);
   const [editOpen,     setEditOpen]     = useState(false);
   const [detailOpen,   setDetailOpen]   = useState(false);
@@ -913,7 +914,7 @@ export default function Meetings() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters & View Toggle */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="relative flex-1 min-w-0 max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -938,6 +939,30 @@ export default function Meetings() {
             <SelectItem value="hybrid">Hybrid</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex items-center gap-1 bg-muted/40 rounded-xl border border-border/30 p-1">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`h-9 px-3 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${
+              viewMode === 'grid'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Grid3x3 className="h-4 w-4" />
+            Grid
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`h-9 px-3 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${
+              viewMode === 'list'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <List className="h-4 w-4" />
+            List
+          </button>
+        </div>
       </div>
 
       {isLoading && (
@@ -964,7 +989,9 @@ export default function Meetings() {
             ))}
           </TabsList>
 
-          <TabsContent value="upcoming" className="mt-2 space-y-3 focus-visible:outline-none">
+          <TabsContent value="upcoming" className={`mt-2 focus-visible:outline-none ${
+            viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'
+          }`}>
             {upcoming.length === 0 ? <EmptyState isPast={false} onCreate={() => setCreateOpen(true)} /> :
               upcoming.map(m => (
                 <MeetingCard key={getMeetingId(m) || m.title || 'meeting'}
@@ -974,7 +1001,9 @@ export default function Meetings() {
             }
           </TabsContent>
 
-          <TabsContent value="past" className="mt-2 space-y-3 focus-visible:outline-none">
+          <TabsContent value="past" className={`mt-2 focus-visible:outline-none ${
+            viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'
+          }`}>
             {past.length === 0 ? <EmptyState isPast={true} onCreate={() => setCreateOpen(true)} /> :
               past.map(m => (
                 <MeetingCard key={getMeetingId(m) || m.title || 'meeting'}
