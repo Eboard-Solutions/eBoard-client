@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authService } from '@/api/services';
+import { TokenService } from '@/api/client';
 import type {
   LoginCredentials,
   OrgAdminLoginCredentials,
@@ -28,6 +29,13 @@ export function useCurrentUser() {
     queryKey: ['auth', 'me'],   // ← same key everywhere = one shared request
     queryFn:  () => authService.getMe(),
     staleTime: 1000 * 60 * 15, // user profile rarely changes — 15 min
+    onSuccess: (data) => {
+      try {
+        if (data) TokenService.setUser(data as any);
+      } catch {
+        // ignore storage errors
+      }
+    },
   });
 }
 
