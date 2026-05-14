@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -17,17 +18,13 @@ import {
   Loader2,
   Mail,
   CheckCircle2,
-  XCircle,
   ArrowLeft,
+  AlertCircle,
 } from 'lucide-react';
 
 import authService from '@/lib/auth';
 
-interface Notification {
-  type: 'success' | 'error';
-  message: string;
-  description?: string;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export function ForgotPassword() {
   const [, setLocation] = useLocation();
@@ -35,20 +32,21 @@ export function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isEmailSent, setIsEmailSent] = useState(false);
-  const [notification, setNotification] = useState<Notification | null>(null);
+  const [touched, setTouched] = useState(false);
 
-  const showNotification = (type: 'success' | 'error', message: string, description?: string) => {
-    setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 5000);
-  };
+  const emailInvalid = touched && !!email && !EMAIL_RE.test(email.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched(true);
 
     const trimmedEmail = email.trim();
-
     if (!trimmedEmail) {
-      showNotification('error', 'Email is required');
+      toast.error('Email is required');
+      return;
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      toast.error('Invalid email', { description: 'Please enter a valid email address.' });
       return;
     }
 
@@ -56,54 +54,24 @@ export function ForgotPassword() {
 
     try {
       await authService.forgotPassword({ email: trimmedEmail });
-      
       setIsLoading(false);
       setIsEmailSent(true);
-      showNotification(
-        'success',
-        'Reset link sent!',
-        'Check your email for password reset instructions'
-      );
-    } catch (err: any) {
+      toast.success('Reset link sent!', {
+        description: 'Check your email for password reset instructions.',
+      });
+    } catch (err: unknown) {
       console.error('[FORGOT PASSWORD ERROR]', err);
-
-      let msg = 'Failed to send reset link. Please try again.';
-      if (err.message) {
-        msg = err.message;
-      }
-
-      showNotification('error', 'Request Failed', msg);
+      const msg = (err as { response?: { data?: { message?: string } }; message?: string })
+        ?.response?.data?.message
+        ?? (err instanceof Error ? err.message : 'Failed to send reset link. Please try again.');
+      toast.error('Request failed', { description: msg });
       setIsLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 px-4 py-12 sm:px-6 lg:px-8">
-      {/* Notification Toast */}
-      {notification && (
-        <div
-          className={`fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-5 fade-in duration-300 ${
-            notification.type === 'success'
-              ? 'bg-green-50/95 border-green-200 text-green-900'
-              : 'bg-red-50/95 border-red-200 text-red-900'
-          } border rounded-xl shadow-xl backdrop-blur-sm p-4`}
-        >
-          <div className="flex items-start gap-3">
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-            )}
-            <div>
-              <p className="font-medium text-sm">{notification.message}</p>
-              {notification.description && (
-                <p className="mt-1 text-sm opacity-90">{notification.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Feedback toasts come from the app-wide <Toaster /> in App.tsx. */}
       <div className="w-full max-w-md">
         {/* Back Button */}
         <Button
@@ -159,12 +127,23 @@ export function ForgotPassword() {
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="h-12 pl-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                      onBlur={() => setTouched(true)}
+                      aria-invalid={emailInvalid || undefined}
+                      className={`h-12 pl-11 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 transition-all ${
+                        emailInvalid
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500/20'
+                      }`}
                       required
                       autoFocus
                       autoComplete="email"
                     />
                   </div>
+                  {emailInvalid && (
+                    <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" /> Enter a valid email address.
+                    </p>
+                  )}
                 </div>
 
                 {/* Submit Button */}

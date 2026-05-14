@@ -3,6 +3,7 @@
 
 import React, { useState } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -13,44 +14,29 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Lock, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
+import { Loader2, Lock, ArrowLeft, AlertCircle, CheckCircle2 } from "lucide-react";
 import { authService } from "@/lib/auth";
 
-interface Notification {
-  type: "success" | "error";
-  message: string;
-  description?: string;
-}
-
 export function ActivateAccount() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [notification, setNotification] = useState<Notification | null>(null);
+  const [touched, setTouched] = useState({ password: false, confirm: false });
 
   const search = typeof window !== "undefined" ? window.location.search : "";
   const params = new URLSearchParams(search);
   const token = params.get("token") || "";
 
-  const showNotification = (
-    type: "success" | "error",
-    message: string,
-    description?: string,
-  ) => {
-    setNotification({ type, message, description });
-    setTimeout(() => setNotification(null), 5000);
-  };
+  const passwordTooShort = touched.password && password.length > 0 && password.length < 8;
+  const passwordMismatch = touched.confirm && confirmPassword.length > 0 && password !== confirmPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ password: true, confirm: true });
 
     if (!token) {
-      showNotification(
-        "error",
-        "Invalid activation link",
-        "Missing or invalid token in the link.",
-      );
+      toast.error("Invalid activation link", { description: "Missing or invalid token in the link." });
       return;
     }
 
@@ -58,21 +44,15 @@ export function ActivateAccount() {
     const trimmedConfirm = confirmPassword.trim();
 
     if (!trimmedPassword || !trimmedConfirm) {
-      showNotification("error", "Password is required");
+      toast.error("Password is required");
       return;
     }
-
     if (trimmedPassword.length < 8) {
-      showNotification(
-        "error",
-        "Password too short",
-        "Password must be at least 8 characters long.",
-      );
+      toast.error("Password too short", { description: "Use at least 8 characters." });
       return;
     }
-
     if (trimmedPassword !== trimmedConfirm) {
-      showNotification("error", "Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
@@ -80,21 +60,17 @@ export function ActivateAccount() {
 
     try {
       await authService.activateAccount({ token, password: trimmedPassword });
-      showNotification(
-        "success",
-        "Account activated!",
-        "You can now sign in with your new password.",
-      );
-
-      setTimeout(() => {
-        setLocation("/auth/signin");
-      }, 1500);
-    } catch (err: any) {
+      toast.success("Account activated!", {
+        description: "Redirecting to sign in…",
+        duration: 1800,
+      });
+      setTimeout(() => { setLocation("/auth/signin"); }, 1200);
+    } catch (err: unknown) {
       console.error("[ACTIVATE ACCOUNT ERROR]", err);
-      const msg =
-        err?.message ||
-        "Failed to activate account. The link may be invalid or expired.";
-      showNotification("error", "Activation Failed", msg);
+      const msg = (err as { response?: { data?: { message?: string } }; message?: string })
+        ?.response?.data?.message
+        ?? (err instanceof Error ? err.message : "Failed to activate account. The link may be invalid or expired.");
+      toast.error("Activation failed", { description: msg });
     } finally {
       setIsLoading(false);
     }
@@ -102,32 +78,7 @@ export function ActivateAccount() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-emerald-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 px-4 py-12">
-      {notification && (
-        <div
-          className={`fixed top-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-top-5 fade-in duration-300 ${
-            notification.type === "success"
-              ? "bg-emerald-50/95 border-emerald-200 text-emerald-900"
-              : "bg-red-50/95 border-red-200 text-red-900"
-          } border rounded-xl shadow-xl backdrop-blur-sm p-4`}
-        >
-          <div className="flex items-start gap-3">
-            {notification.type === "success" ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-            )}
-            <div>
-              <p className="font-medium text-sm">{notification.message}</p>
-              {notification.description && (
-                <p className="mt-1 text-sm opacity-90">
-                  {notification.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Feedback toasts come from the app-wide <Toaster /> in App.tsx. */}
       <div className="w-full max-w-md">
         <Button
           variant="ghost"
@@ -170,12 +121,27 @@ export function ActivateAccount() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                      aria-invalid={passwordTooShort || undefined}
                       minLength={8}
-                      className="h-12 pl-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all"
+                      className={`h-12 pl-11 bg-white dark:bg-slate-800 rounded-xl focus:ring-2 transition-all ${
+                        passwordTooShort
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : 'border-slate-200 dark:border-slate-700 focus:border-sky-500 focus:ring-sky-500/20'
+                      }`}
                       placeholder="Enter a strong password"
                       autoComplete="new-password"
                     />
                   </div>
+                  {passwordTooShort ? (
+                    <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" /> At least 8 characters.
+                    </p>
+                  ) : password.length >= 8 ? (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
+                      <CheckCircle2 className="h-3 w-3" /> Length looks good.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">
@@ -190,11 +156,22 @@ export function ActivateAccount() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    onBlur={() => setTouched(t => ({ ...t, confirm: true }))}
+                    aria-invalid={passwordMismatch || undefined}
                     minLength={8}
-                    className="h-12 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all"
+                    className={`h-12 bg-white dark:bg-slate-800 rounded-xl focus:ring-2 transition-all ${
+                      passwordMismatch
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-slate-200 dark:border-slate-700 focus:border-sky-500 focus:ring-sky-500/20'
+                    }`}
                     placeholder="Re-enter your password"
                     autoComplete="new-password"
                   />
+                  {passwordMismatch && (
+                    <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" /> Passwords don't match.
+                    </p>
+                  )}
                 </div>
 
                 <Button
