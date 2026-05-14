@@ -106,15 +106,19 @@ const BOTTOM_NAV: readonly NavItem[] = [
   { icon: HelpCircle, label: "Help", href: "/help" },
 ];
 
+// User-menu items. Each entry MUST point at a route registered in App.tsx —
+// the previous list included `/settings/profile`, `/settings/security`, and
+// `/settings/notifications`, none of which exist, so three of the four items
+// 404'd. Profile + Security are both handled by the consolidated `/profile`
+// page, so they collapse into one entry. Notifications doesn't have a
+// dedicated settings page; dropped rather than wired to a stub.
 const USER_MENU_ITEMS: readonly {
   icon: ElementType;
   label: string;
   href: string;
 }[] = [
-  { icon: UserCog, label: "Profile Settings", href: "/settings/profile" },
+  { icon: UserCog,   label: "Profile",      href: "/profile" },
   { icon: Building2, label: "Organisation", href: "/organisation" },
-  { icon: Lock, label: "Security", href: "/settings/security" },
-  { icon: Bell, label: "Notifications", href: "/settings/notifications" },
 ];
 
 // ─── Badge counts ───────────────────────────────────────────────────────────
