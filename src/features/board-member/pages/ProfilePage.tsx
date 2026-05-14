@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Users, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useCurrentUser, useUpdateProfile } from '@/hooks/api';
-import { PageHeader, unwrap } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
+import { unwrap } from '../components/page-helpers';
 
 export function ProfilePage() {
   const { data } = useCurrentUser();
@@ -31,18 +32,47 @@ export function ProfilePage() {
     joinedAt: new Date().toISOString(),
   }, [data]);
 
-  const [form, setForm] = useState({ ...profile });
+  const [form, setForm] = useState(() => ({ ...profile }));
+  // Keep local form in sync when the backend returns the profile.
+  useEffect(() => {
+    setForm({ ...profile });
+  }, [profile.userId, profile.firstName, profile.lastName, profile.email, profile.joinedAt]);
   const [tab, setTab] = useState<'profile' | 'notifications' | 'security'>('profile');
 
-  function save() {
-    update.mutate(form);
-    toast.success('Profile updated');
+  async function save() {
+    try {
+      await update.mutateAsync(form as any);
+      toast.success('Profile updated');
+    } catch (err) {
+      toast.error('Profile update failed');
+    }
   }
 
-  return (
-    <div className="container mx-auto max-w-3xl px-4 md:px-6 py-8">
-      <PageHeader icon={Users} title="Profile & Settings" color="bg-indigo-600" subtitle="Personal information and preferences" />
+  // Safely compute the joined date label to avoid date-fns throwing
+  // when `joinedAt` is missing or invalid in the backend response.
+  const joinedLabel = (() => {
+    try {
+      const v = (form as any)?.joinedAt;
+      if (!v) return '—';
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return '—';
+      return format(d, 'MMM yyyy');
+    } catch {
+      return '—';
+    }
+  })();
 
+  // Organisation may be a string or an object (org admin). Render a safe label.
+  const orgLabel = (() => {
+    const o = (form as any)?.organisation;
+    if (!o) return '';
+    if (typeof o === 'string') return o;
+    if (typeof o === 'object') return (o.organisationName || o.name || o.organisation || o.orgName || '').toString();
+    return '';
+  })();
+
+  return (
+    <MemberPortalLayout icon={Users} title="Profile & Settings" color="bg-indigo-600" subtitle="Personal information and preferences">
       <div className="flex items-center gap-1 border-b border-border/60 mb-6">
         {(['profile', 'notifications', 'security'] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${tab === t ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
@@ -59,8 +89,8 @@ export function ProfilePage() {
             </div>
             <div>
               <p className="text-lg font-bold">{form.firstName} {form.lastName}</p>
-              <p className="text-sm text-muted-foreground">{form.title} · {form.organisation}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Member since {format(new Date(form.joinedAt), 'MMM yyyy')}</p>
+              <p className="text-sm text-muted-foreground">{form.title}{orgLabel ? ` · ${orgLabel}` : ''}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Member since {joinedLabel}</p>
             </div>
           </div>
 
@@ -77,14 +107,14 @@ export function ProfilePage() {
                 <Input value={(form as any)[key] ?? ''} onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))} className="h-9 text-sm" disabled={key === 'email'} />
               </div>
             ))}
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bio</Label>
-              <Textarea value={form.bio ?? ''} onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))} rows={3} className="text-sm resize-none" />
-            </div>
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bio</Label>
+                <Textarea value={form.bio ?? ''} onChange={(e) => setForm((p: any) => ({ ...p, bio: e.target.value }))} rows={3} className="text-sm resize-none" />
+              </div>
           </div>
 
-          <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={save}>
-            Save Changes
+          <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={save} disabled={update.isLoading}>
+            {update.isLoading ? 'Saving…' : 'Save Changes'}
           </Button>
         </div>
       )}
@@ -92,13 +122,22 @@ export function ProfilePage() {
       {tab === 'notifications' && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Choose which notifications you want to receive.</p>
-          {Object.entries(form.notificationPreferences).map(([key, val]) => (
+          {Object.entries((form.notificationPreferences ?? {}) as Record<string, boolean>).map(([key, val]) => (
             <div key={key} className="flex items-center justify-between p-4 rounded-xl border border-border/60 bg-card">
               <div>
                 <p className="text-sm font-medium capitalize">{key}</p>
                 <p className="text-xs text-muted-foreground">Receive notifications for {key}</p>
               </div>
-              <Switch checked={val} onCheckedChange={(v) => setForm((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, [key]: v } }))} />
+              <Switch
+                checked={Boolean(val)}
+                onCheckedChange={(v: boolean) => setForm((p: any) => ({
+                  ...p,
+                  notificationPreferences: {
+                    ...(p.notificationPreferences ?? {}),
+                    [key]: v,
+                  },
+                }))}
+              />
             </div>
           ))}
           <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={save}>
@@ -114,7 +153,7 @@ export function ProfilePage() {
               <p className="text-sm font-semibold">Two-Factor Authentication</p>
               <p className="text-xs text-muted-foreground mt-0.5">{form.twoFactorEnabled ? 'Enabled — your account is more secure.' : 'Disabled — enable for extra security.'}</p>
             </div>
-            <Switch checked={form.twoFactorEnabled} onCheckedChange={(v) => { setForm((p) => ({ ...p, twoFactorEnabled: v })); update.mutate({ twoFactorEnabled: v }); toast.success(v ? '2FA enabled' : '2FA disabled'); }} />
+            <Switch checked={Boolean(form.twoFactorEnabled)} onCheckedChange={(v: boolean) => { setForm((p: any) => ({ ...p, twoFactorEnabled: v })); toast.success(v ? '2FA enabled' : '2FA disabled'); }} />
           </div>
 
           <div className="p-4 rounded-xl border border-border/60 bg-card space-y-3">
@@ -133,6 +172,6 @@ export function ProfilePage() {
           </div>
         </div>
       )}
-    </div>
+    </MemberPortalLayout>
   );
 }
