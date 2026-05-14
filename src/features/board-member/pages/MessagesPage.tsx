@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useMessageThreads, useSendMessage, useCreateThread, useMarkThreadRead, useCurrentUser } from '@/hooks/api';
 import type { MessageThread } from '../types';
-import { PageHeader, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
+import { unwrapList } from '../components/page-helpers';
 
 export function MessagesPage() {
   const { data } = useMessageThreads();
@@ -37,9 +38,8 @@ export function MessagesPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 md:px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <PageHeader icon={MessageSquare} title="Messages" color="bg-emerald-600" subtitle="Secure board communications" />
+    <MemberPortalLayout icon={MessageSquare} title="Messages" color="bg-emerald-600" subtitle="Secure board communications">
+      <div className="flex justify-end mb-4">
         <Button size="sm" className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => setNewOpen(true)}>
           <Plus className="h-3.5 w-3.5" />New Thread
         </Button>
@@ -141,6 +141,6 @@ export function MessagesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </MemberPortalLayout>
   );
 }
