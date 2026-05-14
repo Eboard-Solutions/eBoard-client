@@ -5,7 +5,8 @@ import { Shield, AlertCircle, CheckCircle2, Clock, FileText, Check } from 'lucid
 import { Button } from '@/components/ui/button';
 import { useCompliance, useAcknowledgeCompliance } from '@/hooks/api';
 import type { ComplianceItem } from '../types';
-import { PageHeader, EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
+import { EmptyState, unwrapList } from '../components/page-helpers';
 
 export function CompliancePage() {
   const { data } = useCompliance();
@@ -23,9 +24,7 @@ export function CompliancePage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 md:px-6 py-8">
-      <PageHeader icon={Shield} title="Compliance & Governance" color="bg-slate-700" subtitle="Policy acknowledgments and regulatory requirements" />
-
+    <MemberPortalLayout icon={Shield} title="Compliance & Governance" color="bg-slate-700" subtitle="Policy acknowledgments and regulatory requirements">
       {pending.length === 0 && acknowledged.length === 0 ? (
         <EmptyState icon={Shield} title="No compliance items" />
       ) : (
@@ -89,6 +88,6 @@ export function CompliancePage() {
           )}
         </div>
       )}
-    </div>
+    </MemberPortalLayout>
   );
 }
