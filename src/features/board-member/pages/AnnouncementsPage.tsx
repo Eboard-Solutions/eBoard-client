@@ -6,7 +6,8 @@ import { Megaphone, Pin, CheckCircle2, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAnnouncements, useUpdateAnnouncement } from '@/hooks/api';
 import type { Announcement } from '../types';
-import { PageHeader, EmptyState, unwrapList } from '../components/page-helpers';
+import { EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
 
 export function AnnouncementsPage() {
   const { data } = useAnnouncements();
@@ -38,9 +39,8 @@ export function AnnouncementsPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 md:px-6 py-8">
+    <MemberPortalLayout icon={Megaphone} title="Announcements" color="bg-rose-500" subtitle="Board notices and updates">
       <div className="flex items-start justify-between gap-4 mb-6">
-        <PageHeader icon={Megaphone} title="Announcements" color="bg-rose-500" subtitle="Board notices and updates" />
         {unreadCount > 0 && (
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 shrink-0 mt-1" onClick={() => {
             announcements.forEach((a) => update.mutate({ id: a.announcementId, data: { isRead: true } as any }));
@@ -49,7 +49,6 @@ export function AnnouncementsPage() {
           </Button>
         )}
       </div>
-
       <div className="flex items-center gap-1 border-b border-border/60 mb-5">
         {(['unread', 'all'] as const).map((f) => (
           <button
@@ -118,6 +117,6 @@ export function AnnouncementsPage() {
           })}
         </div>
       )}
-    </div>
+    </MemberPortalLayout>
   );
 }
