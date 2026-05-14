@@ -37,16 +37,19 @@ export function useMeetings(params?: FetchMeetingsParams) {
 }
 
 /**
- * Hook to get user's meetings
+ * Hook to get user's meetings. Used by the dashboard "Upcoming Meetings"
+ * widget — keep data fresh enough that navigating back doesn't show the
+ * stale cached list until the next 60s tick.
  */
 export function useMyMeetings(includeDeclined = false) {
   return useQuery({
     queryKey: MEETINGS_QUERY_KEYS.myMeetings(includeDeclined),
     queryFn: () => meetingsService.getMyMeetings(includeDeclined),
-    staleTime: 60 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 15 * 1000,                  // Treat data as stale after 15s
+    refetchInterval: 45 * 1000,            // Poll every 45s while tab is active
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
+    refetchOnMount: 'always',              // Always re-check when the widget remounts
   });
 }
 
@@ -107,8 +110,13 @@ export function useUpdateMeeting() {
     mutationFn: ({ meetingId, data }: { meetingId: string; data: UpdateMeetingData }) =>
       meetingsService.updateMeeting(meetingId, data),
     onSuccess: (_, variables) => {
+      // Wipe every cached view of this meeting so the page reloads against
+      // fresh data: detail, all paginated lists, the user's "my meetings"
+      // feed (the dashboard widget), and the related minutes record.
       queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEYS.detail(variables.meetingId) });
       queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEYS.lists() });
+      queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: ['minutes', 'meeting', variables.meetingId] });
     },
   });
 }

@@ -69,12 +69,34 @@ export function useMinutesByMeeting(meetingId: string) {
   });
 }
 
+// After any minutes mutation we have to refresh every cached view of the
+// same minutes — the meeting-detail page reads via `byMeeting`, the
+// minutes-list page via `lists`, and the editor via `detail`. The old
+// hooks only invalidated two of the three keys, so the meeting page kept
+// showing the stale version until the user navigated away and back. This
+// is the "updating minutes takes too long to reload" bug.
+function invalidateMinutesCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  minutesId?: string,
+) {
+  queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+  queryClient.invalidateQueries({ queryKey: minutesKeys.all });
+  if (minutesId) {
+    queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
+  }
+}
+
 export function useCreateMinutes() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateMinutesData) => MinutesService.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+    onSuccess: (_, variables) => {
+      invalidateMinutesCaches(queryClient);
+      if ((variables as { meetingId?: string }).meetingId) {
+        queryClient.invalidateQueries({
+          queryKey: minutesKeys.byMeeting((variables as { meetingId: string }).meetingId),
+        });
+      }
     },
   });
 }
@@ -84,9 +106,15 @@ export function useUpdateMinutes() {
   return useMutation({
     mutationFn: ({ minutesId, data }: { minutesId: string; data: UpdateMinutesData }) =>
       MinutesService.update(minutesId, data),
-    onSuccess: (_, { minutesId }) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
-      queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+    onSuccess: (response, { minutesId }) => {
+      invalidateMinutesCaches(queryClient, minutesId);
+      // The response carries the updated minutes (with its meetingId), so we
+      // can refresh the per-meeting cache even when the caller didn't pass it.
+      const meetingId = (response as { data?: { meetingId?: string }; meetingId?: string })
+        ?.data?.meetingId ?? (response as { meetingId?: string })?.meetingId;
+      if (meetingId) {
+        queryClient.invalidateQueries({ queryKey: minutesKeys.byMeeting(meetingId) });
+      }
     },
   });
 }
@@ -96,7 +124,7 @@ export function useDeleteMinutes() {
   return useMutation({
     mutationFn: (minutesId: string) => MinutesService.delete(minutesId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+      invalidateMinutesCaches(queryClient);
     },
   });
 }
@@ -107,8 +135,7 @@ export function useApproveMinutes() {
     mutationFn: ({ minutesId, data }: { minutesId: string; data: ApproveMinutesData }) =>
       MinutesService.approve(minutesId, data),
     onSuccess: (_, { minutesId }) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
-      queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }
@@ -118,8 +145,7 @@ export function usePublishMinutes() {
   return useMutation({
     mutationFn: (minutesId: string) => MinutesService.publish(minutesId),
     onSuccess: (_, minutesId) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
-      queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }
@@ -129,8 +155,7 @@ export function useSubmitMinutesForReview() {
   return useMutation({
     mutationFn: (minutesId: string) => MinutesService.submitForReview(minutesId),
     onSuccess: (_, minutesId) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
-      queryClient.invalidateQueries({ queryKey: minutesKeys.lists() });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }
@@ -141,7 +166,7 @@ export function useAddMinuteItem() {
     mutationFn: ({ minutesId, data }: { minutesId: string; data: CreateMinuteItemData }) =>
       MinutesService.addItem(minutesId, data),
     onSuccess: (_, { minutesId }) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }
@@ -154,7 +179,7 @@ export function useUpdateMinuteItem() {
     }: { minutesId: string; itemId: string; data: UpdateMinuteItemData }) =>
       MinutesService.updateItem(minutesId, itemId, data),
     onSuccess: (_, { minutesId }) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }
@@ -165,7 +190,7 @@ export function useDeleteMinuteItem() {
     mutationFn: ({ minutesId, itemId }: { minutesId: string; itemId: string }) =>
       MinutesService.deleteItem(minutesId, itemId),
     onSuccess: (_, { minutesId }) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }
@@ -176,7 +201,7 @@ export function useReorderMinuteItems() {
     mutationFn: ({ minutesId, itemIds }: { minutesId: string; itemIds: string[] }) =>
       MinutesService.reorderItems(minutesId, itemIds),
     onSuccess: (_, { minutesId }) => {
-      queryClient.invalidateQueries({ queryKey: minutesKeys.detail(minutesId) });
+      invalidateMinutesCaches(queryClient, minutesId);
     },
   });
 }

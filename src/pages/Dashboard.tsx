@@ -13,6 +13,7 @@ import { usePendingOrganisations, useOrganisations } from '@/hooks/api/useOrgani
 import { authService } from '@/api/services';
 import { UpcomingMeetingsWidget }  from '@/components/dashboard/UpcomingMeetingsWidget';
 import { OpenActionsWidget }       from '@/components/dashboard/OpenActionsWidget';
+import { SmartRemindersWidget }    from '@/components/dashboard/SmartRemindersWidget';
 import { BudgetSummaryWidget }     from '@/components/dashboard/BudgetSummaryWidget';
 import { VotingOverviewWidget }    from '@/components/dashboard/VotingOverviewWidget';
 import { AttendanceWidget }        from '@/components/dashboard/AttendanceWidget';
@@ -1438,6 +1439,12 @@ function OrgAdminDashboard({ currentUser }: { currentUser: Record<string, unknow
             {loadingMeetings ? <WidgetSkel rows={3} h={56} /> : <UpcomingMeetingsWidget meetings={upcoming} />}
           </WidgetCard>
 
+          <WidgetCard title="Smart Reminders" icon={Clock} iconColor="text-rose-500" delay={20}>
+            {(loadingTasks || loadingMeetings)
+              ? <WidgetSkel rows={3} h={48} />
+              : <SmartRemindersWidget tasks={tasks} meetings={meetings} taskRoute="/tasks" meetingRoute="/meetings" />}
+          </WidgetCard>
+
           <WidgetCard title="Attendance Trend" icon={Users} iconColor="text-violet-500" delay={40}>
             {loadingAnalytics ? <WidgetSkel rows={3} /> : <AttendanceWidget attendanceTrend={attendanceTrend} />}
           </WidgetCard>
@@ -1607,6 +1614,12 @@ function UserDashboard({ currentUser }: { currentUser: Record<string, unknown> }
           <WidgetCard title="My Meetings" icon={Calendar} iconColor="text-indigo-500"
             action={{ label: 'All', onClick: () => navigate('/meetings') }} delay={0}>
             {loadingMeetings ? <WidgetSkel rows={3} h={56} /> : <UpcomingMeetingsWidget meetings={upcoming} />}
+          </WidgetCard>
+
+          <WidgetCard title="Smart Reminders" icon={Clock} iconColor="text-rose-500" delay={20}>
+            {(loadingTasks || loadingMeetings)
+              ? <WidgetSkel rows={3} h={48} />
+              : <SmartRemindersWidget tasks={tasks} meetings={meetings} taskRoute="/tasks" meetingRoute="/meetings" />}
           </WidgetCard>
 
           <div className="db-fade-up db-card p-5" style={{ animationDelay: '40ms' }}>

@@ -9,7 +9,9 @@ import {
   BarChart3,
   Bell,
   Shield,
+  Clock,
 } from "lucide-react";
+import { SmartRemindersWidget } from "@/components/dashboard/SmartRemindersWidget";
 import { toast } from "sonner";
 import {
   useMyMeetings,
@@ -390,6 +392,26 @@ export default function BoardMemberDashboard() {
             </Link>
           )}
         </div>
+      </section>
+
+      <section className="rounded-[28px] border border-border/60 bg-card p-5 sm:p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center">
+              <Clock className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">Smart reminders</h2>
+              <p className="text-sm text-muted-foreground">What needs your attention in the next 24 hours.</p>
+            </div>
+          </div>
+        </div>
+        <SmartRemindersWidget
+          tasks={tasks as Parameters<typeof SmartRemindersWidget>[0]['tasks']}
+          meetings={meetings as Parameters<typeof SmartRemindersWidget>[0]['meetings']}
+          taskRoute="/board/tasks"
+          meetingRoute="/board/meetings"
+        />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
