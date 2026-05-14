@@ -63,7 +63,7 @@ export function MeetingsOverview() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {([
           { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
           { label: 'Scheduled', value: counts.scheduled, color: 'text-blue-600 dark:text-blue-400' },

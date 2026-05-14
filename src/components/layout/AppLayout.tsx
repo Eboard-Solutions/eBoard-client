@@ -25,8 +25,8 @@ export function AppLayout({ children, fullWidth }: AppLayoutProps) {
 
       {/* Main content — margin is handled by SidebarOffset */}
       <SidebarOffset>
-        <main className="pt-16 min-h-screen">
-          <div className={fullWidth ? '' : 'p-6'}>
+        <main className="pt-[58px] min-h-screen">
+          <div className={fullWidth ? '' : 'p-3 sm:p-4 lg:p-6'}>
             {children}
           </div>
         </main>

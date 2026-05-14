@@ -8,9 +8,11 @@ import {
   Calendar, FileText, ListTodo, Vote,
   Megaphone, DollarSign,
 } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { authService } from '@/lib/auth';
+import { useSidebar } from './SidebarContext';
 
 interface NavItem {
   icon: React.ElementType;
@@ -152,11 +154,15 @@ function NavLink({ item, isActive, collapsed }: { item: NavItem; isActive: boole
 export function SuperAdminSidebar({ className }: { className?: string }) {
   const [location] = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
+  const { isMobile, isTablet, mobileOpen, toggleMobile } = useSidebar();
 
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
+  const [collapsedPref, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('sa-sidebar-collapsed') === 'true';
   });
+  // Tablet always forces the rail; mobile uses a sliding drawer at full menu
+  // width (collapsed=false) so labels are visible when the drawer is open.
+  const collapsed = isMobile ? false : isTablet ? true : collapsedPref;
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -168,15 +174,51 @@ export function SuperAdminSidebar({ className }: { className?: string }) {
   });
 
   useEffect(() => {
-    localStorage.setItem('sa-sidebar-collapsed', String(collapsed));
-  }, [collapsed]);
+    // Only persist desktop preference; on tablet `collapsed` is forced true.
+    if (!isTablet && !isMobile) {
+      localStorage.setItem('sa-sidebar-collapsed', String(collapsedPref));
+    }
+  }, [collapsedPref, isTablet, isMobile]);
+
+  // Auto-close the mobile drawer on navigation.
+  useEffect(() => {
+    if (isMobile && mobileOpen) toggleMobile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
 
   const initials = user
     ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'SA';
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Super Admin';
 
+  // On mobile: render a hamburger trigger + an overlay backdrop, and turn the
+  // aside itself into a sliding drawer.
+  const mobileMode = isMobile;
+
   return (
+    <>
+      {mobileMode && (
+        <>
+          <button
+            onClick={toggleMobile}
+            aria-label="Open menu"
+            className={cn(
+              'fixed top-4 left-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg',
+              'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow transition-shadow',
+              mobileOpen && 'hidden',
+            )}
+          >
+            <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+          </button>
+          <div
+            className={cn(
+              'fixed inset-0 z-40 bg-gray-950/50 backdrop-blur-sm transition-opacity duration-200',
+              mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+            )}
+            onClick={toggleMobile}
+          />
+        </>
+      )}
     <aside
       className={cn(
         'fixed left-0 top-0 z-40 flex h-screen flex-col',
@@ -184,11 +226,22 @@ export function SuperAdminSidebar({ className }: { className?: string }) {
         'border-r border-gray-200 dark:border-gray-800',
         'shadow-[1px_0_0_rgba(0,0,0,0.04)] dark:shadow-none',
         'transition-all duration-300 ease-in-out',
-        collapsed ? 'w-[68px]' : 'w-[248px]',
+        mobileMode
+          ? cn('w-72 z-50 shadow-xl', mobileOpen ? 'translate-x-0' : '-translate-x-full')
+          : collapsed ? 'w-[68px]' : 'w-[248px]',
         mounted ? 'opacity-100' : 'opacity-0',
         className,
       )}
     >
+      {mobileMode && (
+        <button
+          onClick={toggleMobile}
+          aria-label="Close menu"
+          className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
       {/* Logo */}
       <div className={cn('flex h-[58px] shrink-0 items-center border-b border-gray-100 dark:border-gray-800', collapsed ? 'justify-center px-3' : 'justify-between px-4')}>
         <div className="flex items-center gap-2.5 min-w-0">
@@ -202,14 +255,14 @@ export function SuperAdminSidebar({ className }: { className?: string }) {
             </div>
           )}
         </div>
-        {!collapsed && (
+        {!collapsed && !mobileMode && !isTablet && (
           <button aria-label="Collapse sidebar" onClick={() => setCollapsed(true)} className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all shrink-0">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {collapsed && (
+      {collapsed && !mobileMode && !isTablet && (
         <button aria-label="Expand sidebar" onClick={() => setCollapsed(false)} className={cn('absolute -right-3 top-[68px] z-50 flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-md text-gray-400 dark:text-gray-500 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-700 transition-all')}>
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -299,5 +352,6 @@ export function SuperAdminSidebar({ className }: { className?: string }) {
         )}
       </div>
     </aside>
+    </>
   );
 }

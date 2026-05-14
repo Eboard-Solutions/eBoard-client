@@ -81,12 +81,12 @@ export function SettingsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Platform Settings</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Configure platform-wide settings</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Platform Settings</h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Configure platform-wide settings</p>
         </div>
-        <Button onClick={handleSave} disabled={updateSettings.isPending} className="gap-2">
+        <Button onClick={handleSave} disabled={updateSettings.isPending} className="gap-2 self-start sm:self-auto">
           <Save className="h-4 w-4" />
           {updateSettings.isPending ? 'Saving...' : 'Save Changes'}
         </Button>
