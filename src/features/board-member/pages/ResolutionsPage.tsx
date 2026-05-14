@@ -162,19 +162,12 @@
 
 import { Vote, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
 import { toast } from 'sonner';
 
 export function ResolutionsPage() {
   return (
-    <div className="container mx-auto max-w-3xl px-4 md:px-6 py-12">
-      <PageHeader
-        icon={Vote}
-        title="Resolutions"
-        color="bg-amber-500"
-        subtitle="Board resolutions and voting"
-      />
-
+    <MemberPortalLayout icon={Vote} title="Resolutions" color="bg-amber-500" subtitle="Board resolutions and voting">
       <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10 p-8 text-center">
         <AlertCircle className="h-10 w-10 mx-auto mb-3 text-amber-500" />
         <h2 className="text-lg font-semibold mb-2">Coming Soon</h2>
@@ -188,6 +181,6 @@ export function ResolutionsPage() {
           Notify me
         </Button>
       </div>
-    </div>
+    </MemberPortalLayout>
   );
 }
