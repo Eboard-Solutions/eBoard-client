@@ -12,12 +12,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTasks, useUpdateTask } from '@/hooks/api';
 import type { Task } from '../types';
-import { PageHeader, SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import { SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
 
 export function TasksPage() {
   const { data } = useTasks();
   const updateTask = useUpdateTask();
-  const tasks = useMemo(() => unwrapList<Task>(data), [data]);
+  const tasks = useMemo(() => unwrapList<Task>(data) ?? [], [data]);
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('active');
@@ -54,9 +55,18 @@ export function TasksPage() {
     PENDING: 'bg-amber-500',
   };
 
+  // Helper to ensure we never call the API with an undefined id.
+  const safeUpdate = (taskId: string | undefined, data: any) => {
+    const id = taskId ?? (taskId as any)?.id;
+    if (!id) {
+      toast.error('Task id missing');
+      return;
+    }
+    updateTask.mutate({ taskId: id, data } as any);
+  };
+
   return (
-    <div className="container mx-auto max-w-5xl px-4 md:px-6 py-8">
-      <PageHeader icon={CheckSquare} title="My Tasks" color="bg-emerald-600" subtitle="Action items and deliverables" />
+    <MemberPortalLayout icon={CheckSquare} title="My Tasks" color="bg-emerald-600" subtitle="Action items and deliverables">
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchBar value={search} onChange={setSearch} placeholder="Search tasks…" />
@@ -81,16 +91,16 @@ export function TasksPage() {
               className={`rounded-2xl border transition-all hover:shadow-md cursor-pointer ${
                 t.status === 'OVERDUE' ? 'border-red-200 dark:border-red-900 bg-red-50/20 dark:bg-red-950/10' : ''
               }`}
-              onClick={() => { setSelected(t); setProgressInput(t.progress); }}
+              onClick={() => { setSelected(t); setProgressInput(t.progress ?? 0); }}
             >
               <div className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className={`h-3 w-3 rounded-full shrink-0 mt-1.5 ${STATUS_DOT[t.status]}`} />
+                  <div className={`h-3 w-3 rounded-full shrink-0 mt-1.5 ${STATUS_DOT[t.status] ?? ''}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PRIORITY_COLORS[t.priority] ?? ''}`}>{t.priority}</span>
                           {t.status === 'OVERDUE' && <span className="text-[10px] font-bold text-red-600">OVERDUE</span>}
                         </div>
                         <p className={`font-semibold text-sm ${t.status === 'COMPLETED' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{t.title}</p>
@@ -102,7 +112,7 @@ export function TasksPage() {
                             </span>
                           )}
                           <span>Assigned by {t.assignedBy}</span>
-                          {t.deliverables.length > 0 && (
+                          {(t.deliverables?.length ?? 0) > 0 && (
                             <span className="flex items-center gap-1">
                               <Paperclip className="h-3 w-3" />{t.deliverables.length}
                             </span>
@@ -112,7 +122,7 @@ export function TasksPage() {
                       <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         {t.status !== 'COMPLETED' && (
                           <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => {
-                            updateTask.mutate({ taskId: t.taskId, data: { status: 'COMPLETED', progress: 100 } as any });
+                            safeUpdate(t.taskId, { status: 'COMPLETED', progress: 100 });
                             toast.success('Task completed');
                           }}>
                             Complete
@@ -153,7 +163,7 @@ export function TasksPage() {
                   </div>
                   <input type="range" min="0" max="100" step="5" value={progressInput} onChange={(e) => setProgressInput(Number(e.target.value))} className="w-full accent-indigo-600" />
                   <Button size="sm" className="mt-2 h-8 text-xs w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => {
-                    updateTask.mutate({ taskId: selected.taskId, data: { progress: progressInput, status: progressInput === 100 ? 'COMPLETED' : progressInput > 0 ? 'IN_PROGRESS' : 'PENDING' } as any });
+                    safeUpdate(selected.taskId, { progress: progressInput, status: progressInput === 100 ? 'COMPLETED' : progressInput > 0 ? 'IN_PROGRESS' : 'PENDING' } as any);
                     toast.success('Progress updated');
                   }}>
                     Update Progress
@@ -161,12 +171,12 @@ export function TasksPage() {
                 </div>
                 <div>
                   <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Notes</Label>
-                  <Textarea defaultValue={selected.notes} rows={3} className="text-sm resize-none" onBlur={(e) => updateTask.mutate({ taskId: selected.taskId, data: { notes: e.target.value } as any })} placeholder="Add notes…" />
+                  <Textarea defaultValue={selected.notes} rows={3} className="text-sm resize-none" onBlur={(e) => safeUpdate(selected.taskId, { notes: e.target.value } as any)} placeholder="Add notes…" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Deliverables ({selected.deliverables.length})</h4>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Deliverables ({selected.deliverables?.length ?? 0})</h4>
                   <div className="space-y-2 mb-2">
-                    {selected.deliverables.map((d) => (
+                    {(selected.deliverables ?? []).map((d) => (
                       <div key={d.deliverableId} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/30">
                         <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <span className="text-sm flex-1">{d.title}</span>
@@ -178,7 +188,7 @@ export function TasksPage() {
                     <Input value={newDeliverable} onChange={(e) => setNewDeliverable(e.target.value)} placeholder="Add deliverable…" className="h-8 text-sm flex-1" />
                     <Button size="sm" className="h-8" onClick={() => {
                       if (newDeliverable.trim()) {
-                        updateTask.mutate({ taskId: selected.taskId, data: { deliverables: [{ title: newDeliverable.trim() } as any] } as any });
+                        safeUpdate(selected.taskId, { deliverables: [{ title: newDeliverable.trim() } as any] } as any);
                         setNewDeliverable('');
                         toast.success('Deliverable added');
                       }
@@ -195,6 +205,6 @@ export function TasksPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </MemberPortalLayout>
   );
 }
