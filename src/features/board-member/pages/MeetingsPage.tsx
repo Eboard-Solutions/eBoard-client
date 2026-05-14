@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useMyMeetings, useRSVP } from '@/hooks/api';
 import type { Meeting } from '../types';
-import { PageHeader, SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import { SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
 
 export function MeetingsPage() {
   const { data: meetingsData } = useMyMeetings();
@@ -49,8 +50,7 @@ export function MeetingsPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 md:px-6 py-8">
-      <PageHeader icon={CalendarDays} title="Meetings" color="bg-indigo-600" subtitle="Board and committee meeting schedule" />
+    <MemberPortalLayout icon={CalendarDays} title="Meetings" color="bg-indigo-600" subtitle="Board and committee meeting schedule">
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchBar value={search} onChange={setSearch} placeholder="Search meetings…" />
@@ -192,6 +192,6 @@ export function MeetingsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </MemberPortalLayout>
   );
 }
