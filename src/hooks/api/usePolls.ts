@@ -132,8 +132,9 @@ export function useVotePoll() {
       });
     },
     onSettled: (result) => {
-      if (result?.id) {
-        queryClient.invalidateQueries({ queryKey: pollKeys.detail(result.id) });
+      const id = result?.data?.id;
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: pollKeys.detail(id) });
       }
       queryClient.invalidateQueries({ queryKey: pollKeys.lists() });
     },

@@ -1,7 +1,7 @@
 import type { Resolution, Vote } from '@/features/board-member';
 
 import apiClient from '../client';
-import type { ResponseObject } from '../response-object';
+import { ResponseObject } from '../response-object';
 import { ENDPOINTS } from '@/config/api.config';
 export interface CreateResolutionData {
     title: string;
@@ -23,7 +23,7 @@ export const resolutionsService = {
         try {
             const response = await apiClient.get<ResponseObject<Resolution[]>>(ENDPOINTS.RESOLUTIONS.BASE);
             return response.data;
-        } catch (err) {
+        } catch {
             // If the backend doesn't expose resolutions yet (404), return an empty successful wrapper
             return new ResponseObject<Resolution[]>(404, 'Not found', []);
         }

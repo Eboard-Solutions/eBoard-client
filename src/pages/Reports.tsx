@@ -164,7 +164,7 @@ export function Reports() {
 
   // activePolls can come back as a number OR an array of Poll objects
   const activePollsRaw = dashboardRaw
-    ? (dashboardRaw as Record<string, unknown>)['activePolls']
+    ? (dashboardRaw as unknown as Record<string, unknown>)['activePolls']
     : undefined;
   const activePollsCount: number =
     typeof activePollsRaw === 'number'
@@ -335,7 +335,7 @@ export function Reports() {
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
-                    formatter={(value: number) => [`${value}%`, 'Attendance']}
+                    formatter={(value) => [`${value ?? 0}%`, 'Attendance']}
                   />
                   <Line
                     type="monotone"
@@ -431,7 +431,7 @@ export function Reports() {
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
-                    formatter={(value: number) => [value, 'Tasks']}
+                    formatter={(value) => [value ?? 0, 'Tasks']}
                   />
                   <Bar dataKey="count" fill="hsl(var(--primary))" name="Tasks" radius={[4, 4, 0, 0]} />
                 </BarChart>

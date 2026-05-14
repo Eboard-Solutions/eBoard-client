@@ -231,7 +231,9 @@ function useDocumentUrl(docId: string | undefined, refreshKey: number, fallbackU
 
 type FetchState = 'idle' | 'fetching' | 'ready' | 'error';
 
-function useBlob(url: string | null | undefined) {
+// retained for potential reuse
+// @ts-expect-error - unused helper kept for reference
+function _useBlob(url: string | null | undefined) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [status, setStatus]   = useState<FetchState>('idle');
   const [errMsg, setErrMsg]   = useState<string | null>(null);

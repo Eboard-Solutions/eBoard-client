@@ -21,10 +21,10 @@ import {
 import {
   Plus, Trash2, GripVertical, Calendar, Clock, MapPin, Users,
   Target, ClipboardList, Eye, ArrowLeft, ArrowRight, Save,
-  Download, Timer, BookOpen, ChevronRight, Loader2,
-  AlertTriangle, CheckCircle2, Pencil, FileText, Globe,
-  Send, MoreHorizontal, Hash, AlarmClock, StickyNote,
-  Layers, Play, Info,
+  Timer, BookOpen, ChevronRight, Loader2,
+  AlertTriangle, CheckCircle2, Pencil, FileText,
+  Send, Hash, AlarmClock, StickyNote,
+  Layers,
 } from 'lucide-react';
 
 import {
@@ -33,7 +33,7 @@ import {
   useAddAgendaItem, useUpdateAgendaItem, useDeleteAgendaItem,
 } from '@/hooks/api/useAgendas';
 import type {
-  Meeting, User, Agenda, AgendaItem,
+  Meeting, User, Agenda,
   AgendaItemType, CreateAgendaItemData,
 } from '@/types/api.types';
 

@@ -47,10 +47,13 @@ export function Finance() {
   const [searchQuery, setSearchQuery] = useState('');
   const { data: financeData, isLoading } = useFinanceOverview();
 
-  const typedFinance = financeData as FinanceOverview | undefined;
+  const typedFinance = financeData as (FinanceOverview & {
+    categories?: Array<{ name: string; allocated: number; spent: number }>;
+    recentTransactions?: Array<{ id: string; description: string; amount: number; date: string; category: string }>;
+  }) | undefined;
 
   // Extract budgets from categories
-  const budgets: Budget[] = (typedFinance?.categories || []).map((c, idx) => ({
+  const budgets: Budget[] = (typedFinance?.categories ?? []).map((c, idx: number) => ({
     id: `cat-${idx}`,
     category: c.name,
     allocated: c.allocated,
@@ -58,7 +61,7 @@ export function Finance() {
   }));
 
   // Extract expenses from recent transactions
-  const expenses: Expense[] = (typedFinance?.recentTransactions || []).map((t) => ({
+  const expenses: Expense[] = (typedFinance?.recentTransactions ?? []).map((t) => ({
     id: t.id,
     title: t.description,
     amount: t.amount,
@@ -294,7 +297,7 @@ export function Finance() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number | string) => formatCurrency(Number(value) || 0)}
+                  formatter={(value) => formatCurrency(Number(value) || 0)}
                   contentStyle={{
                     backgroundColor: 'hsl(var(--popover))',
                     border: '1px solid hsl(var(--border))',

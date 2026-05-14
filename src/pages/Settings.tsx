@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,9 +26,9 @@ import { usePermissions } from '@/lib/permissions';
 
 import {
   Building, Users, Bell, Shield, Zap, Globe, Mail, Key,
-  Database, Palette, Save, Loader2, RefreshCw, AlertTriangle,
+  Database, Save, Loader2, AlertTriangle,
   CheckCircle2, Smartphone, Copy, Eye, EyeOff, ShieldCheck,
-  Lock, Unlock, Activity, Server, X, Check, Info,
+  Lock, Server, Check, Info,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

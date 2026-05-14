@@ -31,7 +31,7 @@ import {
   useAddMinuteItem, useUpdateMinuteItem, useDeleteMinuteItem,
 } from '@/hooks/api/useMinutes';
 import type {
-  Meeting, User, MinuteItemType,
+  Meeting, User, MinuteItemType, Minutes, MinuteItem,
   CreateMinuteItemData,
   ActionItemDetails, ActionItemAssignee,
 } from '@/types/api.types';
@@ -299,7 +299,7 @@ export function MinutesManager({ meetings = [], members = [] }: MinutesManagerPr
     setTitle(existingMinutes.title ?? '');
     setSummary(existingMinutes.summary ?? '');
     setItems(
-      (existingMinutes.items ?? []).map(i => ({
+      (existingMinutes.items ?? []).map((i: MinuteItem) => ({
         clientId:          i.id,
         serverId:          i.id,
         orderIndex:        i.orderIndex,

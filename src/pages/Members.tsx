@@ -176,7 +176,7 @@ export default function MembersPage() {
     const items = extractUsers(membersRaw);
 
     return items.map((u): DisplayUser => ({
-      id:        u.userId ?? u.id ?? '',
+      id:        u.userId ?? '',
       name:      `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.email,
       firstName: u.firstName ?? '',
       lastName:  u.lastName  ?? '',
@@ -185,7 +185,7 @@ export default function MembersPage() {
       role:      u.role,
       position:  u.title,
       phone:     u.phoneNumber,
-      isActive:  u.isActive ?? u.status === 'ACTIVE' ?? true,
+      isActive:  u.status === 'active' || u.status === undefined,
     }));
   }, [membersRaw]);
 
@@ -220,9 +220,9 @@ export default function MembersPage() {
     // with the new member without having to remember what they typed.
     setShowAddDialog(false);
     const pendingToast = toast.loading('Adding member…');
-    const tempPassword = data.password;
+    const tempPassword = (data as AddMemberFormData & { password?: string }).password;
 
-    createUser.mutate(data, {
+    createUser.mutate(data as any, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
 
@@ -284,7 +284,7 @@ export default function MembersPage() {
     // Close immediately, show optimistic loading toast — feels instant.
     setEditTarget(null);
     const pendingToast = toast.loading('Saving changes…');
-    updateUser.mutate({ userId, data }, {
+    updateUser.mutate({ userId, data: data as any }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['users'] });
         toast.success('Member updated', { id: pendingToast });

@@ -10,7 +10,6 @@ import {
   Bell,
   Shield,
   Clock,
-  AlertCircle,
 } from "lucide-react";
 import { SmartRemindersWidget } from "@/components/dashboard/SmartRemindersWidget";
 import { toast } from "sonner";

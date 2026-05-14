@@ -20,12 +20,11 @@ interface Props {
 }
 
 
-const AgendaItemForm: React.FC<Props> = ({ 
-  item, 
-  agendaId, 
-  onSubmit, 
-  onCancel, 
-  onDelete 
+const AgendaItemForm: React.FC<Props> = ({
+  item,
+  onSubmit,
+  onCancel,
+  onDelete
 }) => {
   const [formData, setFormData] = useState<CreateAgendaItemData>({
     orderIndex: 0,

@@ -152,7 +152,7 @@ interface AppRouteProps {
 function AppRoute({ path, roles, fullWidth, children }: AppRouteProps) {
   return (
     <Route path={path}>
-      <ProtectedRoute allowedRoles={roles}>
+      <ProtectedRoute requiredRoles={roles}>
         <AppLayout fullWidth={fullWidth}>{children}</AppLayout>
       </ProtectedRoute>
     </Route>
@@ -162,7 +162,7 @@ function AppRoute({ path, roles, fullWidth, children }: AppRouteProps) {
 function BoardRoute({ path, children }: { path: string; children: React.ReactNode }) {
   return (
     <Route path={path}>
-      <ProtectedRoute allowedRoles={['boardmember', 'orgadmin', 'superadmin']}>
+      <ProtectedRoute requiredRoles={['boardmember', 'orgadmin', 'superadmin']}>
         <AppLayout fullWidth>{children}</AppLayout>
       </ProtectedRoute>
     </Route>
@@ -172,7 +172,7 @@ function BoardRoute({ path, children }: { path: string; children: React.ReactNod
 function SuperRoute({ path, children }: { path: string; children: React.ReactNode }) {
   return (
     <Route path={path}>
-      <ProtectedRoute allowedRoles={['superadmin']}>
+      <ProtectedRoute requiredRoles={['superadmin']}>
         <SuperAdminLayout>{children}</SuperAdminLayout>
       </ProtectedRoute>
     </Route>
