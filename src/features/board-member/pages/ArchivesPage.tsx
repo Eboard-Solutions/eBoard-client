@@ -6,7 +6,8 @@ import { CalendarDays, FileText, Vote, Archive } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMeetings, useDocuments, useResolutions } from '@/hooks/api';
 import type { Meeting, Document, Resolution } from '../types';
-import { PageHeader, SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
+import MemberPortalLayout from '../components/MemberPortalLayout';
+import { SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
 
 export function ArchivesPage() {
   const { data: meetingsData } = useMeetings();
@@ -49,9 +50,7 @@ export function ArchivesPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 md:px-6 py-8">
-      <PageHeader icon={Archive} title="Archives" color="bg-orange-600" subtitle="Historical board records" />
-
+    <MemberPortalLayout icon={Archive} title="Archives" color="bg-orange-600" subtitle="Historical board records">
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchBar value={search} onChange={setSearch} placeholder="Search archives…" />
         <Select value={type} onValueChange={setType}>
@@ -102,6 +101,6 @@ export function ArchivesPage() {
           })}
         </div>
       )}
-    </div>
+    </MemberPortalLayout>
   );
 }
