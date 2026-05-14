@@ -1,7 +1,12 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, dateFnsLocalizer, type View } from "react-big-calendar";
+import {
+  Calendar,
+  dateFnsLocalizer,
+  type View,
+  type DateHeaderProps,
+} from "react-big-calendar";
 import { startOfWeek, isSameDay, isWithinInterval, addDays } from "date-fns";
 import { parse } from "date-fns/parse";
 import { format } from "date-fns/format";
@@ -19,8 +24,15 @@ import {
   ChevronRight,
   CalendarRange,
   Inbox,
+  Search,
+  X,
+  ListChecks,
+  ClipboardList,
+  Bell,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   calendarService,
   CALENDAR_QUERY_KEYS,
@@ -43,21 +55,25 @@ const localizer = dateFnsLocalizer({
 type EventType = CalendarEvent["type"];
 type FilterKey = "all" | EventType;
 
-// Map event types to a coordinated palette. Each entry drives the dot, the
-// gradient on the rendered event chip, and the filter pill.
+// Map every event type to a coordinated palette. The user asked for blue
+// meetings, green tasks, orange reviews (actionItem), purple agendas; we also
+// keep a red "deadline" entry that the renderer can detect via the title (no
+// new server field needed) for tasks marked DUE/Deadline.
 type TypeStyle = {
   label: string;
   chip: string;
   dot: string;
   gradient: string;
+  ring: string;
   icon: typeof Users;
 };
 const TYPE_STYLES: Record<EventType, TypeStyle> = {
   meeting: {
     label: "Meetings",
-    chip: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900",
-    dot: "bg-indigo-500",
-    gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+    chip: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900",
+    dot: "bg-blue-500",
+    gradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+    ring: "ring-blue-400/50",
     icon: Users,
   },
   task: {
@@ -65,30 +81,47 @@ const TYPE_STYLES: Record<EventType, TypeStyle> = {
     chip: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
     dot: "bg-emerald-500",
     gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    ring: "ring-emerald-400/50",
     icon: CheckSquare,
   },
   actionItem: {
-    label: "Action items",
+    label: "Reviews",
     chip: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900",
     dot: "bg-amber-500",
     gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-    icon: Sparkles,
+    ring: "ring-amber-400/50",
+    icon: ClipboardList,
   },
   agendaItem: {
-    label: "Agenda items",
+    label: "Agendas",
     chip: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900",
     dot: "bg-violet-500",
     gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-    icon: CalendarRange,
+    ring: "ring-violet-400/50",
+    icon: ListChecks,
   },
 };
 
-const FALLBACK_GRADIENT = "linear-gradient(135deg, #64748b 0%, #475569 100%)";
+// Deadline override — applied dynamically when an event's title hints at one.
+// We don't want to change the data model just to colour-code, so the renderer
+// inspects the title for keywords (case-insensitive). Cheap, accurate enough.
+const DEADLINE_STYLE: TypeStyle = {
+  label: "Deadlines",
+  chip: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900",
+  dot: "bg-rose-500",
+  gradient: "linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)",
+  ring: "ring-rose-400/50",
+  icon: Bell,
+};
+
+const DEADLINE_RE = /\b(deadline|due|overdue)\b/i;
+
+function styleFor(event: CalendarEvent): TypeStyle {
+  if (DEADLINE_RE.test(event.title)) return DEADLINE_STYLE;
+  return TYPE_STYLES[event.type];
+}
 
 // ─── Custom toolbar ───────────────────────────────────────────────────────────
-// Replaces react-big-calendar's default top bar with a layout matched to the
-// rest of the app: title on the left, view switcher on the right, with a
-// segmented "today / prev / next" control in the middle.
 
 interface ToolbarProps {
   label: string;
@@ -96,75 +129,156 @@ interface ToolbarProps {
   views: View[];
   onView: (v: View) => void;
   onNavigate: (action: "PREV" | "NEXT" | "TODAY") => void;
+  search: string;
+  onSearch: (v: string) => void;
 }
 
-function CalendarToolbar({ label, view, views, onView, onNavigate }: ToolbarProps) {
+const VIEW_ICONS: Record<View, typeof CalendarIcon> = {
+  month: CalendarRange,
+  week: CalendarIcon,
+  day: Sparkles,
+  agenda: ListChecks,
+  work_week: CalendarIcon,
+};
+
+function CalendarToolbar({
+  label,
+  view,
+  views,
+  onView,
+  onNavigate,
+  search,
+  onSearch,
+}: ToolbarProps) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-1 pb-4">
-      {/* Nav cluster */}
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-1 pb-5">
+      {/* Left: nav cluster */}
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
-          className="h-9 px-3 rounded-xl text-xs font-semibold"
+          className="h-9 px-3.5 rounded-full text-xs font-bold tracking-wide"
           onClick={() => onNavigate("TODAY")}
         >
           Today
         </Button>
-        <div className="flex items-center rounded-xl border border-border/60 overflow-hidden bg-card">
+        <div className="flex items-center rounded-full border border-border/60 bg-card overflow-hidden">
           <button
             type="button"
             aria-label="Previous"
             onClick={() => onNavigate("PREV")}
-            className="h-9 px-2.5 hover:bg-muted/50 transition-colors"
+            className="h-9 w-9 flex items-center justify-center hover:bg-muted/50 transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="px-3 text-sm font-bold tracking-tight tabular-nums select-none border-x border-border/60 h-9 flex items-center min-w-[140px] justify-center">
+          <span className="px-4 text-sm font-extrabold tracking-tight tabular-nums select-none border-x border-border/60 h-9 flex items-center min-w-[150px] justify-center">
             {label}
           </span>
           <button
             type="button"
             aria-label="Next"
             onClick={() => onNavigate("NEXT")}
-            className="h-9 px-2.5 hover:bg-muted/50 transition-colors"
+            className="h-9 w-9 flex items-center justify-center hover:bg-muted/50 transition-colors"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* View switcher */}
-      <div className="flex items-center gap-1 bg-muted/40 rounded-xl border border-border/30 p-1 self-start sm:self-auto">
-        {views.map((v) => (
+      {/* Middle: search */}
+      <div className="relative flex-1 max-w-xs lg:max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Search events…"
+          className="h-9 pl-9 pr-8 rounded-full text-sm border-border/60 bg-card"
+        />
+        {search && (
           <button
-            key={v}
             type="button"
-            onClick={() => onView(v)}
-            className={`h-8 px-3 rounded-lg transition-all text-xs font-semibold capitalize ${
-              view === v
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            onClick={() => onSearch("")}
+            aria-label="Clear search"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
-            {v}
+            <X className="h-3.5 w-3.5" />
           </button>
-        ))}
+        )}
+      </div>
+
+      {/* Right: view switcher with icons */}
+      <div className="flex items-center gap-1 bg-muted/40 rounded-full border border-border/30 p-1 self-start lg:self-auto">
+        {views.map((v) => {
+          const Icon = VIEW_ICONS[v] ?? CalendarIcon;
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onView(v)}
+              className={`h-8 px-3 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold capitalize ${
+                view === v
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-border/40"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
+              {v}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
+// ─── Custom date-cell header ─────────────────────────────────────────────────
+// Replaces the default numeric label with a 28px chip that turns into a filled
+// indigo circle on the current day. Hover on any cell reveals a quick-add
+// button (visual affordance only — wires through to `onQuickAdd`).
+
+function makeDateHeader(opts: { onQuickAdd?: (date: Date) => void }) {
+  return function DateHeader({ date, label, isOffRange }: DateHeaderProps) {
+    const today = isSameDay(date, new Date());
+    return (
+      <div className="flex items-center justify-between w-full">
+        {opts.onQuickAdd && !isOffRange && (
+          <button
+            type="button"
+            aria-label={`Add event on ${format(date, "MMM d")}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              opts.onQuickAdd?.(date);
+            }}
+            className="opacity-0 group-hover/cell:opacity-100 h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm hover:bg-indigo-700 transition-all ml-1"
+          >
+            <Plus className="h-3 w-3" strokeWidth={3} />
+          </button>
+        )}
+        <span className="flex-1" />
+        <span
+          className={`inline-flex items-center justify-center min-w-[26px] h-[26px] px-1.5 rounded-full text-[12px] font-bold tabular-nums transition-all ${
+            today
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/30 ring-2 ring-white dark:ring-gray-950"
+              : isOffRange
+                ? "text-muted-foreground/45"
+                : "text-foreground hover:bg-muted/60"
+          }`}
+        >
+          {label}
+        </span>
+      </div>
+    );
+  };
+}
+
 // ─── Custom event chip ────────────────────────────────────────────────────────
-// react-big-calendar renders events as a flat colored bar by default; our
-// renderer gives them a tiny icon + slightly nicer typography.
 
 function EventChip({ event }: { event: CalendarEvent }) {
-  const cfg = TYPE_STYLES[event.type];
-  const Icon = cfg?.icon ?? Sparkles;
+  const cfg = styleFor(event);
+  const Icon = cfg.icon;
   return (
     <span className="flex items-center gap-1.5 truncate text-[11.5px] font-semibold leading-none">
-      <Icon className="h-3 w-3 shrink-0 opacity-90" strokeWidth={2.5} />
+      <Icon className="h-3 w-3 shrink-0 opacity-95" strokeWidth={2.5} />
       <span className="truncate">{event.title}</span>
     </span>
   );
@@ -177,6 +291,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState<View>("month");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
+  const [search, setSearch] = useState("");
 
   const { data: events, isLoading, isError, refetch } = useQuery({
     queryKey: CALENDAR_QUERY_KEYS.all,
@@ -185,10 +300,6 @@ export default function CalendarPage() {
 
   const allEvents: CalendarEvent[] = useMemo(() => events ?? [], [events]);
 
-  // ── Derived stats ──────────────────────────────────────────────────────────
-  // Counts shown in the stat tiles. `thisWeek` covers a rolling 7-day window
-  // from the calendar's current "now" date, which is more intuitive than ISO
-  // weeks since Sunday-start vs Monday-start would confuse users.
   const stats = useMemo(() => {
     const today = new Date();
     const weekEnd = addDays(today, 7);
@@ -212,29 +323,36 @@ export default function CalendarPage() {
     };
   }, [allEvents]);
 
-  const filtered = useMemo(
-    () =>
-      activeFilter === "all"
-        ? allEvents
-        : allEvents.filter((e) => e.type === activeFilter),
-    [allEvents, activeFilter],
-  );
+  // ── Filtering: type + search ───────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    let list = allEvents;
+    if (activeFilter !== "all") {
+      list = list.filter((e) => e.type === activeFilter);
+    }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (e) =>
+          e.title.toLowerCase().includes(q) ||
+          (e.location ?? "").toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [allEvents, activeFilter, search]);
 
-  // ── Event styling ──────────────────────────────────────────────────────────
-  // We push the visual treatment through `eventPropGetter` so react-big-
-  // calendar's internal layout still owns positioning — we only override
-  // colour, radius, and shadow.
+  // ── Per-event visual treatment via eventPropGetter. We keep react-big-
+  // calendar's layout; only override the visuals on the chip itself.
   const eventStyleGetter = (event: CalendarEvent) => {
-    const cfg = TYPE_STYLES[event.type];
+    const cfg = styleFor(event);
     return {
       style: {
-        background: cfg?.gradient ?? FALLBACK_GRADIENT,
-        borderRadius: 8,
+        background: cfg.gradient,
+        borderRadius: 999, // full pill
         color: "white",
         border: "0px",
-        padding: "3px 8px",
+        padding: "4px 10px",
         boxShadow:
-          "0 2px 6px -2px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.18)",
+          "0 2px 8px -2px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.22)",
       },
     };
   };
@@ -244,6 +362,8 @@ export default function CalendarPage() {
   };
 
   const views = useMemo(() => ["month", "week", "day", "agenda"] as View[], []);
+
+  const DateHeader = useMemo(() => makeDateHeader({}), []);
 
   return (
     <div className="space-y-6 pb-12">
@@ -256,7 +376,10 @@ export default function CalendarPage() {
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4 min-w-0">
             <div className="shrink-0 h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 ring-1 ring-inset ring-white/25 backdrop-blur flex items-center justify-center">
-              <CalendarIcon className="h-6 w-6 sm:h-7 sm:w-7 text-white drop-shadow-sm" strokeWidth={2.25} />
+              <CalendarIcon
+                className="h-6 w-6 sm:h-7 sm:w-7 text-white drop-shadow-sm"
+                strokeWidth={2.25}
+              />
             </div>
             <div className="min-w-0">
               <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-white/70">
@@ -280,13 +403,15 @@ export default function CalendarPage() {
               disabled={isLoading}
               className="h-9 gap-2 bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
+              />
               Refresh
             </Button>
           </div>
         </div>
 
-        {/* Stat strip — sits inside the hero card, blends with the gradient */}
+        {/* Stat strip embedded in the hero */}
         <div className="relative mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           {[
             { label: "Total", value: stats.total, icon: CalendarRange },
@@ -340,11 +465,13 @@ export default function CalendarPage() {
           dotClass={TYPE_STYLES.task.dot}
         />
 
-        {/* Legend — visible on >= sm so the filter row doesn't wrap into a
-            cluttered stack on phones. */}
+        {/* Legend on >= sm */}
         <div className="ml-auto hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
           <LegendDot color={TYPE_STYLES.meeting.dot} label="Meeting" />
           <LegendDot color={TYPE_STYLES.task.dot} label="Task" />
+          <LegendDot color={TYPE_STYLES.agendaItem.dot} label="Agenda" />
+          <LegendDot color={TYPE_STYLES.actionItem.dot} label="Review" />
+          <LegendDot color={DEADLINE_STYLE.dot} label="Deadline" />
         </div>
       </div>
 
@@ -361,7 +488,12 @@ export default function CalendarPage() {
               and try again.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="self-start">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            className="self-start"
+          >
             <RefreshCw className="h-3.5 w-3.5 mr-2" />
             Retry
           </Button>
@@ -372,7 +504,7 @@ export default function CalendarPage() {
             {isLoading ? (
               <CalendarSkeleton />
             ) : filtered.length === 0 ? (
-              <EmptyState filter={activeFilter} />
+              <EmptyState filter={activeFilter} searching={!!search.trim()} />
             ) : (
               <Calendar<CalendarEvent>
                 localizer={localizer}
@@ -386,9 +518,19 @@ export default function CalendarPage() {
                 views={views}
                 eventPropGetter={eventStyleGetter}
                 onSelectEvent={handleSelectEvent}
+                popup
                 tooltipAccessor={(event) =>
-                  `${event.title}\nLocation: ${event.location || "N/A"}`
+                  [
+                    event.title,
+                    event.location ? `Location: ${event.location}` : null,
+                    `${format(new Date(event.start), "PPP p")}`,
+                  ]
+                    .filter(Boolean)
+                    .join("\n")
                 }
+                messages={{
+                  showMore: (count) => `+${count} more`,
+                }}
                 components={{
                   toolbar: (props) => (
                     <CalendarToolbar
@@ -397,11 +539,16 @@ export default function CalendarPage() {
                       views={views}
                       onView={props.onView}
                       onNavigate={(a) => props.onNavigate(a)}
+                      search={search}
+                      onSearch={setSearch}
                     />
                   ),
                   event: ({ event }) => <EventChip event={event} />,
+                  month: {
+                    dateHeader: DateHeader,
+                  },
                 }}
-                style={{ height: "clamp(560px, 70vh, 820px)" }}
+                style={{ height: "clamp(580px, 72vh, 860px)" }}
                 className="rbc-modern font-sans"
               />
             )}
@@ -409,9 +556,6 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Inline CSS overrides for react-big-calendar so it inherits the
-          app's design language (rounded corners, soft borders, dark-mode
-          contrast). Scoped via the `rbc-modern` class so it can't leak. */}
       <style>{rbcOverrides}</style>
     </div>
   );
@@ -436,7 +580,7 @@ function FilterPill({
     <button
       type="button"
       onClick={onClick}
-      className={`group inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-semibold transition-all ${
+      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-semibold transition-all ${
         active
           ? "bg-foreground text-background border-foreground shadow-sm"
           : "bg-card hover:bg-muted/60 border-border/60 text-muted-foreground hover:text-foreground"
@@ -470,115 +614,205 @@ function CalendarSkeleton() {
   return (
     <div className="space-y-3 animate-pulse">
       <div className="flex items-center justify-between">
-        <div className="h-9 w-48 rounded-xl bg-muted/60" />
-        <div className="h-9 w-56 rounded-xl bg-muted/60" />
+        <div className="h-9 w-48 rounded-full bg-muted/60" />
+        <div className="h-9 w-56 rounded-full bg-muted/60" />
       </div>
       <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 35 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-lg bg-muted/40" />
+          <div key={i} className="h-20 rounded-xl bg-muted/40" />
         ))}
       </div>
     </div>
   );
 }
 
-function EmptyState({ filter }: { filter: FilterKey }) {
+function EmptyState({
+  filter,
+  searching,
+}: {
+  filter: FilterKey;
+  searching: boolean;
+}) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 sm:py-20 px-6">
       <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
         <Inbox className="h-7 w-7 text-muted-foreground/50" />
       </div>
       <h3 className="text-base font-semibold">
-        {filter === "all"
-          ? "No events scheduled"
-          : filter === "meeting"
-            ? "No meetings yet"
-            : "No tasks yet"}
+        {searching
+          ? "No events match your search"
+          : filter === "all"
+            ? "No events scheduled"
+            : filter === "meeting"
+              ? "No meetings yet"
+              : filter === "task"
+                ? "No tasks yet"
+                : "No events for this filter"}
       </h3>
       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-        Once events are scheduled they'll appear here, colour-coded by type.
+        {searching
+          ? "Try a different keyword, or clear the search to see everything."
+          : "Once events are scheduled they'll appear here, colour-coded by type."}
       </p>
     </div>
   );
 }
 
-// ─── CSS overrides ────────────────────────────────────────────────────────────
-// react-big-calendar ships its own stylesheet (imported above). These rules
-// re-skin it to fit the app: softer borders, rounded corners, today highlight,
-// dark-mode contrast, and a calmer typography scale. Scoped to `.rbc-modern`.
+// ─── CSS overrides (scoped to .rbc-modern) ────────────────────────────────────
+// Designed to make react-big-calendar feel native to the app: lighter grid
+// lines, larger date cells, soft today background, polished `+N more` chip,
+// hover lift on events, and dark-mode contrast.
 
 const rbcOverrides = `
+  /* Outer frame */
   .rbc-modern .rbc-month-view,
   .rbc-modern .rbc-time-view,
   .rbc-modern .rbc-agenda-view {
-    border: 1px solid hsl(var(--border));
-    border-radius: 16px;
+    border: 1px solid hsl(var(--border) / 0.6);
+    border-radius: 20px;
     overflow: hidden;
     background: hsl(var(--card));
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
   }
+
+  /* Weekday header strip */
   .rbc-modern .rbc-month-header,
   .rbc-modern .rbc-time-header {
-    background: hsl(var(--muted) / 0.4);
+    background: hsl(var(--muted) / 0.35);
+    backdrop-filter: blur(4px);
   }
   .rbc-modern .rbc-header {
-    border-bottom: 1px solid hsl(var(--border));
-    padding: 10px 6px;
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+    padding: 12px 8px;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     color: hsl(var(--muted-foreground));
   }
-  .rbc-modern .rbc-month-row + .rbc-month-row,
-  .rbc-modern .rbc-day-bg + .rbc-day-bg,
   .rbc-modern .rbc-header + .rbc-header {
-    border-color: hsl(var(--border));
+    border-left: 1px solid hsl(var(--border) / 0.4);
   }
+
+  /* Cell separators — lighter and more spacious */
+  .rbc-modern .rbc-month-row + .rbc-month-row {
+    border-top: 1px solid hsl(var(--border) / 0.4);
+  }
+  .rbc-modern .rbc-day-bg + .rbc-day-bg {
+    border-left: 1px solid hsl(var(--border) / 0.4);
+  }
+  .rbc-modern .rbc-month-row {
+    overflow: visible;
+    min-height: 110px;
+  }
+
+  /* Date cell — wrap so the custom header animates on hover */
   .rbc-modern .rbc-date-cell {
-    padding: 6px 8px;
-    font-size: 12px;
-    font-weight: 600;
+    padding: 8px 10px 4px;
     text-align: right;
-    color: hsl(var(--foreground));
   }
-  .rbc-modern .rbc-date-cell.rbc-off-range {
+  .rbc-modern .rbc-row-bg .rbc-day-bg {
+    transition: background-color 150ms ease;
+  }
+  .rbc-modern .rbc-row-bg .rbc-day-bg:hover {
+    background-color: hsl(var(--muted) / 0.5);
+  }
+
+  /* Off-range (greyed) cells — softer than default */
+  .rbc-modern .rbc-off-range-bg {
+    background-color: hsl(var(--muted) / 0.25);
+  }
+  .rbc-modern .rbc-off-range {
     color: hsl(var(--muted-foreground) / 0.45);
   }
+
+  /* Today cell — gentle wash, not the harsh yellow default */
   .rbc-modern .rbc-today {
-    background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(59,130,246,0.06));
+    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(59,130,246,0.04));
   }
-  .rbc-modern .rbc-date-cell.rbc-now > .rbc-button-link {
-    color: rgb(79 70 229);
-    font-weight: 800;
-  }
+
+  /* Events — full pill, hover lift */
   .rbc-modern .rbc-event {
     border: none !important;
     font-size: 11.5px !important;
-    transition: transform 150ms ease, box-shadow 150ms ease;
+    margin: 1px 4px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .rbc-modern .rbc-event:focus,
+  .rbc-modern .rbc-event:focus-visible {
+    outline: 2px solid rgb(99 102 241 / 0.55);
+    outline-offset: 1px;
   }
   .rbc-modern .rbc-event:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px -4px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.2);
+    box-shadow:
+      0 8px 18px -6px rgba(15,23,42,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.24);
   }
+  .rbc-modern .rbc-event-content {
+    line-height: 1.1;
+  }
+
+  /* "+N more" — turn into a styled badge */
   .rbc-modern .rbc-show-more {
-    color: rgb(79 70 229);
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
+    font-weight: 700;
     font-size: 11px;
-    background: transparent;
+    padding: 3px 9px;
+    border-radius: 999px;
+    margin: 2px 4px;
+    border: 1px solid hsl(var(--border) / 0.7);
+    transition: background-color 150ms ease, transform 150ms ease;
   }
-  .rbc-modern .rbc-agenda-view table.rbc-agenda-table {
+  .rbc-modern .rbc-show-more:hover {
+    background: hsl(var(--muted) / 0.75);
+    transform: translateY(-1px);
+    color: rgb(79 70 229);
+  }
+
+  /* Popup that shows when "+N more" is clicked */
+  .rbc-modern .rbc-overlay {
+    border-radius: 14px;
     border: 1px solid hsl(var(--border));
-    border-radius: 12px;
+    box-shadow: 0 16px 40px -8px rgba(15,23,42,0.25);
+    background: hsl(var(--card));
+    padding: 10px;
+  }
+  .rbc-modern .rbc-overlay-header {
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+    margin: -10px -10px 8px;
+    padding: 10px 12px;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Agenda view rows */
+  .rbc-modern .rbc-agenda-view table.rbc-agenda-table {
+    border: 1px solid hsl(var(--border) / 0.6);
+    border-radius: 14px;
     overflow: hidden;
   }
   .rbc-modern .rbc-agenda-view table.rbc-agenda-table tbody > tr > td,
   .rbc-modern .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
-    padding: 12px;
-    font-size: 12px;
-    border-color: hsl(var(--border));
+    padding: 12px 14px;
+    font-size: 12.5px;
+    border-color: hsl(var(--border) / 0.5);
   }
-  .rbc-modern .rbc-time-content {
-    border-color: hsl(var(--border));
+  .rbc-modern .rbc-agenda-view table.rbc-agenda-table tbody > tr:hover {
+    background: hsl(var(--muted) / 0.4);
+  }
+
+  /* Time view */
+  .rbc-modern .rbc-time-content,
+  .rbc-modern .rbc-time-header-content,
+  .rbc-modern .rbc-time-gutter,
+  .rbc-modern .rbc-timeslot-group {
+    border-color: hsl(var(--border) / 0.45);
   }
   .rbc-modern .rbc-time-slot {
     color: hsl(var(--muted-foreground));
@@ -588,11 +822,24 @@ const rbcOverrides = `
     background-color: rgb(99 102 241);
     height: 2px;
   }
-  /* Dark mode tweaks — the library uses fixed colours otherwise. */
+
+  /* Group cell-hover affordance with our DateHeader (quick-add button) */
+  .rbc-modern .rbc-date-cell {
+    position: relative;
+  }
+  .rbc-modern .rbc-day-bg {
+    position: relative;
+  }
+  .rbc-modern .rbc-row .rbc-date-cell { display: flex; justify-content: flex-end; }
+
+  /* Dark mode adjustments */
   .dark .rbc-modern .rbc-today {
-    background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(59,130,246,0.10));
+    background: linear-gradient(135deg, rgba(99,102,241,0.20), rgba(59,130,246,0.10));
   }
   .dark .rbc-modern .rbc-off-range-bg {
-    background: hsl(var(--muted) / 0.3);
+    background-color: hsl(var(--muted) / 0.35);
+  }
+  .dark .rbc-modern .rbc-show-more {
+    background: hsl(var(--muted) / 0.5);
   }
 `;
