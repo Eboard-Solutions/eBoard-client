@@ -47,7 +47,6 @@ export function UserLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [touched, setTouched] = useState({ email: false, password: false, orgCode: false });
 
   useEffect(() => {
     setMounted(true);
@@ -55,7 +54,6 @@ export function UserLogin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ email: true, password: true, orgCode: true });
 
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();

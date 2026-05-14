@@ -11,7 +11,7 @@ import { useUsers } from '@/hooks/api/useUsers';
 import { useOrganisations, usePendingOrganisations } from '@/hooks/api/useOrganisations';
 import { useAnalytics, useFinanceOverview } from '@/hooks/api/useOverview';
 import { useLocation } from 'wouter';
-import type { User, Organisation, AnalyticsData, FinanceOverview } from '@/types/api.types';
+import type { User, Organisation, Meeting, AnalyticsData, FinanceOverview } from '@/types/api.types';
 
 function StatCard({ icon: Icon, label, value, subtext, color }: {
   icon: React.ElementType;

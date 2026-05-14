@@ -67,7 +67,7 @@ export function MeetingsOverview() {
         {([
           { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
           { label: 'Scheduled', value: counts.scheduled, color: 'text-blue-600 dark:text-blue-400' },
-          { label: 'In Progress', value: counts['in-progress'], color: 'text-amber-600 dark:text-amber-400' },
+          { label: 'In Progress', value: counts.inProgress, color: 'text-amber-600 dark:text-amber-400' },
           { label: 'Completed', value: counts.completed, color: 'text-emerald-600 dark:text-emerald-400' },
           { label: 'Cancelled', value: counts.cancelled, color: 'text-gray-500 dark:text-gray-500' },
         ] as const).map(s => (

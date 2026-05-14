@@ -443,8 +443,16 @@ export function Settings() {
   const updateOrg      = useUpdateOrganisation();
 
   // Unwrap ResponseObject correctly
-  const settings = settingsData?.data ?? settingsData;
-  const org      = orgData?.data ?? orgData ?? orgData;
+  const settings = (() => {
+    if (!settingsData) return undefined;
+    // If it has a .data property, extract it; otherwise use as-is
+    return 'data' in settingsData ? settingsData.data : settingsData;
+  })() as any;
+
+  const org = (() => {
+    if (!orgData) return undefined;
+    return 'data' in orgData ? orgData.data : orgData;
+  })() as any;
 
   const isLoading = settingsLoading || orgLoading;
 
