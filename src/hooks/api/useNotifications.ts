@@ -40,11 +40,8 @@ export function useNotificationById(id: string) {
 export function useUnreadNotificationsCount() {
   return useQuery({
     queryKey: notificationKeys.unreadCount(),
-    queryFn: async () => {
-      const response = await NotificationsService.getAll();
-      const items = response.data || [];
-      return items.filter((n: { isRead?: boolean }) => !n.isRead).length;
-    },
+    queryFn: async () => NotificationsService.getAll({ category: 'Unread', page: 1 }),
+    select: (response) => response.totalRecords ?? response.data?.length ?? 0,
   });
 }
 
@@ -102,15 +99,11 @@ export function useMarkNotificationAsRead() {
 export function useMarkAllNotificationsAsRead() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const notifications = await NotificationsService.getAll();
-      const items = notifications.data || [];
-      const unreadItems = items.filter((n: { id: string; isRead?: boolean }) => !n.isRead);
-      await Promise.all(unreadItems.map((n: { id: string }) => NotificationsService.markAsRead(n.id)));
-    },
+    mutationFn: () => NotificationsService.markAllAsRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
       queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.details() });
     },
   });
 }

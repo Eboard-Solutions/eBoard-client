@@ -1,24 +1,76 @@
+
 'use client';
 
-import { useState, useMemo } from 'react';
-import { format, isToday, isTomorrow } from 'date-fns';
+import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { CalendarDays, Clock, MapPin, Users, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useMyMeetings, useRSVP } from '@/hooks/api';
-import type { Meeting } from '../types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useMeetings, useRSVP } from '@/hooks/api';
 import { SearchBar, EmptyState, unwrapList } from '../components/page-helpers';
 import MemberPortalLayout from '../components/MemberPortalLayout';
 
+type MeetingItem = {
+  meetingId?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  scheduledAt?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  meetingLink?: string;
+  meetingType?: string;
+  status?: string;
+  attendees?: unknown[];
+  myRsvp?: string;
+};
+
+function safeDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function meetingStartValue(meeting: MeetingItem): string | null {
+  if (meeting.scheduledAt) return meeting.scheduledAt;
+  if (meeting.date && meeting.startTime) return `${meeting.date}T${meeting.startTime}`;
+  return meeting.date ?? null;
+}
+
+function meetingEndValue(meeting: MeetingItem): string | null {
+  if (meeting.endTime && meeting.date && !meeting.endTime.includes('T')) {
+    return `${meeting.date}T${meeting.endTime}`;
+  }
+  return meeting.endTime ?? null;
+}
+
+function normalizeMeeting(meeting: MeetingItem): Required<Pick<MeetingItem, 'title'>> & MeetingItem {
+  return {
+    ...meeting,
+    title: meeting.title ?? 'Untitled meeting',
+    attendees: Array.isArray(meeting.attendees) ? meeting.attendees : [],
+    location: meeting.location ?? '',
+  };
+}
+
 export function MeetingsPage() {
-  const { data: meetingsData } = useMyMeetings();
+  const { data: meetingsData } = useMeetings({ page: 1, limit: 100 });
   const rsvpMutation = useRSVP();
-  const meetings = useMemo(() => unwrapList<Meeting>(meetingsData), [meetingsData]);
+  const meetings = useMemo(() => unwrapList<MeetingItem>(meetingsData).map(normalizeMeeting), [meetingsData]);
 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
-  const [selected, setSelected] = useState<Meeting | null>(null);
+  const [selected, setSelected] = useState<MeetingItem | null>(null);
 
   const now = new Date();
 
@@ -26,17 +78,19 @@ export function MeetingsPage() {
     () =>
       meetings
         .filter((m) => {
+          const startValue = meetingStartValue(m);
+          const startDate = safeDate(startValue ?? undefined);
           const matchSearch =
             !search ||
             m.title.toLowerCase().includes(search.toLowerCase()) ||
-            m.location.toLowerCase().includes(search.toLowerCase());
-          const isUpcoming = new Date(m.scheduledAt) >= now || m.status === 'IN_PROGRESS';
+            (m.location ?? '').toLowerCase().includes(search.toLowerCase());
+          const isUpcoming = (startDate ? startDate >= now : false) || m.status === 'IN_PROGRESS';
           return matchSearch && (tab === 'upcoming' ? isUpcoming : !isUpcoming);
         })
         .sort((a, b) =>
           tab === 'upcoming'
-            ? new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
-            : new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+            ? (safeDate(meetingStartValue(a))?.getTime() ?? 0) - (safeDate(meetingStartValue(b))?.getTime() ?? 0)
+            : (safeDate(meetingStartValue(b))?.getTime() ?? 0) - (safeDate(meetingStartValue(a))?.getTime() ?? 0),
         ),
     [meetings, search, tab],
   );
@@ -50,7 +104,7 @@ export function MeetingsPage() {
   };
 
   return (
-    <MemberPortalLayout icon={CalendarDays} title="Meetings" color="bg-indigo-600" subtitle="Board and committee meeting schedule">
+    <MemberPortalLayout icon={CalendarDays} title="Meetings" color="bg-indigo-600" subtitle="Organisation-wide meetings with live updates and RSVP control">
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchBar value={search} onChange={setSearch} placeholder="Search meetings…" />
@@ -76,11 +130,19 @@ export function MeetingsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((m) => {
-            const isT = isToday(new Date(m.scheduledAt));
-            const isTo = isTomorrow(new Date(m.scheduledAt));
+            const startValue = meetingStartValue(m);
+            const endValue = meetingEndValue(m);
+            const startDate = safeDate(startValue ?? undefined);
+            const isT = Boolean(startDate && format(startDate, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd'));
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const isTo = Boolean(startDate && format(startDate, 'yyyy-MM-dd') === format(tomorrow, 'yyyy-MM-dd'));
+
+            if (!startDate) return null;
+
             return (
               <div
-                key={m.meetingId}
+                key={m.meetingId ?? m.id ?? `${m.title}-${startValue}`}
                 className={`rounded-[24px] border border-border/60 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer overflow-hidden ${
                   isT ? 'border-indigo-300 bg-indigo-50/30 dark:border-indigo-800 dark:bg-indigo-950/20' : ''
                 }`}
@@ -91,12 +153,12 @@ export function MeetingsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div className={`shrink-0 rounded-xl p-2.5 text-center min-w-[52px] ${isT || isTo ? 'bg-indigo-600 text-white' : 'bg-muted text-foreground'}`}>
-                        <p className="text-[9px] font-bold uppercase">{format(new Date(m.scheduledAt), 'MMM')}</p>
-                        <p className="text-lg font-semibold leading-none">{format(new Date(m.scheduledAt), 'd')}</p>
+                        <p className="text-[9px] font-bold uppercase">{format(startDate, 'MMM')}</p>
+                        <p className="text-lg font-semibold leading-none">{format(startDate, 'd')}</p>
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_COLORS[m.meetingType] ?? TYPE_COLORS.BOARD}`}>{m.meetingType}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_COLORS[m.meetingType ?? 'BOARD'] ?? TYPE_COLORS.BOARD}`}>{m.meetingType ?? 'BOARD'}</span>
                           {(isT || isTo) && <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">{isT ? 'Today' : 'Tomorrow'}</span>}
                           {m.status !== 'SCHEDULED' && <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full">{m.status}</span>}
                         </div>
@@ -104,7 +166,7 @@ export function MeetingsPage() {
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {format(new Date(m.scheduledAt), 'h:mm a')}
+                            {format(startDate, 'h:mm a')}
                           </span>
                           {m.location && (
                             <span className="flex items-center gap-1">
@@ -114,7 +176,7 @@ export function MeetingsPage() {
                           )}
                           <span className="flex items-center gap-1">
                             <Users className="h-3 w-3" />
-                            {m.attendees.length} attendees
+                            {(m.attendees ?? []).length} attendees
                           </span>
                         </div>
                       </div>
@@ -126,7 +188,7 @@ export function MeetingsPage() {
                             key={s}
                             type="button"
                             onClick={() => {
-                              rsvpMutation.mutate({ meetingId: m.meetingId, data: { status: s.toLowerCase() as any } });
+                              rsvpMutation.mutate({ meetingId: m.meetingId ?? m.id ?? '', data: { status: s.toLowerCase() as any } });
                               toast.success(`RSVP updated: ${s}`);
                             }}
                             className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${
@@ -159,16 +221,17 @@ export function MeetingsPage() {
               <DialogHeader>
                 <DialogTitle>{selected.title}</DialogTitle>
                 <DialogDescription>
-                  {format(new Date(selected.scheduledAt), 'EEEE, MMMM d yyyy')} · {format(new Date(selected.scheduledAt), 'h:mm a')} – {format(new Date(selected.endTime), 'h:mm a')}
+                  {format(safeDate(meetingStartValue(selected))!, 'EEEE, MMMM d yyyy')} · {format(safeDate(meetingStartValue(selected))!, 'h:mm a')}
+                  {meetingEndValue(selected) && safeDate(meetingEndValue(selected)) ? ` – ${format(safeDate(meetingEndValue(selected))!, 'h:mm a')}` : ''}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-5 py-2">
                 {selected.description && <p className="text-sm text-muted-foreground">{selected.description}</p>}
 
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Location</p>
-                      <p className="font-medium text-sm sm:text-base">{selected.location || '—'}</p>
+                    <p className="font-medium text-sm sm:text-base">{selected.location || '—'}</p>
                   </div>
                   {selected.meetingLink && (
                     <div className="rounded-xl border border-border/60 bg-muted/20 p-3">

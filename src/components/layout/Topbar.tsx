@@ -20,8 +20,17 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { authService } from '@/lib/auth';
-import { useNotifications, useUnreadNotificationsCount } from '@/hooks/api/useNotifications';
+import {
+  useNotifications,
+  useUnreadNotificationsCount,
+  useMarkAllNotificationsAsRead,
+  useMarkNotificationAsRead,
+  useToggleNotificationFlag,
+  useDeleteNotification,
+} from '@/hooks/api/useNotifications';
 import type { Notification } from '@/types/api.types';
+import { unwrapList } from '@/features/board-member/components/page-helpers';
+import { NotificationDetailsDialog, type NotificationPreview } from '@/components/notifications/NotificationDetailsDialog';
 
 // ─────────────────────────────────────────────────────────
 // HELPERS
@@ -113,6 +122,8 @@ interface TopbarProps {
 export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
   const [, setLocation] = useLocation();
   const { isDark, toggle: toggleDarkMode } = useThemeSync();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [selectedNotificationId, setSelectedNotificationId] = useState<string | null>(null);
 
   // Scroll shadow
   const [scrolled, setScrolled] = useState(false);
@@ -151,12 +162,31 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
   // Notifications
   const { data: notificationsData, isLoading: notifsLoading } = useNotifications({ page: 1 });
   const { data: unreadCountData } = useUnreadNotificationsCount();
+  const markAllRead = useMarkAllNotificationsAsRead();
+  const markRead = useMarkNotificationAsRead();
+  const toggleFlag = useToggleNotificationFlag();
+  const deleteNotification = useDeleteNotification();
 
-  const notificationsList: Notification[] = notificationsData?.items ?? [];
+  const notificationsList: Notification[] = unwrapList<Notification>(notificationsData);
   const unreadCount: number =
     typeof unreadCountData === 'number'
       ? unreadCountData
       : notificationsList.filter(n => !n.isRead).length;
+
+  const closeNotifications = () => setNotificationsOpen(false);
+
+  const selectedNotification: NotificationPreview | null = selectedNotificationId
+    ? (notificationsList.find((notif) => notif.id === selectedNotificationId) as NotificationPreview | undefined) ?? null
+    : null;
+
+  const openNotification = (notif: Notification) => {
+    closeNotifications();
+    setSelectedNotificationId(notif.id);
+
+    if (!notif.isRead) {
+      markRead.mutate(notif.id);
+    }
+  };
 
   // User — read after mount
   const [user] = useState<ReturnType<typeof authService.getUser>>(() => {
@@ -330,7 +360,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
           </Button>
 
           {/* Notifications */}
-          <DropdownMenu>
+          <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 size="icon"
@@ -362,7 +392,15 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                   )}
                 </div>
                 {unreadCount > 0 && (
-                  <button className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeNotifications();
+                      markAllRead.mutate();
+                    }}
+                    className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 transition-colors disabled:opacity-50"
+                    disabled={markAllRead.isPending}
+                  >
                     <Check className="h-3 w-3" />
                     Mark all read
                   </button>
@@ -384,8 +422,9 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                   </div>
                 ) : (
                   notificationsList.slice(0, 8).map(notif => (
-                    <div
+                    <DropdownMenuItem
                       key={notif.id}
+                      onSelect={() => openNotification(notif)}
                       className={cn(
                         'group relative flex items-start gap-3 px-4 py-3 cursor-pointer',
                         'border-b border-gray-50 dark:border-gray-800/60 last:border-0',
@@ -420,7 +459,7 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
                       {!notif.isRead && (
                         <span className="mt-2 h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />
                       )}
-                    </div>
+                    </DropdownMenuItem>
                   ))
                 )}
               </div>
@@ -429,7 +468,10 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
               {notificationsList.length > 0 && (
                 <div className="border-t border-gray-100 dark:border-gray-800">
                   <button
-                    onClick={() => setLocation('/notifications')}
+                    onClick={() => {
+                      closeNotifications();
+                      setLocation('/board/notifications');
+                    }}
                     className="w-full flex items-center justify-center gap-1.5 px-4 py-3 text-[12px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
                   >
                     View all notifications
@@ -439,6 +481,28 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <NotificationDetailsDialog
+            open={Boolean(selectedNotification)}
+            notification={selectedNotification}
+            onOpenChange={(open) => {
+              if (!open) setSelectedNotificationId(null);
+            }}
+            onMarkRead={(notification) => markRead.mutate(notification.id)}
+            onToggleFlag={(notification) => toggleFlag.mutate({ id: notification.id, isFlagged: !notification.isFlagged })}
+            onDelete={(notification) => {
+              deleteNotification.mutate(notification.id, {
+                onSuccess: () => setSelectedNotificationId(null),
+              });
+            }}
+            onOpenRelated={(notification) => {
+              setSelectedNotificationId(null);
+              setLocation(notification.targetRoute ?? '/board/notifications');
+            }}
+            isMarkReadPending={markRead.isPending}
+            isToggleFlagPending={toggleFlag.isPending}
+            isDeletePending={deleteNotification.isPending}
+          />
 
           {/* User menu */}
           <DropdownMenu>

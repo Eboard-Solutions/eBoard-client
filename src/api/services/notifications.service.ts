@@ -59,6 +59,12 @@ export const NotificationsService = {
     const response = await apiClient.post<ResponseObject<Notification[]>>(ENDPOINTS.NOTIFICATIONS.BULK_DELETE, { ids });
     return response.data;
   },
+
+  // Mark all notifications as read
+  async markAllAsRead(): Promise<ResponseObject<{ affected: number }>> {
+    const response = await apiClient.patch<ResponseObject<{ affected: number }>>(ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ);
+    return response.data;
+  },
 };
 
 export default NotificationsService;

@@ -117,6 +117,7 @@ export const ENDPOINTS = {
     UPDATE: (id: string) => `/notifications/update/${id}`,
     DELETE: (id: string) => `/notifications/delete/${id}`,
     BULK_DELETE: '/notifications/bulk-delete',
+    MARK_ALL_READ: '/notifications/mark-all-read',
   },
 
   POLLS: {
