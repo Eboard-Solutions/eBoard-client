@@ -256,7 +256,7 @@ export default function App() {
           <Route component={NotFoundPage} />
         </Switch>
 
-        <Toaster richColors position="top-right" closeButton />
+        <Toaster richColors position="top-center" closeButton />
       </Router>
     </QueryClientProvider>
   );
