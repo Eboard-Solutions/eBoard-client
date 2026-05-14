@@ -7,14 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
@@ -24,7 +22,7 @@ import {
   Plus, Trash2, Calendar, Clock, MapPin, Users, CheckCircle,
   ChevronRight, Save, Download, ListChecks, Gavel, AlertCircle,
   Eye, ArrowLeft, ArrowRight, Printer, UserCheck, CalendarPlus,
-  FileText, Loader2, AlertTriangle, X, ChevronDown,
+  FileText, Loader2, AlertTriangle, X,
 } from 'lucide-react';
 
 import {
@@ -33,9 +31,9 @@ import {
   useAddMinuteItem, useUpdateMinuteItem, useDeleteMinuteItem,
 } from '@/hooks/api/useMinutes';
 import type {
-  Meeting, User, Minutes, MinuteItem, MinuteItemType,
-  CreateMinutesData, CreateMinuteItemData,
-  VotingDetails, ActionItemDetails, ActionItemAssignee,
+  Meeting, User, MinuteItemType,
+  CreateMinuteItemData,
+  ActionItemDetails, ActionItemAssignee,
 } from '@/types/api.types';
 import { printMinutes } from '@/lib/printMinutes';
 import { computeMeetingLock } from '@/lib/meetingLock';

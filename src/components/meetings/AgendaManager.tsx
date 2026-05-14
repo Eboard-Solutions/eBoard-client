@@ -119,7 +119,6 @@ function AgendaViewMode({
   const items    = agenda.items ?? [];
   const total    = items.reduce((s, i) => s + (i.duration ?? 0), 0);
   const status   = agenda.status ?? 'draft';
-  const agendaId = (agenda as any).agendaId ?? (agenda as any).id ?? '';
 
   const statusCfg: Record<string, { cls: string; label: string }> = {
     draft:       { cls: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300',  label: 'Draft'       },
