@@ -10,6 +10,7 @@ import {
 import { useDocuments } from '@/hooks/api/useDocuments';
 import type { Document as DocType } from '@/types/api.types';
 import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 import { HardDrive } from 'lucide-react';
 
 function formatFileSize(bytes: number): string {
@@ -70,22 +71,22 @@ export function DocumentsOverview() {
       </div>
 
       {/* Table */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
+      <DataTableCard>
           {isLoading ? (
-            <div className="p-8 text-center">
+            <div className="p-10 text-center">
               <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-              <p className="text-sm text-gray-500 mt-3">Loading documents...</p>
+              <p className="text-sm text-muted-foreground mt-3">Loading documents...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
-              <FileText className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                <FileText className="h-7 w-7 text-muted-foreground/60" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
                 {search ? 'No documents match your search' : 'No documents found'}
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -137,10 +138,8 @@ export function DocumentsOverview() {
                 })}
               </TableBody>
             </Table>
-            </div>
           )}
-        </CardContent>
-      </Card>
+      </DataTableCard>
     </div>
   );
 }

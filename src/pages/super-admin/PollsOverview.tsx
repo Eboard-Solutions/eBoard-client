@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePolls } from '@/hooks/api/usePolls';
 import type { Poll, PollStatus } from '@/types/api.types';
 import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
 const statusConfig: Record<PollStatus, { label: string; color: string; icon: React.ElementType }> = {
   DRAFT:     { label: 'Draft',     color: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700', icon: FileEdit },
@@ -79,22 +80,22 @@ export function PollsOverview() {
 
         {['all', 'DRAFT', 'ACTIVE', 'CLOSED'].map(t => (
           <TabsContent key={t} value={t} className="mt-4">
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-0">
+            <DataTableCard>
                 {isLoading ? (
-                  <div className="p-8 text-center">
+                  <div className="p-10 text-center">
                     <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-sm text-gray-500 mt-3">Loading polls...</p>
+                    <p className="text-sm text-muted-foreground mt-3">Loading polls...</p>
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="p-12 text-center">
-                    <Vote className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                      <Vote className="h-7 w-7 text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
                       {search ? 'No polls match your search' : 'No polls found'}
                     </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -158,10 +159,8 @@ export function PollsOverview() {
                       })}
                     </TableBody>
                   </Table>
-                  </div>
                 )}
-              </CardContent>
-            </Card>
+            </DataTableCard>
           </TabsContent>
         ))}
       </Tabs>

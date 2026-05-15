@@ -9,6 +9,7 @@ import {
 import { useFinanceOverview } from '@/hooks/api/useOverview';
 import type { FinanceOverview } from '@/types/api.types';
 import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);

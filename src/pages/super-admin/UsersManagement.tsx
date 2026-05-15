@@ -29,6 +29,7 @@ import {
 } from '@/hooks/api/useUsers';
 import type { User, UserRole } from '@/types/api.types';
 import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
 const ROLES: UserRole[] = ['superAdmin', 'OrgAdmin', 'BoardMember', 'secretary'];
 
@@ -153,21 +154,21 @@ export function UsersManagement() {
       </Card>
 
       {/* Users Table */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
+      <DataTableCard>
           {isLoading ? (
-            <div className="p-8 text-center">
+            <div className="p-10 text-center">
               <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-              <p className="text-sm text-gray-500 mt-3">Loading users...</p>
+              <p className="text-sm text-muted-foreground mt-3">Loading users...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
-              <Users className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No users found</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try adjusting your filters</p>
+              <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                <Users className="h-7 w-7 text-muted-foreground/60" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">No users found</p>
+              <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -248,10 +249,8 @@ export function UsersManagement() {
                 ))}
               </TableBody>
             </Table>
-            </div>
           )}
-        </CardContent>
-      </Card>
+      </DataTableCard>
 
       {/* Delete Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
