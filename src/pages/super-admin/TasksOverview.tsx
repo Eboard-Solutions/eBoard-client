@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTasks } from '@/hooks/api/useTasks';
 import { usePermissions } from '@/lib/permissions';
 import type { Task, TaskStatus, TaskPriority } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; icon: React.ElementType }> = {
   TODO:        { label: 'To Do',       color: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700', icon: Clock },
@@ -65,28 +66,19 @@ export function TasksOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform tasks</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        {([
-          { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
-          { label: 'To Do', value: counts.TODO, color: 'text-gray-600 dark:text-gray-400' },
-          { label: 'In Progress', value: counts.IN_PROGRESS, color: 'text-blue-600 dark:text-blue-400' },
-          { label: 'Completed', value: counts.COMPLETED, color: 'text-emerald-600 dark:text-emerald-400' },
-          { label: 'Cancelled', value: counts.CANCELLED, color: 'text-gray-500 dark:text-gray-500' },
-        ] as const).map(s => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{s.label}</p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <SuperAdminPageHeader
+        icon={ListTodo}
+        eyebrow="Platform Data"
+        title="Tasks"
+        subtitle="Every task across every organisation — priority, status, assignee at a glance."
+        gradient="from-emerald-600 via-green-600 to-teal-700"
+        stats={[
+          { label: 'Total',       value: counts.all,         icon: ListTodo },
+          { label: 'To Do',       value: counts.TODO,        icon: Clock },
+          { label: 'In Progress', value: counts.IN_PROGRESS, icon: ArrowRight },
+          { label: 'Completed',   value: counts.COMPLETED,   icon: CheckCircle2 },
+        ]}
+      />
 
       {/* Tabs + Search */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -120,6 +112,7 @@ export function TasksOverview() {
                     </p>
                   </div>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -178,6 +171,7 @@ export function TasksOverview() {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

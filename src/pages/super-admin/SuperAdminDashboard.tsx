@@ -12,6 +12,7 @@ import { useOrganisations, usePendingOrganisations } from '@/hooks/api/useOrgani
 import { useAnalytics, useFinanceOverview } from '@/hooks/api/useOverview';
 import { useLocation } from 'wouter';
 import type { User, Organisation, Meeting, AnalyticsData, FinanceOverview } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 function StatCard({ icon: Icon, label, value, subtext, color }: {
   icon: React.ElementType;
@@ -75,21 +76,20 @@ export function SuperAdminDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Super Admin Dashboard</h1>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Platform overview and management</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1.5 px-3 py-1 text-violet-600 border-violet-200 dark:text-violet-400 dark:border-violet-800">
-            <ShieldAlert className="h-3.5 w-3.5" />
-            Super Admin
-          </Badge>
-        </div>
-      </div>
+      <SuperAdminPageHeader
+        icon={ShieldAlert}
+        eyebrow="Super Admin"
+        title="Platform Dashboard"
+        subtitle="Tenants, users, and the activity that's keeping the platform humming."
+        stats={[
+          { label: 'Users',         value: users.length,        icon: Users },
+          { label: 'Organisations', value: orgs.length,         icon: Building2 },
+          { label: 'Pending',       value: pendingOrgs.length,  icon: Clock },
+          { label: 'Active Users',  value: activeUsers.length,  icon: TrendingUp },
+        ]}
+      />
 
-      {/* Stat Cards */}
+      {/* Detail Cards — extra context below the hero stats */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (

@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/table';
 import { useDocuments } from '@/hooks/api/useDocuments';
 import type { Document as DocType } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { HardDrive } from 'lucide-react';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -48,32 +50,18 @@ export function DocumentsOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Documents</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform documents</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Total Documents</p>
-            <p className="text-2xl font-extrabold mt-1 text-indigo-600 dark:text-indigo-400">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Total Size</p>
-            <p className="text-2xl font-extrabold mt-1 text-violet-600 dark:text-violet-400">{stats.totalSize}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Results</p>
-            <p className="text-2xl font-extrabold mt-1 text-emerald-600 dark:text-emerald-400">{filtered.length}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <SuperAdminPageHeader
+        icon={FileText}
+        eyebrow="Platform Data"
+        title="Documents"
+        subtitle="Every uploaded document across organisations — by access level, type, and date."
+        gradient="from-orange-500 via-amber-500 to-red-600"
+        stats={[
+          { label: 'Total Documents', value: stats.total,     icon: FileText },
+          { label: 'Total Size',      value: stats.totalSize, icon: HardDrive },
+          { label: 'Showing',         value: filtered.length, icon: Search },
+        ]}
+      />
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -97,10 +85,11 @@ export function DocumentsOverview() {
               </p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12.5">#</TableHead>
+                  <TableHead className="w-[50px]">#</TableHead>
                   <TableHead>Document</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Size</TableHead>
@@ -148,6 +137,7 @@ export function DocumentsOverview() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

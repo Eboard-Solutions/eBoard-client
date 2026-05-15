@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useAllSettings, useUpdateSettings } from '@/hooks/api/useSettings';
 import type { PlatformSettings, UpdateSettingsData } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 export function SettingsManagement() {
   const { data, isLoading, isError } = useAllSettings();
@@ -81,16 +82,20 @@ export function SettingsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Platform Settings</h1>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Configure platform-wide settings</p>
-        </div>
-        <Button onClick={handleSave} disabled={updateSettings.isPending} className="gap-2 self-start sm:self-auto">
-          <Save className="h-4 w-4" />
-          {updateSettings.isPending ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </div>
+      <SuperAdminPageHeader
+        icon={Settings}
+        eyebrow="Administration"
+        title="Platform Settings"
+        subtitle="Configure platform-wide defaults — organisation profile, members, notifications, and security."
+        gradient="from-slate-700 via-gray-700 to-zinc-800"
+        actions={
+          <Button onClick={handleSave} disabled={updateSettings.isPending}
+            className="h-9 gap-2 bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur">
+            <Save className="h-3.5 w-3.5" />
+            {updateSettings.isPending ? 'Saving…' : 'Save Changes'}
+          </Button>
+        }
+      />
 
       {/* App Name */}
       <Card className="border-0 shadow-sm">

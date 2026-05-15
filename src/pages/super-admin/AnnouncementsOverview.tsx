@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/table';
 import { useAnnouncements } from '@/hooks/api/useAnnouncements';
 import type { Announcement } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 export function AnnouncementsOverview() {
   const { data, isLoading, isError } = useAnnouncements();
@@ -33,32 +34,18 @@ export function AnnouncementsOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Announcements</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform announcements</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Total</p>
-            <p className="text-2xl font-extrabold mt-1 text-indigo-600 dark:text-indigo-400">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Pinned</p>
-            <p className="text-2xl font-extrabold mt-1 text-amber-600 dark:text-amber-400">{stats.pinned}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Showing</p>
-            <p className="text-2xl font-extrabold mt-1 text-emerald-600 dark:text-emerald-400">{filtered.length}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <SuperAdminPageHeader
+        icon={Megaphone}
+        eyebrow="Platform Data"
+        title="Announcements"
+        subtitle="Every published announcement across organisations and audiences."
+        gradient="from-amber-500 via-orange-500 to-rose-600"
+        stats={[
+          { label: 'Total',   value: stats.total,     icon: Megaphone },
+          { label: 'Pinned',  value: stats.pinned,    icon: Pin },
+          { label: 'Showing', value: filtered.length, icon: Search },
+        ]}
+      />
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -82,6 +69,7 @@ export function AnnouncementsOverview() {
               </p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -130,6 +118,7 @@ export function AnnouncementsOverview() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

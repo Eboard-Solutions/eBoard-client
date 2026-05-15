@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import {
   Calendar, Search, Video, MapPin, Monitor,
-  Clock, CheckCircle2, XCircle, Play,
+  Clock, CheckCircle2, XCircle, Play, CalendarRange,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMeetings } from '@/hooks/api/useMeetings';
 import type { Meeting, MeetingStatus } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 const statusConfig: Record<MeetingStatus, { label: string; color: string; icon: React.ElementType }> = {
   scheduled:    { label: 'Scheduled',   color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700', icon: Clock },
@@ -57,28 +58,19 @@ export function MeetingsOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Meetings</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform meetings</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        {([
-          { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
-          { label: 'Scheduled', value: counts.scheduled, color: 'text-blue-600 dark:text-blue-400' },
-          { label: 'In Progress', value: counts.inProgress, color: 'text-amber-600 dark:text-amber-400' },
-          { label: 'Completed', value: counts.completed, color: 'text-emerald-600 dark:text-emerald-400' },
-          { label: 'Cancelled', value: counts.cancelled, color: 'text-gray-500 dark:text-gray-500' },
-        ] as const).map(s => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{s.label}</p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <SuperAdminPageHeader
+        icon={CalendarRange}
+        eyebrow="Platform Data"
+        title="Meetings"
+        subtitle="Every scheduled, live, and completed meeting across the platform."
+        gradient="from-blue-600 via-indigo-600 to-violet-700"
+        stats={[
+          { label: 'Total',       value: counts.all,        icon: Calendar },
+          { label: 'Scheduled',   value: counts.scheduled,  icon: Clock },
+          { label: 'In Progress', value: counts.inProgress, icon: Play },
+          { label: 'Completed',   value: counts.completed,  icon: CheckCircle2 },
+        ]}
+      />
 
       {/* Tabs + Search */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -86,7 +78,7 @@ export function MeetingsOverview() {
           <TabsList>
             <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
             <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
-            <TabsTrigger value="in-progress">In Progress</TabsTrigger>
+            <TabsTrigger value="inProgress">In Progress</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
           <div className="relative min-w-[200px]">
@@ -95,7 +87,7 @@ export function MeetingsOverview() {
           </div>
         </div>
 
-        {['all', 'scheduled', 'in-progress', 'completed'].map(t => (
+        {['all', 'scheduled', 'inProgress', 'completed'].map(t => (
           <TabsContent key={t} value={t} className="mt-4">
             <Card className="border-0 shadow-sm">
               <CardContent className="p-0">
@@ -112,6 +104,7 @@ export function MeetingsOverview() {
                     </p>
                   </div>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -171,6 +164,7 @@ export function MeetingsOverview() {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

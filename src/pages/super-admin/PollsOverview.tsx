@@ -10,6 +10,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePolls } from '@/hooks/api/usePolls';
 import type { Poll, PollStatus } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 const statusConfig: Record<PollStatus, { label: string; color: string; icon: React.ElementType }> = {
   DRAFT:     { label: 'Draft',     color: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700', icon: FileEdit },
@@ -47,27 +48,19 @@ export function PollsOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Polls / Voting</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform polls and votes</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {([
-          { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
-          { label: 'Draft', value: counts.DRAFT, color: 'text-gray-600 dark:text-gray-400' },
-          { label: 'Active', value: counts.ACTIVE, color: 'text-emerald-600 dark:text-emerald-400' },
-          { label: 'Closed', value: counts.CLOSED, color: 'text-blue-600 dark:text-blue-400' },
-        ] as const).map(s => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{s.label}</p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <SuperAdminPageHeader
+        icon={Vote}
+        eyebrow="Platform Data"
+        title="Polls & Voting"
+        subtitle="Every poll across every organisation — drafts, active votes, closed results."
+        gradient="from-purple-600 via-violet-600 to-fuchsia-700"
+        stats={[
+          { label: 'Total',  value: counts.all,    icon: Vote },
+          { label: 'Draft',  value: counts.DRAFT,  icon: FileEdit },
+          { label: 'Active', value: counts.ACTIVE, icon: Play },
+          { label: 'Closed', value: counts.CLOSED, icon: Lock },
+        ]}
+      />
 
       {/* Tabs + Search */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -101,6 +94,7 @@ export function PollsOverview() {
                     </p>
                   </div>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -164,6 +158,7 @@ export function PollsOverview() {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

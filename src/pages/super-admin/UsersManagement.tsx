@@ -28,6 +28,7 @@ import {
   useUsers, useDeleteUser, useChangeRole, useToggleUserStatus,
 } from '@/hooks/api/useUsers';
 import type { User, UserRole } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 const ROLES: UserRole[] = ['superAdmin', 'OrgAdmin', 'BoardMember', 'secretary'];
 
@@ -37,6 +38,7 @@ const roleBadge: Record<string, string> = {
   BoardMember: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700',
   secretary:   'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
 };
+const DEFAULT_ROLE_BADGE = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
 
 export function UsersManagement() {
   const { data: usersResponse = [] as any, isLoading } = useUsers();
@@ -99,19 +101,25 @@ export function UsersManagement() {
     });
   }
 
+  // Stat counts for the header strip
+  const activeCount = users.filter((u: User) => u.status === 'active').length;
+  const superAdminCount = users.filter((u: User) => u.role === 'superAdmin').length;
+  const boardCount = users.filter((u: User) => u.role === 'BoardMember').length;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Users Management</h1>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all platform users</p>
-        </div>
-        <Badge variant="outline" className="gap-1.5 px-3 py-1 self-start sm:self-auto">
-          <Users className="h-3.5 w-3.5" />
-          {users.length} users
-        </Badge>
-      </div>
+      <SuperAdminPageHeader
+        icon={Users}
+        eyebrow="Administration"
+        title="Users Management"
+        subtitle="Every account on the platform — across organisations, roles, and statuses."
+        stats={[
+          { label: 'Total',       value: users.length,    icon: Users },
+          { label: 'Active',      value: activeCount,     icon: UserCheck },
+          { label: 'Super Admin', value: superAdminCount, icon: Shield },
+          { label: 'Board',       value: boardCount,      icon: UserCheck },
+        ]}
+      />
 
       {/* Filters */}
       <Card className="border-0 shadow-sm">
@@ -159,6 +167,7 @@ export function UsersManagement() {
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try adjusting your filters</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -186,7 +195,7 @@ export function UsersManagement() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={roleBadge[user.role] ?? roleBadge.User}>
+                      <Badge variant="outline" className={roleBadge[user.role] ?? DEFAULT_ROLE_BADGE}>
                         {user.role}
                       </Badge>
                     </TableCell>
@@ -239,6 +248,7 @@ export function UsersManagement() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

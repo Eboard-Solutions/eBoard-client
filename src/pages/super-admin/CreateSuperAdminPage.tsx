@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useCreateSuperAdmin } from '@/hooks/api/useUsers';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 export function CreateSuperAdminPage() {
   const createSuperAdmin = useCreateSuperAdmin();
@@ -57,10 +58,13 @@ export function CreateSuperAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Super Admin</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Add a new super administrator to the platform</p>
-      </div>
+      <SuperAdminPageHeader
+        icon={UserPlus}
+        eyebrow="Administration"
+        title="Create Super Admin"
+        subtitle="Provision a new super administrator with full platform access."
+        gradient="from-violet-600 via-purple-600 to-fuchsia-700"
+      />
 
       <div className="max-w-lg">
         <Card className="border-0 shadow-sm">

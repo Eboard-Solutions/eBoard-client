@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/table';
 import { useFinanceOverview } from '@/hooks/api/useOverview';
 import type { FinanceOverview } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
@@ -20,10 +21,13 @@ export function FinanceOverviewPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Finance</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Platform financial overview</p>
-        </div>
+        <SuperAdminPageHeader
+          icon={DollarSign}
+          eyebrow="Platform Data"
+          title="Finance"
+          subtitle="Platform-wide budget, spending, and recent expenses."
+          gradient="from-emerald-600 via-teal-600 to-cyan-700"
+        />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2].map(i => (
             <Card key={i} className="border-0 shadow-sm">
@@ -44,10 +48,13 @@ export function FinanceOverviewPage() {
   if (!finance && !isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Finance</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Platform financial overview</p>
-        </div>
+        <SuperAdminPageHeader
+          icon={DollarSign}
+          eyebrow="Platform Data"
+          title="Finance"
+          subtitle="Platform-wide budget, spending, and recent expenses."
+          gradient="from-emerald-600 via-teal-600 to-cyan-700"
+        />
         <Card className="border-0 shadow-sm">
           <CardContent className="p-12 text-center">
             <DollarSign className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
@@ -67,10 +74,18 @@ export function FinanceOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Finance</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Platform financial overview</p>
-      </div>
+      <SuperAdminPageHeader
+        icon={DollarSign}
+        eyebrow="Platform Data"
+        title="Finance"
+        subtitle="Platform-wide budget, spending, and recent expenses."
+        gradient="from-emerald-600 via-teal-600 to-cyan-700"
+        stats={[
+          { label: 'Total Budget', value: formatCurrency(totalBudget), icon: Wallet },
+          { label: 'Total Spent',  value: formatCurrency(totalSpent),  icon: TrendingUp },
+          { label: 'Used',         value: `${spentPercent}%`,          icon: PieChart },
+        ]}
+      />
 
       {/* Budget Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -145,6 +160,7 @@ export function FinanceOverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -183,6 +199,7 @@ export function FinanceOverviewPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -197,6 +214,7 @@ export function FinanceOverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -225,6 +243,7 @@ export function FinanceOverviewPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
