@@ -9,7 +9,6 @@ import {
   ClipboardList,
   FileText,
   Gavel,
-  LineChart,
   Lock,
   Megaphone,
   Menu,
