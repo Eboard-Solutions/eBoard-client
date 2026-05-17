@@ -4,7 +4,6 @@ import {
   ListTodo, Search, Clock, CheckCircle2, XCircle,
   ArrowUp, ArrowRight, ArrowDown, AlertTriangle,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {

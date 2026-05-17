@@ -4,7 +4,6 @@ import {
   Calendar, Search, Video, MapPin, Monitor,
   Clock, CheckCircle2, XCircle, Play, CalendarRange,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {

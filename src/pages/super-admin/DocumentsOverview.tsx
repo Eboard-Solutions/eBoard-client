@@ -1,7 +1,6 @@
 // src/pages/super-admin/DocumentsOverview.tsx
 import { useState, useMemo } from 'react';
 import { FileText, Search, File, Image, FileSpreadsheet } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {

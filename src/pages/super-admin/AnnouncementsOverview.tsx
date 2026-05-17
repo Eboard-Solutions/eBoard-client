@@ -1,7 +1,6 @@
 // src/pages/super-admin/AnnouncementsOverview.tsx
 import { useState, useMemo } from 'react';
 import { Megaphone, Search, Pin, Users, ShieldCheck } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {

@@ -1,7 +1,6 @@
 // src/pages/super-admin/PollsOverview.tsx
 import { useState, useMemo } from 'react';
 import { Vote, Search, FileEdit, Play, Lock } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
