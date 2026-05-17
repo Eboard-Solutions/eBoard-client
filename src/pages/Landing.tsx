@@ -624,7 +624,7 @@ export default function Landing() {
               <span className="lp-gradient-text">Nothing it doesn't.</span>
             </h2>
             <p className="text-muted-foreground sm:text-lg">
-              Purpose‑built modules that work together — so you stop juggling email threads,
+              Purpose‑built modules that work together so you stop juggling email threads,
               shared drives, and spreadsheets.
             </p>
           </div>
@@ -664,7 +664,7 @@ export default function Landing() {
               How it works
             </Badge>
             <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-              From agenda to action — in one flow.
+              From agenda to action in one flow.
             </h2>
             <p className="text-muted-foreground sm:text-lg">
               A single source of truth for every meeting, every decision, every owner.
@@ -813,7 +813,7 @@ export default function Landing() {
       {/* ── CTA ──────────────────────────────────────────────────────── */}
       <section className="relative py-20 sm:py-28">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-3xl p-10 sm:p-14 lg:p-20 text-center">
+          <div className="relative isolate overflow-hidden rounded-3xl p-10 sm:p-14 lg:p-20 text-center">
             <div
               aria-hidden
               className="absolute inset-0 -z-10"
@@ -863,7 +863,7 @@ export default function Landing() {
                   <Gavel className="h-5 w-5" />
                 </div>
                 <div className="flex flex-col leading-tight">
-                  <span className="font-bold tracking-tight">e‑Board</span>
+                  <span className="font-bold tracking-tight">E‑Board</span>
                   <span className="text-[10px] uppercase tracking-widest text-muted-foreground">MIS</span>
                 </div>
               </div>
