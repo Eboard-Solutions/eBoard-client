@@ -79,7 +79,7 @@ export function NotificationsPage() {
           senderName: notification.senderName,
           targetRoute: notification.targetRoute,
           actionLabel: notification.actionLabel,
-          createdAt: notification.createdAt,
+          createdAt: notification.createdAt == null ? undefined : String(notification.createdAt),
         };
       })()
     : null;

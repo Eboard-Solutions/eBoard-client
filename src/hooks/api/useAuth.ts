@@ -25,18 +25,15 @@ export const AUTH_QUERY_KEYS = {
  */
 // hooks/api/useAuth.ts
 export function useCurrentUser() {
-  return useQuery({
-    queryKey: ['auth', 'me'],   // ← same key everywhere = one shared request
+  const result = useQuery({
+    queryKey: ['auth', 'me'],
     queryFn:  () => authService.getMe(),
-    staleTime: 1000 * 60 * 15, // user profile rarely changes — 15 min
-    onSuccess: (data) => {
-      try {
-        if (data) TokenService.setUser(data as any);
-      } catch {
-        // ignore storage errors
-      }
-    },
+    staleTime: 1000 * 60 * 15,
   });
+  if (result.data) {
+    try { TokenService.setUser(result.data as any); } catch { /* ignore */ }
+  }
+  return result;
 }
 
 /**

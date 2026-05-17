@@ -1,10 +1,10 @@
 // src/pages/super-admin/UsersManagement.tsx
 import { useState, useMemo } from 'react';
 import {
-  Users, Search, UserPlus, MoreHorizontal, Shield,
-  UserCheck, UserX, ChevronDown, ArrowUpDown, Trash2, Edit,
+  Users, Search, MoreHorizontal, Shield,
+  UserCheck, UserX, Trash2,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -28,19 +28,22 @@ import {
   useUsers, useDeleteUser, useChangeRole, useToggleUserStatus,
 } from '@/hooks/api/useUsers';
 import type { User, UserRole } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
-const ROLES: UserRole[] = ['SuperAdmin', 'OrgAdmin', 'BoardMember', 'Admin', 'User'];
+const ROLES: UserRole[] = ['superAdmin', 'OrgAdmin', 'BoardMember', 'secretary'];
 
 const roleBadge: Record<string, string> = {
-  SuperAdmin:  'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
+  superAdmin:  'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
   OrgAdmin:    'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700',
-  Admin:       'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
   BoardMember: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700',
-  User:        'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+  secretary:   'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
 };
+const DEFAULT_ROLE_BADGE = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
 
 export function UsersManagement() {
-  const { data: users = [], isLoading } = useUsers();
+  const { data: usersResponse = [] as any, isLoading } = useUsers();
+  const users = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data ?? []);
   const deleteUser = useDeleteUser();
   const changeRole = useChangeRole();
   const toggleStatus = useToggleUserStatus();
@@ -52,7 +55,7 @@ export function UsersManagement() {
   // Dialogs
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [roleTarget, setRoleTarget] = useState<User | null>(null);
-  const [newRole, setNewRole] = useState<UserRole>('User');
+  const [newRole, setNewRole] = useState<UserRole>('superAdmin');
 
   const filtered = useMemo(() => {
     let result = users;
@@ -68,16 +71,16 @@ export function UsersManagement() {
       result = result.filter((u: User) => u.role === roleFilter);
     }
     if (statusFilter === 'active') {
-      result = result.filter((u: User) => u.isActive !== false);
+      result = result.filter((u: User) => u.status === 'active');
     } else if (statusFilter === 'inactive') {
-      result = result.filter((u: User) => u.isActive === false);
+      result = result.filter((u: User) => u.status !== 'active');
     }
     return result;
   }, [users, search, roleFilter, statusFilter]);
 
   function handleDelete() {
     if (!deleteTarget) return;
-    deleteUser.mutate(deleteTarget.id, {
+    deleteUser.mutate(deleteTarget.userId, {
       onSuccess: () => { toast.success('User deleted'); setDeleteTarget(null); },
       onError: () => toast.error('Failed to delete user'),
     });
@@ -85,33 +88,39 @@ export function UsersManagement() {
 
   function handleChangeRole() {
     if (!roleTarget) return;
-    changeRole.mutate({ userId: roleTarget.id, data: { role: newRole } }, {
+    changeRole.mutate({ userId: roleTarget.userId, data: { role: newRole } }, {
       onSuccess: () => { toast.success('Role updated'); setRoleTarget(null); },
       onError: () => toast.error('Failed to update role'),
     });
   }
 
   function handleToggleStatus(user: User) {
-    const nextActive = user.isActive === false;
-    toggleStatus.mutate({ userId: user.id, isActive: nextActive }, {
+    const nextActive = user.status !== 'active';
+    toggleStatus.mutate({ userId: user.userId, isActive: nextActive }, {
       onSuccess: () => toast.success(`User ${nextActive ? 'activated' : 'deactivated'}`),
       onError: () => toast.error('Failed to toggle status'),
     });
   }
 
+  // Stat counts for the header strip
+  const activeCount = users.filter((u: User) => u.status === 'active').length;
+  const superAdminCount = users.filter((u: User) => u.role === 'superAdmin').length;
+  const boardCount = users.filter((u: User) => u.role === 'BoardMember').length;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Users Management</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all platform users</p>
-        </div>
-        <Badge variant="outline" className="gap-1.5 px-3 py-1">
-          <Users className="h-3.5 w-3.5" />
-          {users.length} users
-        </Badge>
-      </div>
+      <SuperAdminPageHeader
+        icon={Users}
+        eyebrow="Administration"
+        title="Users Management"
+        subtitle="Every account on the platform — across organisations, roles, and statuses."
+        stats={[
+          { label: 'Total',       value: users.length,    icon: Users },
+          { label: 'Active',      value: activeCount,     icon: UserCheck },
+          { label: 'Super Admin', value: superAdminCount, icon: Shield },
+          { label: 'Board',       value: boardCount,      icon: UserCheck },
+        ]}
+      />
 
       {/* Filters */}
       <Card className="border-0 shadow-sm">
@@ -145,18 +154,19 @@ export function UsersManagement() {
       </Card>
 
       {/* Users Table */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
+      <DataTableCard>
           {isLoading ? (
-            <div className="p-8 text-center">
+            <div className="p-10 text-center">
               <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-              <p className="text-sm text-gray-500 mt-3">Loading users...</p>
+              <p className="text-sm text-muted-foreground mt-3">Loading users...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
-              <Users className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No users found</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try adjusting your filters</p>
+              <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                <Users className="h-7 w-7 text-muted-foreground/60" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">No users found</p>
+              <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters.</p>
             </div>
           ) : (
             <Table>
@@ -172,7 +182,7 @@ export function UsersManagement() {
               </TableHeader>
               <TableBody>
                 {filtered.map((user: User, idx: number) => (
-                  <TableRow key={user.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                  <TableRow key={user.userId} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
                     <TableCell className="text-xs text-gray-400">{idx + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -186,12 +196,12 @@ export function UsersManagement() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={roleBadge[user.role] ?? roleBadge.User}>
+                      <Badge variant="outline" className={roleBadge[user.role] ?? DEFAULT_ROLE_BADGE}>
                         {user.role}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {user.isActive !== false ? (
+                      {user.status === 'active' ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           Active
@@ -199,7 +209,7 @@ export function UsersManagement() {
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-500 dark:text-red-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                          Inactive
+                          {user.status || 'Inactive'}
                         </span>
                       )}
                     </TableCell>
@@ -221,7 +231,7 @@ export function UsersManagement() {
                             Change Role
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
-                            {user.isActive !== false ? (
+                            {user.status === 'active' ? (
                               <><UserX className="h-4 w-4 mr-2" />Deactivate</>
                             ) : (
                               <><UserCheck className="h-4 w-4 mr-2" />Activate</>
@@ -240,8 +250,7 @@ export function UsersManagement() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </DataTableCard>
 
       {/* Delete Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>

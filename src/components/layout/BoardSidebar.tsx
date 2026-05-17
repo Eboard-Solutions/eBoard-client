@@ -96,7 +96,7 @@ function useThemeSyncSidebar() {
   return { isDark, toggle };
 }
 
-function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
+function useClickOutside(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
   useEffect(() => {
     const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) cb(); };
     document.addEventListener('mousedown', fn); return () => document.removeEventListener('mousedown', fn);

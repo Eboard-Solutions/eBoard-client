@@ -904,7 +904,6 @@ function StatCard({ title, value, icon: Icon, sub, variant = 'indigo', delay = 0
     );
   }
   const trendUp   = (trend ?? 0) > 0;
-  const trendDown = (trend ?? 0) < 0;
   const sparkVals = sparklineFor(spark ?? title.length, 14);
 
   return (
@@ -1469,13 +1468,13 @@ function OrgAdminDashboard({ currentUser }: { currentUser: Record<string, unknow
             {loadingTasks ? <WidgetSkel rows={4} h={52} /> : (
               widgetTasks.length === 0 ? (
                 <p className="py-8 text-sm text-muted-foreground text-center">No {taskFilter.toLowerCase()} tasks.</p>
-              ) : <OpenActionsWidget tasks={widgetTasks} />
+              ) : <OpenActionsWidget tasks={widgetTasks as any} />
             )}
           </WidgetCard>
 
           <WidgetCard title="Polls & Voting" icon={Vote} iconColor="text-emerald-500"
             action={{ label: 'All', onClick: () => navigate('/voting') }} delay={60}>
-            {loadingPolls ? <WidgetSkel rows={3} /> : <VotingOverviewWidget polls={polls.slice(0, 4)} />}
+            {loadingPolls ? <WidgetSkel rows={3} /> : <VotingOverviewWidget polls={polls.slice(0, 4) as any} />}
           </WidgetCard>
         </div>
 
@@ -1489,7 +1488,7 @@ function OrgAdminDashboard({ currentUser }: { currentUser: Record<string, unknow
 
           <WidgetCard title="Recent Docs" icon={FileText} iconColor="text-sky-500"
             action={{ label: 'All', onClick: () => navigate('/documents') }} delay={80}>
-            {loadingDocuments ? <WidgetSkel rows={3} /> : <RecentDocumentsWidget documents={recentDocs} />}
+            {loadingDocuments ? <WidgetSkel rows={3} /> : <RecentDocumentsWidget documents={recentDocs as any} />}
           </WidgetCard>
 
           {/* Activity timeline */}
@@ -1657,19 +1656,20 @@ function UserDashboard({ currentUser }: { currentUser: Record<string, unknown> }
         <div className="col-span-12 lg:col-span-5 space-y-5">
           <WidgetCard title="My Tasks" icon={ListTodo} iconColor="text-amber-500"
             action={{ label: 'View all', onClick: () => navigate('/tasks') }} delay={40}>
-            {loadingTasks ? <WidgetSkel rows={4} h={52} /> : <OpenActionsWidget tasks={widgetTasks} />}
+            {loadingTasks ? <WidgetSkel rows={4} h={52} /> : <OpenActionsWidget tasks={widgetTasks as any} />}
           </WidgetCard>
 
           <WidgetCard title="Active Polls" icon={Vote} iconColor="text-emerald-500"
             action={{ label: 'Vote', onClick: () => navigate('/voting') }} delay={80}>
-            {loadingPolls ? <WidgetSkel rows={3} /> : <VotingOverviewWidget polls={polls.slice(0, 4)} />}
+            {loadingPolls ? <WidgetSkel rows={3} /> : <VotingOverviewWidget polls={polls.slice(0, 4) as any} />}
           </WidgetCard>
         </div>
 
-        <div className="col-span-12 lg:col-span-3 space-y-5">
+        <div className="col-span-12 lg:col-span-3 space-y-5" data-section="dash-r2">
+
           <WidgetCard title="Documents" icon={FileText} iconColor="text-sky-500"
             action={{ label: 'All', onClick: () => navigate('/documents') }} delay={80}>
-            {loadingDocuments ? <WidgetSkel rows={3} /> : <RecentDocumentsWidget documents={recentDocs} />}
+            {loadingDocuments ? <WidgetSkel rows={3} /> : <RecentDocumentsWidget documents={recentDocs as any} />}
           </WidgetCard>
 
           <WidgetCard title="Announcements" icon={Megaphone} iconColor="text-violet-500"

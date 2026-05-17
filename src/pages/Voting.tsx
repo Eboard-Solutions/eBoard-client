@@ -459,7 +459,7 @@ export function Voting() {
             <Vote className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Voting & Polls</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Voting & Polls</h1>
             <p className="text-muted-foreground mt-1 text-sm">
               Participate in board votes and view live results.
             </p>

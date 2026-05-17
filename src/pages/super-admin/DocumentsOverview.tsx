@@ -1,6 +1,6 @@
 // src/pages/super-admin/DocumentsOverview.tsx
 import { useState, useMemo } from 'react';
-import { FileText, Search, Download, Eye, File, Image, FileSpreadsheet } from 'lucide-react';
+import { FileText, Search, File, Image, FileSpreadsheet } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,9 @@ import {
 } from '@/components/ui/table';
 import { useDocuments } from '@/hooks/api/useDocuments';
 import type { Document as DocType } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
+import { HardDrive } from 'lucide-react';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -48,32 +51,18 @@ export function DocumentsOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Documents</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform documents</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Total Documents</p>
-            <p className="text-2xl font-extrabold mt-1 text-indigo-600 dark:text-indigo-400">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Total Size</p>
-            <p className="text-2xl font-extrabold mt-1 text-violet-600 dark:text-violet-400">{stats.totalSize}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Results</p>
-            <p className="text-2xl font-extrabold mt-1 text-emerald-600 dark:text-emerald-400">{filtered.length}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <SuperAdminPageHeader
+        icon={FileText}
+        eyebrow="Platform Data"
+        title="Documents"
+        subtitle="Every uploaded document across organisations — by access level, type, and date."
+        gradient="from-orange-500 via-amber-500 to-red-600"
+        stats={[
+          { label: 'Total Documents', value: stats.total,     icon: FileText },
+          { label: 'Total Size',      value: stats.totalSize, icon: HardDrive },
+          { label: 'Showing',         value: filtered.length, icon: Search },
+        ]}
+      />
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -82,17 +71,18 @@ export function DocumentsOverview() {
       </div>
 
       {/* Table */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
+      <DataTableCard>
           {isLoading ? (
-            <div className="p-8 text-center">
+            <div className="p-10 text-center">
               <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-              <p className="text-sm text-gray-500 mt-3">Loading documents...</p>
+              <p className="text-sm text-muted-foreground mt-3">Loading documents...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
-              <FileText className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                <FileText className="h-7 w-7 text-muted-foreground/60" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
                 {search ? 'No documents match your search' : 'No documents found'}
               </p>
             </div>
@@ -100,7 +90,7 @@ export function DocumentsOverview() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12.5">#</TableHead>
+                  <TableHead className="w-[50px]">#</TableHead>
                   <TableHead>Document</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Size</TableHead>
@@ -149,8 +139,7 @@ export function DocumentsOverview() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </DataTableCard>
     </div>
   );
 }

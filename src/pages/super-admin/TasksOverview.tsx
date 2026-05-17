@@ -14,10 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTasks } from '@/hooks/api/useTasks';
 import { usePermissions } from '@/lib/permissions';
 import type { Task, TaskStatus, TaskPriority } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; icon: React.ElementType }> = {
   TODO:        { label: 'To Do',       color: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700', icon: Clock },
   IN_PROGRESS: { label: 'In Progress', color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700', icon: ArrowRight },
+  REVIEW:      { label: 'Review',      color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700', icon: Clock },
   COMPLETED:   { label: 'Completed',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700', icon: CheckCircle2 },
   CANCELLED:   { label: 'Cancelled',   color: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700', icon: XCircle },
 };
@@ -64,28 +67,19 @@ export function TasksOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform tasks</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {([
-          { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
-          { label: 'To Do', value: counts.TODO, color: 'text-gray-600 dark:text-gray-400' },
-          { label: 'In Progress', value: counts.IN_PROGRESS, color: 'text-blue-600 dark:text-blue-400' },
-          { label: 'Completed', value: counts.COMPLETED, color: 'text-emerald-600 dark:text-emerald-400' },
-          { label: 'Cancelled', value: counts.CANCELLED, color: 'text-gray-500 dark:text-gray-500' },
-        ] as const).map(s => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{s.label}</p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <SuperAdminPageHeader
+        icon={ListTodo}
+        eyebrow="Platform Data"
+        title="Tasks"
+        subtitle="Every task across every organisation — priority, status, assignee at a glance."
+        gradient="from-emerald-600 via-green-600 to-teal-700"
+        stats={[
+          { label: 'Total',       value: counts.all,         icon: ListTodo },
+          { label: 'To Do',       value: counts.TODO,        icon: Clock },
+          { label: 'In Progress', value: counts.IN_PROGRESS, icon: ArrowRight },
+          { label: 'Completed',   value: counts.COMPLETED,   icon: CheckCircle2 },
+        ]}
+      />
 
       {/* Tabs + Search */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -104,17 +98,18 @@ export function TasksOverview() {
 
         {['all', 'TODO', 'IN_PROGRESS', 'COMPLETED'].map(t => (
           <TabsContent key={t} value={t} className="mt-4">
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-0">
+            <DataTableCard>
                 {isLoading ? (
-                  <div className="p-8 text-center">
+                  <div className="p-10 text-center">
                     <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-sm text-gray-500 mt-3">Loading tasks...</p>
+                    <p className="text-sm text-muted-foreground mt-3">Loading tasks...</p>
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="p-12 text-center">
-                    <ListTodo className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                      <ListTodo className="h-7 w-7 text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
                       {search ? 'No tasks match your search' : 'No tasks found'}
                     </p>
                   </div>
@@ -178,8 +173,7 @@ export function TasksOverview() {
                     </TableBody>
                   </Table>
                 )}
-              </CardContent>
-            </Card>
+            </DataTableCard>
           </TabsContent>
         ))}
       </Tabs>

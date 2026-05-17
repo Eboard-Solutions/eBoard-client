@@ -116,7 +116,7 @@ export default function LiveMeeting() {
 
   const me = useMemo(() => authService.getUser(), []);
   const userId = me?.userId ?? '';
-  const organisationId = me?.organisationId ?? '';
+  const organisationId = (me as { organisationId?: string } | null)?.organisationId ?? '';
   const peerId = useMemo(makePeerId, []);
   const myDisplayName = me
     ? `${me.firstName ?? ''} ${me.lastName ?? ''}`.trim() || me.email || 'You'

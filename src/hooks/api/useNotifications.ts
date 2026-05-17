@@ -67,7 +67,7 @@ export function useUnreadNotificationsCount() {
   return useQuery({
     queryKey: notificationKeys.unreadCount(),
     queryFn: async () => {
-      const response = await NotificationsService.getAll({ category: 'Unread', page: 1 });
+      const response = await NotificationsService.getAll({ category: 'Unread' as any, page: 1 });
       return response.totalRecords ?? response.data?.length ?? 0;
     },
   });

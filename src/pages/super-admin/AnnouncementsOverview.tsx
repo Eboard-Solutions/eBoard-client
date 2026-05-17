@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/table';
 import { useAnnouncements } from '@/hooks/api/useAnnouncements';
 import type { Announcement } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
 export function AnnouncementsOverview() {
   const { data, isLoading, isError } = useAnnouncements();
@@ -33,32 +35,18 @@ export function AnnouncementsOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Announcements</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform announcements</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Total</p>
-            <p className="text-2xl font-extrabold mt-1 text-indigo-600 dark:text-indigo-400">{stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Pinned</p>
-            <p className="text-2xl font-extrabold mt-1 text-amber-600 dark:text-amber-400">{stats.pinned}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Showing</p>
-            <p className="text-2xl font-extrabold mt-1 text-emerald-600 dark:text-emerald-400">{filtered.length}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <SuperAdminPageHeader
+        icon={Megaphone}
+        eyebrow="Platform Data"
+        title="Announcements"
+        subtitle="Every published announcement across organisations and audiences."
+        gradient="from-amber-500 via-orange-500 to-rose-600"
+        stats={[
+          { label: 'Total',   value: stats.total,     icon: Megaphone },
+          { label: 'Pinned',  value: stats.pinned,    icon: Pin },
+          { label: 'Showing', value: filtered.length, icon: Search },
+        ]}
+      />
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -67,17 +55,18 @@ export function AnnouncementsOverview() {
       </div>
 
       {/* Table */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
+      <DataTableCard>
           {isLoading ? (
-            <div className="p-8 text-center">
+            <div className="p-10 text-center">
               <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-              <p className="text-sm text-gray-500 mt-3">Loading announcements...</p>
+              <p className="text-sm text-muted-foreground mt-3">Loading announcements...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
-              <Megaphone className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                <Megaphone className="h-7 w-7 text-muted-foreground/60" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
                 {search ? 'No announcements match your search' : 'No announcements found'}
               </p>
             </div>
@@ -131,8 +120,7 @@ export function AnnouncementsOverview() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </DataTableCard>
     </div>
   );
 }

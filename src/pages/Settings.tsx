@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,9 +26,9 @@ import { usePermissions } from '@/lib/permissions';
 
 import {
   Building, Users, Bell, Shield, Zap, Globe, Mail, Key,
-  Database, Palette, Save, Loader2, RefreshCw, AlertTriangle,
+  Database, Save, Loader2, AlertTriangle,
   CheckCircle2, Smartphone, Copy, Eye, EyeOff, ShieldCheck,
-  Lock, Unlock, Activity, Server, X, Check, Info,
+  Lock, Server, Check, Info,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -443,8 +442,16 @@ export function Settings() {
   const updateOrg      = useUpdateOrganisation();
 
   // Unwrap ResponseObject correctly
-  const settings = settingsData?.data ?? settingsData;
-  const org      = orgData?.data ?? orgData ?? orgData;
+  const settings = (() => {
+    if (!settingsData) return undefined;
+    // If it has a .data property, extract it; otherwise use as-is
+    return 'data' in settingsData ? settingsData.data : settingsData;
+  })() as any;
+
+  const org = (() => {
+    if (!orgData) return undefined;
+    return 'data' in orgData ? orgData.data : orgData;
+  })() as any;
 
   const isLoading = settingsLoading || orgLoading;
 
@@ -565,7 +572,7 @@ export function Settings() {
     clearDirty: () => void,
   ) => {
     try {
-      await updateSettings.mutateAsync({ ...patch, version: settings?.version });
+      await updateSettings.mutateAsync(patch);
       toast.success('Settings saved');
       clearDirty();
       refetchSettings();

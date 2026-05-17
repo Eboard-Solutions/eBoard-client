@@ -19,7 +19,7 @@ import { useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
-  Users, User as UserIcon, Mail, Phone, Briefcase, Lock,
+  Users, User as UserIcon, Mail, Phone, Lock,
   Eye, EyeOff, Save, X, Loader2, AlertCircle, Image as ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -122,7 +122,7 @@ export function ProfilePage() {
     const patch: UpdateProfileData = {};
     (Object.keys(form) as (keyof UpdateProfileData)[]).forEach((k) => {
       const next = (form[k] ?? '').toString().trim();
-      const prev = ((profile as Record<string, unknown>)[k as string] ?? '').toString();
+      const prev = ((profile as unknown as Record<string, unknown>)[k as string] ?? '').toString();
       if (next !== prev) (patch as Record<string, string>)[k] = next;
     });
     if (Object.keys(patch).length === 0) {

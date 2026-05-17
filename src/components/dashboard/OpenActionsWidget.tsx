@@ -1,8 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { Task as APITask } from '@/types/api.types';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Calendar, CheckCircle2, User } from 'lucide-react';
 
 // Support both legacy and API task types
@@ -19,7 +18,7 @@ interface Task {
 }
 
 interface OpenActionsWidgetProps {
-  tasks: Task[] | APITask[];
+  tasks: Task[];
 }
 
 const priorityColors: Record<string, 'destructive' | 'warning' | 'secondary' | 'default'> = {

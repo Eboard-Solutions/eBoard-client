@@ -6,9 +6,9 @@ import { toast } from 'sonner';
 import {
   BarChart3, Lock, BookOpen, Search, Filter, TrendingUp,
   Clock, CheckCircle2, Users, AlertCircle, ChevronDown,
-  ThumbsUp, MessageSquare, BarChart2, Zap, Award,
-  ArrowUpRight, RotateCcw, X, Check, Loader2,
-  SortAsc, Eye, ChevronRight, Flame, Star,
+  MessageSquare, BarChart2, Zap, Award,
+  RotateCcw, X, Check, Loader2,
+  SortAsc, Eye, Flame, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePolls, useVotePoll } from '@/hooks/api';
@@ -262,7 +262,7 @@ function ParticipationChart({ polls }: { polls: Poll[] }) {
         <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
         <Tooltip
           contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
-          formatter={(v: number) => [v, 'Responses']}
+          formatter={(v) => [v ?? 0, 'Responses']}
         />
         <Bar dataKey="responses" radius={[5,5,0,0]}>
           {data.map((d, i) => (
@@ -720,7 +720,7 @@ export function PollsPage() {
   const [filter,     setFilter]     = useState<FilterKey>('all');
   const [sort,       setSort]       = useState<SortKey>('newest');
   const [showFilters, setShowFilters] = useState(false);
-  const [refreshKey,  setRefreshKey]  = useState(0);
+  const [, setRefreshKey]  = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcut: / to focus search

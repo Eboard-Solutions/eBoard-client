@@ -24,6 +24,7 @@ import {
   useCurrentUser,
 } from "@/hooks/api";
 import type { Poll } from "./types";
+import type { User } from '@/types/api.types';
 import { unwrapList, unwrap } from "./components/page-helpers";
 
 type DashboardMeeting = {
@@ -107,55 +108,6 @@ function StatCard({
   );
 }
 
-function RingGauge({
-  value,
-  label,
-  color,
-}: {
-  value: number;
-  label: string;
-  color: string;
-}) {
-  const r = 28;
-  const circ = 2 * Math.PI * r;
-  const dash = (value / 100) * circ;
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative">
-        <svg width="72" height="72" className="-rotate-90">
-          <circle
-            cx="36"
-            cy="36"
-            r={r}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="6"
-            className="text-muted/30"
-          />
-          <circle
-            cx="36"
-            cy="36"
-            r={r}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="6"
-            strokeDasharray={`${dash} ${circ}`}
-            strokeLinecap="round"
-            className={color}
-            style={{ transition: "stroke-dasharray 0.6s ease" }}
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">
-          {value}%
-        </span>
-      </div>
-      <p className="text-xs text-muted-foreground text-center leading-tight">
-        {label}
-      </p>
-    </div>
-  );
-}
-
 export default function BoardMemberDashboard() {
   const { data: meetingsData } = useMyMeetings();
   const { data: tasksData } = useTasks();
@@ -164,7 +116,8 @@ export default function BoardMemberDashboard() {
   const { data: pollsData } = usePolls();
   const { data: notificationsData } = useNotifications();
   const { data: analyticsData } = useAnalytics();
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUserData } = useCurrentUser();
+  const currentUser = (currentUserData as unknown as User) || ({} as User);
 
   const meetings = unwrapList<DashboardMeeting>(meetingsData);
   const tasks = unwrapList<DashboardTask>(tasksData);

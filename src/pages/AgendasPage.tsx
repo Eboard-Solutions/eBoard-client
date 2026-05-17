@@ -72,7 +72,7 @@ const AgendasPage = () => {
   const handleSubmit = (data: { title: string; description?: string; meetingId: string }) => {
     if (editingAgenda) {
       updateMutation.mutate(
-        { id: editingAgenda.id, data: { title: data.title, description: data.description } },
+        { agendaId: editingAgenda.id, data: { title: data.title, description: data.description } },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: AGENDAS_QUERY_KEYS.all });
@@ -162,7 +162,7 @@ const AgendasPage = () => {
           </DialogHeader>
           <AgendaForm
             onSubmit={handleSubmit}
-            initialData={editingAgenda}
+            initialData={editingAgenda ? { title: editingAgenda.title, description: editingAgenda.description, meetingId: editingAgenda.meetingId } : undefined}
             onCancel={closeForm}
             meetings={meetings}
           />

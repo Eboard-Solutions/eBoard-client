@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import {
   Calendar, Search, Video, MapPin, Monitor,
-  Clock, CheckCircle2, XCircle, Play,
+  Clock, CheckCircle2, XCircle, Play, CalendarRange,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,12 +13,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMeetings } from '@/hooks/api/useMeetings';
 import type { Meeting, MeetingStatus } from '@/types/api.types';
+import { SuperAdminPageHeader } from './_SuperAdminPageHeader';
+import { DataTableCard } from './_DataTableCard';
 
 const statusConfig: Record<MeetingStatus, { label: string; color: string; icon: React.ElementType }> = {
-  scheduled:     { label: 'Scheduled',   color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700', icon: Clock },
-  'in-progress': { label: 'In Progress', color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700', icon: Play },
-  completed:     { label: 'Completed',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700', icon: CheckCircle2 },
-  cancelled:     { label: 'Cancelled',   color: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700', icon: XCircle },
+  scheduled:    { label: 'Scheduled',   color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700', icon: Clock },
+  inProgress:   { label: 'In Progress', color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700', icon: Play },
+  completed:    { label: 'Completed',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700', icon: CheckCircle2 },
+  cancelled:    { label: 'Cancelled',   color: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700', icon: XCircle },
 };
 
 const formatIcons: Record<string, React.ElementType> = {
@@ -50,35 +52,26 @@ export function MeetingsOverview() {
   const counts = useMemo(() => ({
     all: meetings.length,
     scheduled: meetings.filter(m => m.status === 'scheduled').length,
-    'in-progress': meetings.filter(m => m.status === 'in-progress').length,
+    inProgress: meetings.filter(m => m.status === 'inProgress').length,
     completed: meetings.filter(m => m.status === 'completed').length,
     cancelled: meetings.filter(m => m.status === 'cancelled').length,
   }), [meetings]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Meetings</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of all platform meetings</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {([
-          { label: 'Total', value: counts.all, color: 'text-indigo-600 dark:text-indigo-400' },
-          { label: 'Scheduled', value: counts.scheduled, color: 'text-blue-600 dark:text-blue-400' },
-          { label: 'In Progress', value: counts['in-progress'], color: 'text-amber-600 dark:text-amber-400' },
-          { label: 'Completed', value: counts.completed, color: 'text-emerald-600 dark:text-emerald-400' },
-          { label: 'Cancelled', value: counts.cancelled, color: 'text-gray-500 dark:text-gray-500' },
-        ] as const).map(s => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{s.label}</p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <SuperAdminPageHeader
+        icon={CalendarRange}
+        eyebrow="Platform Data"
+        title="Meetings"
+        subtitle="Every scheduled, live, and completed meeting across the platform."
+        gradient="from-blue-600 via-indigo-600 to-violet-700"
+        stats={[
+          { label: 'Total',       value: counts.all,        icon: Calendar },
+          { label: 'Scheduled',   value: counts.scheduled,  icon: Clock },
+          { label: 'In Progress', value: counts.inProgress, icon: Play },
+          { label: 'Completed',   value: counts.completed,  icon: CheckCircle2 },
+        ]}
+      />
 
       {/* Tabs + Search */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -86,7 +79,7 @@ export function MeetingsOverview() {
           <TabsList>
             <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
             <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
-            <TabsTrigger value="in-progress">In Progress</TabsTrigger>
+            <TabsTrigger value="inProgress">In Progress</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
           <div className="relative min-w-[200px]">
@@ -95,19 +88,20 @@ export function MeetingsOverview() {
           </div>
         </div>
 
-        {['all', 'scheduled', 'in-progress', 'completed'].map(t => (
+        {['all', 'scheduled', 'inProgress', 'completed'].map(t => (
           <TabsContent key={t} value={t} className="mt-4">
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-0">
+            <DataTableCard>
                 {isLoading ? (
-                  <div className="p-8 text-center">
+                  <div className="p-10 text-center">
                     <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-sm text-gray-500 mt-3">Loading meetings...</p>
+                    <p className="text-sm text-muted-foreground mt-3">Loading meetings...</p>
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="p-12 text-center">
-                    <Calendar className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                      <Calendar className="h-7 w-7 text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
                       {search ? 'No meetings match your search' : 'No meetings found'}
                     </p>
                   </div>
@@ -172,8 +166,7 @@ export function MeetingsOverview() {
                     </TableBody>
                   </Table>
                 )}
-              </CardContent>
-            </Card>
+            </DataTableCard>
           </TabsContent>
         ))}
       </Tabs>

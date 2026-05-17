@@ -47,7 +47,6 @@ import {
   Sun,
   Moon,
   UserCog,
-  Lock,
   Menu,
   X,
   BookOpen,
@@ -208,7 +207,7 @@ function useTheme() {
 
 // ─── Click-outside helper ───────────────────────────────────────────────────
 
-function useClickOutside(ref: RefObject<HTMLElement>, cb: () => void) {
+function useClickOutside(ref: RefObject<HTMLElement | null>, cb: () => void) {
   useEffect(() => {
     const fn = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) cb();

@@ -63,7 +63,7 @@ export function CreateAdmin() {
 
     try {
       const API_BASE = 'https://eboard-server-6auf.onrender.com/api/v1';
-      const response = await axios.post(`${API_BASE}/auth/register/org-admin`, {
+      await axios.post(`${API_BASE}/auth/register/org-admin`, {
         firstName: formData.name.split(' ')[0] || formData.name,
         lastName: formData.name.split(' ').slice(1).join(' ') || '',
         email: formData.email,

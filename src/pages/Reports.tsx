@@ -164,7 +164,7 @@ export function Reports() {
 
   // activePolls can come back as a number OR an array of Poll objects
   const activePollsRaw = dashboardRaw
-    ? (dashboardRaw as Record<string, unknown>)['activePolls']
+    ? (dashboardRaw as unknown as Record<string, unknown>)['activePolls']
     : undefined;
   const activePollsCount: number =
     typeof activePollsRaw === 'number'
@@ -226,7 +226,7 @@ export function Reports() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Reports &amp; Analytics</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Reports &amp; Analytics</h1>
           <p className="text-muted-foreground mt-1">
             Comprehensive insights into board activities
           </p>
@@ -238,7 +238,7 @@ export function Reports() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
 
         <Card className="glass">
           <CardContent className="p-6">
@@ -335,7 +335,7 @@ export function Reports() {
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
-                    formatter={(value: number) => [`${value}%`, 'Attendance']}
+                    formatter={(value) => [`${value ?? 0}%`, 'Attendance']}
                   />
                   <Line
                     type="monotone"
@@ -431,7 +431,7 @@ export function Reports() {
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
-                    formatter={(value: number) => [value, 'Tasks']}
+                    formatter={(value) => [value ?? 0, 'Tasks']}
                   />
                   <Bar dataKey="count" fill="hsl(var(--primary))" name="Tasks" radius={[4, 4, 0, 0]} />
                 </BarChart>

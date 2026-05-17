@@ -31,6 +31,7 @@ import {
 import type { Notification } from '@/types/api.types';
 import { unwrapList } from '@/features/board-member/components/page-helpers';
 import { NotificationDetailsDialog, type NotificationPreview } from '@/components/notifications/NotificationDetailsDialog';
+import { useSidebar } from './SidebarContext';
 
 // ─────────────────────────────────────────────────────────
 // HELPERS
@@ -188,8 +189,12 @@ interface TopbarProps {
   sidebarCollapsed?: boolean;
 }
 
-export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
+export function Topbar({ sidebarCollapsed: sidebarCollapsedProp }: TopbarProps = {}) {
   const [, setLocation] = useLocation();
+  const { collapsed: ctxCollapsed, isMobile, isTablet } = useSidebar();
+  // Caller can override (legacy prop) but normally we read from context so the
+  // bar tracks the live sidebar width on every breakpoint.
+  const sidebarCollapsed = sidebarCollapsedProp ?? ctxCollapsed;
   const { isDark, toggle: toggleDarkMode } = useThemeSync();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [selectedNotificationId, setSelectedNotificationId] = useState<string | null>(null);
@@ -335,6 +340,18 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
     setLocation(routes[type]);
   };
 
+  // Resolve the header's left edge per breakpoint:
+  //   mobile  → flush-left (sidebar slides over content, hamburger sits on top)
+  //   tablet  → 68px (rail-only sidebar)
+  //   desktop → 68px collapsed / 248px expanded
+  const leftClass = isMobile
+    ? 'left-0'
+    : isTablet
+      ? 'left-[68px]'
+      : sidebarCollapsed
+        ? 'left-[68px]'
+        : 'left-[248px]';
+
   return (
     <header
       className={cn(
@@ -343,16 +360,23 @@ export function Topbar({ sidebarCollapsed = false }: TopbarProps) {
         'backdrop-blur-xl backdrop-saturate-150',
         'border-b border-gray-200/80 dark:border-gray-800/70',
         'transition-all duration-300 ease-in-out',
-        sidebarCollapsed ? 'left-[68px]' : 'left-[248px]',
+        leftClass,
         scrolled
           ? 'shadow-[0_4px_20px_-8px_rgba(15,23,42,0.10)] dark:shadow-[0_4px_20px_-8px_rgba(0,0,0,0.5)]'
           : 'shadow-none',
       )}
     >
-      <div className="flex h-full items-center justify-between px-5 gap-4">
+      <div className={cn(
+        'flex h-full items-center justify-between gap-2 sm:gap-4',
+        // Leave room on mobile for the hamburger button that the sidebar
+        // injects at top-left (10 left padding ≈ 40px hamburger + 6px gap).
+        isMobile ? 'pl-14 pr-3' : 'px-5',
+      )}>
 
         {/* ══ SEARCH ════════════════════════════════════════ */}
-        <div className="flex flex-1 items-center max-w-md">
+        {/* Hidden on mobile (replaced by a search button below). Tablet
+            shows a narrower input. Desktop gets the full max-w-md width. */}
+        <div className="hidden sm:flex flex-1 items-center max-w-md">
           <div className={cn(
             'relative flex flex-1 items-center rounded-xl',
             'border border-gray-200/90 dark:border-gray-700/80',

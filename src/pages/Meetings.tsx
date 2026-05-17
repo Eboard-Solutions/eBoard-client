@@ -633,7 +633,7 @@ function DetailDialog({ meeting, open, onClose, onEdit, onDelete, onStartLive }:
 
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">RSVP Summary</p>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {([
                 { v: 'accepted'  as RSVPStatus, l: 'Accepted',  Icon: CheckCircle2, c: 'text-emerald-600' },
                 { v: 'declined'  as RSVPStatus, l: 'Declined',  Icon: XCircle,      c: 'text-red-500'     },

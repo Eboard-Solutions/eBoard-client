@@ -29,12 +29,6 @@ function safeDate(s?: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function fmtDate(s?: string): string {
-  const d = safeDate(s);
-  if (!d) return 'TBD';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 function fmtTime(s?: string): string {
   if (!s) return '—';
   if (!s.includes('T') && s.includes(':')) {

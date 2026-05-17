@@ -7,7 +7,7 @@ import {
   Megaphone, Plus, Search, Pin, Calendar,
   Loader2, Filter, X, AlertTriangle,
   Clock, Users, Edit3, Trash2, MoreHorizontal,
-  CheckCircle2, Sparkles, ChevronDown, ChevronUp,
+  CheckCircle2, ChevronDown, ChevronUp,
   Bell, TrendingUp, Eye, EyeOff,
 } from 'lucide-react';
 
@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch }   from '@/components/ui/switch';
 import {
   Dialog, DialogContent, DialogDescription,
-  DialogFooter, DialogHeader, DialogTitle,
+  DialogFooter, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,

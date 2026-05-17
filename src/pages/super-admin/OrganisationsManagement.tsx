@@ -49,6 +49,8 @@ import {
   useDeleteOrganisation,
 } from "@/hooks/api/useOrganisations";
 import type { Organisation, OrganisationStatus } from "@/types/api.types";
+import { SuperAdminPageHeader } from "./_SuperAdminPageHeader";
+import { DataTableCard } from "./_DataTableCard";
 
 const statusConfig: Record<
   OrganisationStatus,
@@ -107,15 +109,14 @@ export function OrganisationsManagement() {
   }, [orgs, pendingOrgs]);
 
   const filtered = useMemo(() => {
+    // FIX: the OrganisationStatus type uses 'approved' / 'pending' / 'suspended'
+    // / 'rejected' — there is no 'active' value. Previously the Active tab
+    // filtered for a status that never exists and was permanently empty.
     let result = tab === "pending" ? pendingOrgs : allOrgs;
     if (tab === "active")
-      result = allOrgs.filter(
-        (o) => o.status === ("active" as OrganisationStatus),
-      );
+      result = allOrgs.filter((o) => o.status === "approved");
     if (tab === "suspended")
-      result = allOrgs.filter(
-        (o) => o.status === ("suspended" as OrganisationStatus),
-      );
+      result = allOrgs.filter((o) => o.status === "suspended");
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -155,12 +156,8 @@ export function OrganisationsManagement() {
     () => ({
       all: allOrgs.length,
       pending: pendingOrgs.length,
-      active: allOrgs.filter(
-        (o) => o.status === ("active" as OrganisationStatus),
-      ).length,
-      suspended: allOrgs.filter(
-        (o) => o.status === ("suspended" as OrganisationStatus),
-      ).length,
+      active: allOrgs.filter((o) => o.status === "approved").length,
+      suspended: allOrgs.filter((o) => o.status === "suspended").length,
     }),
     [allOrgs, pendingOrgs],
   );
@@ -169,64 +166,19 @@ export function OrganisationsManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Organisations
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage platform organisations
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {pendingOrgs.length > 0 && (
-            <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 gap-1">
-              <Clock className="h-3 w-3" />
-              {pendingOrgs.length} pending
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {(
-          [
-            {
-              label: "Total",
-              value: counts.all,
-              color: "text-indigo-600 dark:text-indigo-400",
-            },
-            {
-              label: "Active",
-              value: counts.active,
-              color: "text-emerald-600 dark:text-emerald-400",
-            },
-            {
-              label: "Pending",
-              value: counts.pending,
-              color: "text-amber-600 dark:text-amber-400",
-            },
-            {
-              label: "Suspended",
-              value: counts.suspended,
-              color: "text-red-600 dark:text-red-400",
-            },
-          ] as const
-        ).map((s) => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                {s.label}
-              </p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>
-                {s.value}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <SuperAdminPageHeader
+        icon={Building2}
+        eyebrow="Administration"
+        title="Organisations"
+        subtitle="Review pending applications, monitor active accounts, and manage the platform's tenants."
+        gradient="from-violet-600 via-indigo-600 to-blue-700"
+        stats={[
+          { label: "Total",     value: counts.all,       icon: Building2 },
+          { label: "Active",    value: counts.active,    icon: CheckCircle2 },
+          { label: "Pending",   value: counts.pending,   icon: Clock },
+          { label: "Suspended", value: counts.suspended, icon: Ban },
+        ]}
+      />
 
       {/* Tabs + Search */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -261,22 +213,26 @@ export function OrganisationsManagement() {
         {/* All tabs render the same filtered list component */}
         {["all", "pending", "active", "suspended"].map((t) => (
           <TabsContent key={t} value={t} className="mt-4">
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-0">
+            <DataTableCard>
                 {isLoading ? (
-                  <div className="p-8 text-center">
+                  <div className="p-10 text-center">
                     <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-sm text-gray-500 mt-3">
+                    <p className="text-sm text-muted-foreground mt-3">
                       Loading organisations...
                     </p>
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="p-12 text-center">
-                    <Building2 className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="h-14 w-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+                      <Building2 className="h-7 w-7 text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
                       {search
                         ? "No organisations match your search"
                         : "No organisations found"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {search ? "Try a different keyword." : "Pending applications will show up here once submitted."}
                     </p>
                   </div>
                 ) : (
@@ -388,8 +344,7 @@ export function OrganisationsManagement() {
                     </TableBody>
                   </Table>
                 )}
-              </CardContent>
-            </Card>
+            </DataTableCard>
           </TabsContent>
         ))}
       </Tabs>

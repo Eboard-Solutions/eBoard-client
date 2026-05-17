@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -608,7 +608,6 @@ export function Tasks() {
 
   const [search, setSearch]         = useState('');
   const [view, setView]             = useState<'list' | 'kanban'>('list');
-  const [createOpen, setCreateOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editTask, setEditTask]     = useState<TaskDisplay | null>(null);
   const [delTarget, setDelTarget]   = useState<TaskDisplay | null>(null);
