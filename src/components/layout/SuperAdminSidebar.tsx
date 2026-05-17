@@ -4,9 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   LayoutDashboard, Users, Building2, UserPlus,
   ChevronLeft, ChevronRight, Settings, LogOut,
-  Sun, Moon, Shield, ChevronDown,
-  Calendar, FileText, ListTodo, Vote,
-  Megaphone, DollarSign,
+  Sun, Moon, Shield, ChevronDown, DollarSign,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -37,11 +35,11 @@ const navSections: NavSection[] = [
   {
     label: 'Platform Data',
     items: [
-      { icon: Calendar,  label: 'Meetings',       href: '/super-admin/meetings' },
-      { icon: FileText,  label: 'Documents',      href: '/super-admin/documents' },
-      { icon: ListTodo,  label: 'Tasks',           href: '/super-admin/tasks' },
-      { icon: Vote,      label: 'Polls / Voting', href: '/super-admin/polls' },
-      { icon: Megaphone, label: 'Announcements',  href: '/super-admin/announcements' },
+      // { icon: Calendar,  label: 'Meetings',       href: '/super-admin/meetings' },
+      // { icon: FileText,  label: 'Documents',      href: '/super-admin/documents' },
+      // { icon: ListTodo,  label: 'Tasks',           href: '/super-admin/tasks' },
+      // { icon: Vote,      label: 'Polls / Voting', href: '/super-admin/polls' },
+      // { icon: Megaphone, label: 'Announcements',  href: '/super-admin/announcements' },
       { icon: DollarSign,label: 'Finance',         href: '/super-admin/finance' },
     ],
   },

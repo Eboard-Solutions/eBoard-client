@@ -58,11 +58,11 @@ import { SuperAdminDashboard }     from '@/pages/super-admin/SuperAdminDashboard
 import { UsersManagement }         from '@/pages/super-admin/UsersManagement';
 import { OrganisationsManagement } from '@/pages/super-admin/OrganisationsManagement';
 import { CreateSuperAdminPage }    from '@/pages/super-admin/CreateSuperAdminPage';
-import { MeetingsOverview }        from '@/pages/super-admin/MeetingsOverview';
-import { DocumentsOverview }       from '@/pages/super-admin/DocumentsOverview';
-import { TasksOverview }           from '@/pages/super-admin/TasksOverview';
-import { PollsOverview }           from '@/pages/super-admin/PollsOverview';
-import { AnnouncementsOverview }   from '@/pages/super-admin/AnnouncementsOverview';
+// import { MeetingsOverview }        from '@/pages/super-admin/MeetingsOverview';
+// import { DocumentsOverview }       from '@/pages/super-admin/DocumentsOverview';
+// import { TasksOverview }           from '@/pages/super-admin/TasksOverview';
+// import { PollsOverview }           from '@/pages/super-admin/PollsOverview';
+// import { AnnouncementsOverview }   from '@/pages/super-admin/AnnouncementsOverview';
 import { FinanceOverviewPage }     from '@/pages/super-admin/FinanceOverviewPage';
 import { SettingsManagement }      from '@/pages/super-admin/SettingsManagement';
 
@@ -162,7 +162,7 @@ function AppRoute({ path, roles, fullWidth, children }: AppRouteProps) {
 function BoardRoute({ path, children }: { path: string; children: React.ReactNode }) {
   return (
     <Route path={path}>
-      <ProtectedRoute allowedRoles={['boardmember', 'orgadmin', 'superadmin']}>
+      <ProtectedRoute allowedRoles={['boardmember', 'orgadmin', 'superadmin', 'secretary', 'chairperson']}>
         <AppLayout fullWidth>{children}</AppLayout>
       </ProtectedRoute>
     </Route>
@@ -226,6 +226,7 @@ export default function App() {
 
           {/* ── Board Member Routes ────────────────────────────────── */}
           <BoardRoute path="/board">               <BoardMemberDashboard />   </BoardRoute>
+          <BoardRoute path="/board/calendar">      <CalendarPage />          </BoardRoute>
           <BoardRoute path="/board/meetings">      <BoardMeetingsPage />      </BoardRoute>
           <BoardRoute path="/board/documents">     <BoardDocumentsPage />     </BoardRoute>
           <BoardRoute path="/board/resolutions">   <BoardResolutionsPage />   </BoardRoute>
@@ -244,11 +245,11 @@ export default function App() {
           <SuperRoute path="/super-admin/users">          <UsersManagement />         </SuperRoute>
           <SuperRoute path="/super-admin/organisations">  <OrganisationsManagement /> </SuperRoute>
           <SuperRoute path="/super-admin/create-admin">   <CreateSuperAdminPage />    </SuperRoute>
-          <SuperRoute path="/super-admin/meetings">       <MeetingsOverview />        </SuperRoute>
+          {/* <SuperRoute path="/super-admin/meetings">       <MeetingsOverview />        </SuperRoute>
           <SuperRoute path="/super-admin/documents">      <DocumentsOverview />       </SuperRoute>
           <SuperRoute path="/super-admin/tasks">          <TasksOverview />           </SuperRoute>
           <SuperRoute path="/super-admin/polls">          <PollsOverview />           </SuperRoute>
-          <SuperRoute path="/super-admin/announcements">  <AnnouncementsOverview />   </SuperRoute>
+          <SuperRoute path="/super-admin/announcements">  <AnnouncementsOverview />   </SuperRoute> */}
           <SuperRoute path="/super-admin/finance">        <FinanceOverviewPage />     </SuperRoute>
           <SuperRoute path="/super-admin/settings">       <SettingsManagement />      </SuperRoute>
 

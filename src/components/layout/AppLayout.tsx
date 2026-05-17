@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import { useLocation } from 'wouter';
 import { MainSidebar } from './Sidebar';
-import { BoardSidebar } from './BoardSidebar';
+import { BoardSidebar } from './Boardsidebar';
 import { Topbar } from './Topbar';
 import { useSidebar } from './SidebarContext';
 
