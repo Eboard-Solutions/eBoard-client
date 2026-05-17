@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import React from 'react';
 import { Route, Router, Switch, useLocation } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -35,6 +35,7 @@ import { Reports }       from '@/pages/Reports';
 import { Settings }      from '@/pages/Settings';
 import OrganisationPage  from '@/pages/Organisation';
 import Profile           from '@/pages/Profile';
+import Landing           from '@/pages/Landing';
 
 // ── Board Member Dashboard ───────────────────────────────────────────────────
 import {
@@ -113,31 +114,30 @@ function NotFoundPage() {
 
 function RootRedirect() {
   const [, setLocation] = useLocation();
+  const [showLanding, setShowLanding] = useState(false);
 
   useEffect(() => {
     const token = TokenService.getAccessToken();
     if (!token) {
-      setLocation('/auth/signin');
+      setShowLanding(true);
       return;
     }
 
     const user = TokenService.getUser<{ role: string }>();
     if (!user) {
-      setLocation('/auth/signin');
+      setShowLanding(true);
       return;
     }
 
-    // Normalize role
     const role = user.role?.toLowerCase().replace(/[_\s-]/g, '') ?? '';
 
     if (role === 'superadmin')  { setLocation('/super-admin'); return; }
     if (role === 'boardmember') { setLocation('/board');       return; }
 
-    // fallback: orgadmin, admin, member, etc.
     setLocation('/dashboard');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return null;
+  return showLanding ? <Landing /> : null;
 }
 
 // ─── Route Helpers ───────────────────────────────────────────────────────────
