@@ -173,7 +173,7 @@ const FEATURES: Feature[] = [
   {
     icon: Vote,
     title: 'Resolutions & Voting',
-    description: 'Run secure, auditable votes — single-choice, multi-select, or weighted — with real-time tallies and digital signatures.',
+    description: 'Run secure, auditable votes single-choice, multi-select, or weighted — with real-time tallies and digital signatures.',
     accent: 'from-violet-500/15 to-fuchsia-500/10',
   },
   {
@@ -191,7 +191,7 @@ const FEATURES: Feature[] = [
   {
     icon: Wallet,
     title: 'Finance Oversight',
-    description: 'Live budget summaries, expense reviews, and committee-level financial visibility — without the spreadsheet sprawl.',
+    description: 'Live budget summaries, expense reviews, and committee-level financial visibility without the spreadsheet sprawl.',
     accent: 'from-rose-500/15 to-pink-500/10',
   },
   {
@@ -203,8 +203,8 @@ const FEATURES: Feature[] = [
 ];
 
 const STATS = [
-  { label: 'Organisations', value: '850+', icon: Building2 },
-  { label: 'Board members', value: '12k', icon: Users },
+  { label: 'Organisations', value: '80+', icon: Building2 },
+  { label: 'Board members', value: '1k', icon: Users },
   { label: 'Decisions logged', value: '180k', icon: Gavel },
   { label: 'Uptime SLA',       value: '99.98%', icon: ShieldCheck },
 ];
@@ -220,7 +220,7 @@ const WORKFLOW = [
     step: '02',
     icon: Vote,
     title: 'Run the session',
-    body: 'Quorum tracking, live voting, and minutes captured as the conversation happens — not after.',
+    body: 'Quorum tracking, live voting, and minutes captured as the conversation happens not after.',
   },
   {
     step: '03',
@@ -242,7 +242,7 @@ const TRUST_BADGES = [
 const TESTIMONIALS = [
   {
     quote:
-      'We cut meeting prep time in half. Agendas, minutes, and resolutions live in one place — and our auditors love the trail.',
+      'We cut meeting prep time in half. Agendas, minutes, and resolutions live in one place and our auditors love the trail.',
     name: 'Amina K.',
     role: 'Company Secretary, Sahel Holdings',
   },
@@ -333,7 +333,7 @@ export default function Landing() {
                 <Gavel className="h-5 w-5" />
               </div>
               <div className="flex flex-col leading-tight">
-                <span className="font-bold tracking-tight">e‑Board</span>
+                <span className="font-bold tracking-tight">E‑Board</span>
                 <span className="text-[10px] uppercase tracking-widest text-muted-foreground">MIS</span>
               </div>
             </button>
@@ -423,8 +423,8 @@ export default function Landing() {
             </h1>
 
             <p className="mx-auto mb-10 max-w-2xl text-base text-muted-foreground sm:text-lg">
-              e‑Board MIS brings meetings, resolutions, documents, votes, and action items
-              into one secure, beautifully simple workspace — built for boards, committees,
+              E‑Board MIS brings meetings, resolutions, documents, votes, and action items
+              into one secure, beautifully simple workspace built for boards, committees,
               and the people who keep them running.
             </p>
 
