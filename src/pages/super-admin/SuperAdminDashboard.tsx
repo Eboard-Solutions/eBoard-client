@@ -342,14 +342,14 @@ export function SuperAdminDashboard() {
               <Building2 className="h-5 w-5 text-violet-500" />
               <span className="text-xs font-medium">Organisations</span>
             </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 hover:border-blue-300 hover:bg-blue-50 dark:hover:border-blue-700 dark:hover:bg-blue-900/20" onClick={() => setLocation('/super-admin/meetings')}>
+            {/* <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 hover:border-blue-300 hover:bg-blue-50 dark:hover:border-blue-700 dark:hover:bg-blue-900/20" onClick={() => setLocation('/super-admin/meetings')}>
               <Calendar className="h-5 w-5 text-blue-500" />
               <span className="text-xs font-medium">Meetings</span>
             </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 hover:border-green-300 hover:bg-green-50 dark:hover:border-green-700 dark:hover:bg-green-900/20" onClick={() => setLocation('/super-admin/tasks')}>
+            {/* <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 hover:border-green-300 hover:bg-green-50 dark:hover:border-green-700 dark:hover:bg-green-900/20" onClick={() => setLocation('/super-admin/tasks')}>
               <ListTodo className="h-5 w-5 text-green-500" />
               <span className="text-xs font-medium">Tasks</span>
-            </Button>
+            </Button> */}
             <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/20" onClick={() => setLocation('/super-admin/finance')}>
               <DollarSign className="h-5 w-5 text-emerald-500" />
               <span className="text-xs font-medium">Finance</span>
