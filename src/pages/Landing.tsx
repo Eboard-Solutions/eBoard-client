@@ -23,7 +23,11 @@ import {
   ChevronRight,
   Star,
   Globe2,
+  Download,
+  Smartphone,
 } from 'lucide-react';
+
+const ANDROID_APK_URL = 'https://storage.pointitpos.com/app/downloads/Eboard.apk';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -445,6 +449,22 @@ export default function Landing() {
               >
                 <Lock className="h-4 w-4" />
                 Sign in
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="h-12 gap-2 border-emerald-500/40 bg-emerald-500/10 px-6 text-base text-emerald-700 backdrop-blur hover:bg-emerald-500/15 dark:text-emerald-300"
+              >
+                <a
+                  href={ANDROID_APK_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                >
+                  <Smartphone className="h-4 w-4" />
+                  Download Android App
+                </a>
               </Button>
             </div>
 
@@ -888,6 +908,18 @@ export default function Landing() {
                 <li><button onClick={goSignIn}  className="hover:text-foreground">Sign in</button></li>
                 <li><button onClick={goSignUp}  className="hover:text-foreground">Get started</button></li>
                 <li><a href="mailto:hello@eboard-mis.com" className="hover:text-foreground">Contact</a></li>
+                <li>
+                  <a
+                    href={ANDROID_APK_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="inline-flex items-center gap-1.5 hover:text-foreground"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Android App (APK)
+                  </a>
+                </li>
               </ul>
             </div>
           </div>

@@ -30,7 +30,10 @@ import {
   Activity, Zap, Shield, RefreshCw,
   CheckCheck, Plus, ExternalLink,
   Search, Sparkles, TrendingDown,ArrowUp,
+  Smartphone,
 } from 'lucide-react';
+
+const ANDROID_APK_URL = 'https://storage.pointitpos.com/app/downloads/Eboard.apk';
 
 // ─── Global styles (injected once) ───────────────────────────────────────────
 const STYLES = `
@@ -1403,7 +1406,23 @@ function OrgAdminDashboard({ currentUser }: { currentUser: Record<string, unknow
           <WelcomeBanner userName={userName} role="admin"
             subtitle="Manage your organisation — track meetings, tasks, budget and board activity." />
         </div>
-        <div className="mt-1 shrink-0">
+        <div className="mt-1 flex shrink-0 items-center gap-2">
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="hidden gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300 sm:inline-flex"
+          >
+            <a
+              href={ANDROID_APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+            >
+              <Smartphone className="h-4 w-4" />
+              Download Android App
+            </a>
+          </Button>
           <AnnouncementBell announcements={announcements} />
         </div>
       </div>
